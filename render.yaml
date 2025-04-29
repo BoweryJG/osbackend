@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: mcpolliebackend
+    name: osbackend
     env: node
     buildCommand: npm install
     startCommand: node index.js
