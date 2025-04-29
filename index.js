@@ -111,6 +111,79 @@ app.get('/auth/status', (req, res) => {
   });
 });
 
+// Subscription status endpoint
+app.get('/auth/subscription', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.json({
+      subscription: 'free',
+      authenticated: false
+    });
+  }
+  
+  const email = req.user.emails?.[0]?.value;
+  const subscriptionLevel = await getUserSubscription(email);
+  
+  res.json({
+    subscription: subscriptionLevel,
+    authenticated: true,
+    email: email
+  });
+});
+
+// Admin endpoints for managing subscriptions
+app.get('/admin/subscriptions', ensureAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ success: true, subscriptions: data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/admin/subscriptions', ensureAdmin, async (req, res) => {
+  const { user_id, email, subscription_level } = req.body;
+  
+  if (!email || !subscription_level) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Email and subscription level are required' 
+    });
+  }
+  
+  if (!['free', 'asm', 'rsm'].includes(subscription_level)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Invalid subscription level. Must be one of: free, asm, rsm' 
+    });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .upsert({
+        user_id: user_id || email.replace(/[^a-zA-Z0-9]/g, '_'),
+        email,
+        subscription_level,
+        updated_at: new Date()
+      });
+    
+    if (error) throw error;
+    
+    res.json({ 
+      success: true, 
+      message: `Subscription for ${email} set to ${subscription_level}` 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Supabase client setup
 console.log('Connecting to Supabase at:', process.env.SUPABASE_URL);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -157,7 +230,7 @@ function isFreeModel(modelId) {
   const freeModels = [
     'google/gemini-pro',
     'google/gemini-1.5-pro',
-    'google/gemini-2.5-pro',  // Added Gemini 2.5 Pro
+    'google/gemini-2.0-flash',  // Using Gemini 2.0 Flash which is free
     'anthropic/claude-instant',
     'mistralai/mistral',
     'meta-llama/llama-2'
@@ -173,16 +246,90 @@ function isFreeModel(modelId) {
   return freeModels.some(freeModel => modelId.toLowerCase().includes(freeModel.toLowerCase()));
 }
 
+// Helper function to check if a model is ASM level
+function isAsmModel(modelId) {
+  // ASM level models - more accessible paid models
+  const asmModels = [
+    'microsoft/phi',
+    'anthropic/claude-instant',
+    'mistralai/mistral-medium',
+    'google/gemini-1.5-flash'
+  ];
+  
+  // Check if the model ID contains any of the ASM model patterns
+  return asmModels.some(asmModel => modelId.toLowerCase().includes(asmModel.toLowerCase()));
+}
+
+// Helper function to check user's subscription level
+async function getUserSubscription(email) {
+  if (!email) return 'free';
+  
+  try {
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .select('subscription_level')
+      .eq('email', email)
+      .single();
+    
+    if (error || !data) {
+      console.log(`No subscription found for ${email}, defaulting to free`);
+      return 'free';
+    }
+    
+    return data.subscription_level;
+  } catch (err) {
+    console.error('Error fetching subscription:', err);
+    return 'free';
+  }
+}
+
+// Helper function to check if user can access a model
+async function canAccessModel(email, modelId) {
+  // Free models are accessible to everyone
+  if (isFreeModel(modelId)) return true;
+  
+  // If no email, user can only access free models
+  if (!email) return false;
+  
+  const subscriptionLevel = await getUserSubscription(email);
+  
+  switch (subscriptionLevel) {
+    case 'rsm':
+      return true; // RSM users get access to all models
+    case 'asm':
+      // ASM users get access to free models and ASM models
+      return isFreeModel(modelId) || isAsmModel(modelId);
+    case 'free':
+    default:
+      return isFreeModel(modelId);
+  }
+}
+
 // Main endpoint: receive task, call LLM, log to Supabase
 app.post('/task', async (req, res) => {
   const { model, prompt, llm_model } = req.body;
   
-  // Check if the model is paid and if the user is authenticated
-  if (!isFreeModel(model) && !req.isAuthenticated()) {
+  // Get user email from session if authenticated
+  const userEmail = req.isAuthenticated() ? req.user.emails?.[0]?.value : null;
+  
+  // Check if user can access this model
+  const hasAccess = await canAccessModel(userEmail, model);
+  
+  if (!hasAccess) {
+    // If user is not authenticated at all
+    if (!req.isAuthenticated()) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Authentication required for this model',
+        response: 'Please log in to use premium models.'
+      });
+    }
+    
+    // If user is authenticated but doesn't have the right subscription
     return res.status(403).json({ 
       success: false, 
-      error: 'Authentication required for this model',
-      response: 'Please log in to use premium models.'
+      error: 'Subscription required for this model',
+      response: 'Your current subscription level does not include access to this model. Please upgrade to RSM level for full access.'
     });
   }
   
