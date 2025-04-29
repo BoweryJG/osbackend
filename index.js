@@ -7,13 +7,29 @@ import session from 'express-session';
 import SupabaseSessionStore from './supabaseSessionStore.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env file
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+// Verify required environment variables
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_KEY', 'OPENROUTER_API_KEY'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`Error: Environment variable ${envVar} is required but not set.`);
+    process.exit(1);
+  }
+}
 
 const app = express();
 app.set('trust proxy', 1); // Ensure correct protocol for OAuth redirects on Render
 app.use(cors({
-  origin: 'https://repspheres.netlify.app',
+  origin: ['https://repspheres.netlify.app', 'http://localhost:5176'],
   credentials: true
 }));
 app.use(express.json());
@@ -75,6 +91,7 @@ app.get('/admin', ensureAuthenticated, (req, res) => {
 });
 
 // Supabase client setup
+console.log('Connecting to Supabase at:', process.env.SUPABASE_URL);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // Example: Call LLM endpoint using OpenRouter
@@ -100,9 +117,17 @@ async function callLLM(model, prompt, llm_model) {
 
 // Log activity to Supabase
 async function logActivity(task, result) {
-  const { data, error } = await supabase.from('activity_log').insert([{ task, result }]);
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.from('activity_log').insert([{ task, result }]);
+    if (error) {
+      console.error('Error logging activity to Supabase:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Exception logging activity to Supabase:', err);
+    return null;
+  }
 }
 
 // Helper function to check if a model is free based on its ID
@@ -111,10 +136,21 @@ function isFreeModel(modelId) {
   const freeModels = [
     'google/gemini-pro',
     'google/gemini-1.5-pro',
+    'google/gemini-2.5-pro',  // Added Gemini 2.5 Pro
     'anthropic/claude-instant',
     'mistralai/mistral',
     'meta-llama/llama-2'
   ];
+  
+  // For local development, consider all models as free
+  const isLocalDevelopment = process.env.NODE_ENV === 'development' || 
+                            (process.env.NODE_ENV !== 'production' && 
+                             (process.env.LOCAL_DEV === 'true' || !process.env.LOCAL_DEV));
+  
+  if (isLocalDevelopment) {
+    console.log('Local development mode: All models are considered free');
+    return true;
+  }
   
   // Check if the model ID contains any of the free model patterns
   return freeModels.some(freeModel => modelId.toLowerCase().includes(freeModel.toLowerCase()));
@@ -135,10 +171,39 @@ app.post('/task', async (req, res) => {
   
   try {
     const llmResult = await callLLM(model, prompt, llm_model);
-    await logActivity({ model, prompt, llm_model }, llmResult);
+    
+    // Try to log activity, but don't fail the request if logging fails
+    try {
+      await logActivity({ model, prompt, llm_model }, llmResult);
+    } catch (logErr) {
+      console.error('Error logging activity:', logErr);
+    }
+    
     res.json({ success: true, llmResult });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Error calling LLM:', err);
+    
+    // Handle specific error codes
+    if (err.response && err.response.status === 402) {
+      // Payment Required error from OpenRouter
+      return res.json({ 
+        success: true, 
+        llmResult: {
+          choices: [{ 
+            message: { 
+              content: "I'm sorry, but there seems to be an issue with the API key or credits. The OpenRouter service returned a 'Payment Required' error. This is likely because the API key has expired or has insufficient credits. Please try again later or contact the administrator to update the API key." 
+            } 
+          }]
+        }
+      });
+    }
+    
+    // For other errors, return a generic error message
+    res.status(500).json({ 
+      success: false, 
+      error: err.message,
+      response: "Sorry, there was an error processing your request. Please try again later."
+    });
   }
 });
 
