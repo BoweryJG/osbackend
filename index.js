@@ -163,12 +163,8 @@ function isFreeModel(modelId) {
     'meta-llama/llama-2'
   ];
   
-  // For local development, consider all models as free
-  const isLocalDevelopment = process.env.NODE_ENV === 'development' || 
-                            (process.env.NODE_ENV !== 'production' && 
-                             (process.env.LOCAL_DEV === 'true' || !process.env.LOCAL_DEV));
-  
-  if (isLocalDevelopment) {
+  // Only consider all models as free if explicitly in development mode
+  if (process.env.NODE_ENV === 'development' || process.env.LOCAL_DEV === 'true') {
     console.log('Local development mode: All models are considered free');
     return true;
   }
