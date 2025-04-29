@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import session from 'express-session';
+import pgSession from 'connect-pg-simple';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
@@ -11,12 +12,20 @@ dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1); // Ensure correct protocol for OAuth redirects on Render
-app.use(cors());
+app.use(cors({
+  origin: 'https://ollieiq.netlify.app',
+  credentials: true
+}));
 app.use(express.json());
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  // Use Supabase/PostgreSQL for session storage
+  store: new (pgSession(session))({
+    conString: process.env.SUPABASE_DB_URL,
+    tableName: 'session'
+  })
 }));
 app.use(passport.initialize());
 app.use(passport.session());
