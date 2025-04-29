@@ -134,9 +134,95 @@ app.get('/admin', ensureAdmin, (req, res) => {
   res.send(`Welcome to the admin dashboard, ${req.user.displayName}!`);
 });
 
-// Simple password authentication endpoint
+// User registration endpoint
+app.post('/auth/register', async (req, res) => {
+  const { name, email, company, reason } = req.body;
+  
+  // Validate required fields
+  if (!name || !email || !company || !reason) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'All fields are required' 
+    });
+  }
+  
+  try {
+    // Store user registration in Supabase
+    const { data, error } = await supabase
+      .from('user_registrations')
+      .upsert({
+        name,
+        email,
+        company,
+        reason,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+    
+    if (error) {
+      console.error('Error storing user registration:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to register user' 
+      });
+    }
+    
+    // Set a session variable to track this user
+    req.session.registeredUser = {
+      name,
+      email,
+      company,
+      registeredAt: new Date()
+    };
+    
+    res.json({ 
+      success: true, 
+      message: 'Registration successful'
+    });
+  } catch (err) {
+    console.error('Exception during registration:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'An error occurred during registration' 
+    });
+  }
+});
+
+// Password authentication endpoint
 app.post('/auth/password', (req, res) => {
-  const { password } = req.body;
+  const { password, userData } = req.body;
+  
+  // Check if user is registered
+  if (!req.session.registeredUser && !userData) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Registration required',
+      requiresRegistration: true
+    });
+  }
+  
+  // If userData is provided, store it in the session
+  if (userData && !req.session.registeredUser) {
+    req.session.registeredUser = {
+      ...userData,
+      registeredAt: new Date()
+    };
+    
+    // Also store in Supabase asynchronously
+    supabase
+      .from('user_registrations')
+      .upsert({
+        name: userData.name,
+        email: userData.email,
+        company: userData.company,
+        reason: userData.reason || 'Not provided',
+        created_at: new Date(),
+        updated_at: new Date()
+      })
+      .then(({ error }) => {
+        if (error) console.error('Error storing user registration:', error);
+      });
+  }
   
   if (password === 'letmein123') {
     // Set a session variable to indicate the user is authenticated
