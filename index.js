@@ -99,15 +99,31 @@ app.get('/admin', ensureAdmin, (req, res) => {
   res.send(`Welcome to the admin dashboard, ${req.user.displayName}!`);
 });
 
+// Simple password authentication endpoint
+app.post('/auth/password', (req, res) => {
+  const { password } = req.body;
+  
+  if (password === 'letmein123') {
+    // Set a session variable to indicate the user is authenticated
+    req.session.passwordAuthenticated = true;
+    res.json({ success: true, message: 'Authentication successful' });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid password' });
+  }
+});
+
 // Authentication status endpoint
 app.get('/auth/status', (req, res) => {
+  // Check both OAuth and password authentication
+  const isAuth = req.isAuthenticated() || req.session.passwordAuthenticated === true;
+  
   res.json({
-    authenticated: req.isAuthenticated(),
+    authenticated: isAuth,
     user: req.isAuthenticated() ? {
       id: req.user.id,
       displayName: req.user.displayName,
       email: req.user.emails?.[0]?.value
-    } : null
+    } : (isAuth ? { id: 'password-user', displayName: 'Password User' } : null)
   });
 });
 
@@ -309,28 +325,16 @@ async function canAccessModel(email, modelId) {
 app.post('/task', async (req, res) => {
   const { model, prompt, llm_model } = req.body;
   
-  // Get user email from session if authenticated
-  const userEmail = req.isAuthenticated() ? req.user.emails?.[0]?.value : null;
-  
-  // Check if user can access this model
-  const hasAccess = await canAccessModel(userEmail, model);
-  
-  if (!hasAccess) {
-    // If user is not authenticated at all
-    if (!req.isAuthenticated()) {
+  // Check if the model is free
+  if (!isFreeModel(model)) {
+    // For paid models, check if the user is authenticated with password
+    if (!req.session.passwordAuthenticated) {
       return res.status(403).json({ 
         success: false, 
-        error: 'Authentication required for this model',
-        response: 'Please log in to use premium models.'
+        error: 'Password required',
+        response: 'Please enter the password to access paid models.'
       });
     }
-    
-    // If user is authenticated but doesn't have the right subscription
-    return res.status(403).json({ 
-      success: false, 
-      error: 'Subscription required for this model',
-      response: 'Your current subscription level does not include access to this model. Please upgrade to RSM level for full access.'
-    });
   }
   
   try {
