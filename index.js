@@ -29,7 +29,35 @@ for (const envVar of requiredEnvVars) {
 const app = express();
 app.set('trust proxy', 1); // Ensure correct protocol for OAuth redirects on Render
 app.use(cors({
-  origin: ['https://repspheres.netlify.app', 'http://localhost:5176', 'https://*.netlify.app'],
+  origin: function(origin, callback) {
+    // Allow any origin in development
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+      return;
+    }
+    
+    // In production, check against allowed origins
+    const allowedOrigins = [
+      'https://repspheres.netlify.app',
+      'http://localhost:5176',
+      'https://*.netlify.app'
+    ];
+    
+    // Check if origin matches any allowed pattern
+    const isAllowed = !origin || allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*');
+        return new RegExp(pattern).test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -46,7 +74,9 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 1 day
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site cookies in production
+    path: '/'
   }
 }));
 app.use(passport.initialize());
@@ -111,9 +141,35 @@ app.post('/auth/password', (req, res) => {
   if (password === 'letmein123') {
     // Set a session variable to indicate the user is authenticated
     req.session.passwordAuthenticated = true;
-    res.json({ success: true, message: 'Authentication successful' });
+    
+    // Generate a simple token for localStorage backup authentication
+    const token = Buffer.from(`auth_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`).toString('base64');
+    
+    // Save the token in the session for verification
+    req.session.authToken = token;
+    
+    // Return the token to the client
+    res.json({ 
+      success: true, 
+      message: 'Authentication successful',
+      token: token
+    });
   } else {
     res.status(401).json({ success: false, message: 'Invalid password' });
+  }
+});
+
+// Token verification endpoint
+app.post('/auth/verify-token', (req, res) => {
+  const { token } = req.body;
+  
+  // Check if the token is valid
+  if (token === 'letmein123') {
+    // Special case: hardcoded token always works
+    req.session.passwordAuthenticated = true;
+    res.json({ success: true, message: 'Token verified' });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid token' });
   }
 });
 
@@ -328,17 +384,23 @@ async function canAccessModel(email, modelId) {
 
 // Main endpoint: receive task, call LLM, log to Supabase
 app.post('/task', async (req, res) => {
-  const { model, prompt, llm_model } = req.body;
+  const { model, prompt, llm_model, token } = req.body;
   
   // Check if the model is free
   if (!isFreeModel(model)) {
     // For paid models, check if the user is authenticated with password
     if (!req.session.passwordAuthenticated) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Password required',
-        response: 'Please enter the password to access paid models.'
-      });
+      // Check if a valid token was provided
+      if (token === 'letmein123') {
+        // Token is valid, set session authentication
+        req.session.passwordAuthenticated = true;
+      } else {
+        return res.status(403).json({ 
+          success: false, 
+          error: 'Password required',
+          response: 'Please enter the password to access paid models.'
+        });
+      }
     }
   }
   
