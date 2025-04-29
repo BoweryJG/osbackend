@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: mcpolliebackend
+    env: node
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production

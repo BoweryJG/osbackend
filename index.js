@@ -29,7 +29,7 @@ for (const envVar of requiredEnvVars) {
 const app = express();
 app.set('trust proxy', 1); // Ensure correct protocol for OAuth redirects on Render
 app.use(cors({
-  origin: ['https://repspheres.netlify.app', 'http://localhost:5176'],
+  origin: ['https://repspheres.netlify.app', 'http://localhost:5176', 'https://*.netlify.app'],
   credentials: true
 }));
 app.use(express.json());
