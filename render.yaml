@@ -17,3 +17,5 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      - key: FRONTEND_URL
+        value: https://repspheres.netlify.app

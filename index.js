@@ -60,16 +60,24 @@ passport.use(new GoogleStrategy({
   clientSecret: GOOGLE_CLIENT_SECRET,
   callbackURL: '/auth/google/callback'
 }, (accessToken, refreshToken, profile, done) => {
-  if (profile.emails && profile.emails[0].value.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-    return done(null, profile);
-  } else {
-    return done(null, false, { message: 'Not authorized' });
-  }
+  // Allow any user to log in for using paid models
+  // But only admin can access the admin dashboard
+  return done(null, {
+    ...profile,
+    isAdmin: profile.emails && profile.emails[0].value.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+  });
 }));
 
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) { return next(); }
   res.redirect('/auth/google');
+}
+
+function ensureAdmin(req, res, next) {
+  if (req.isAuthenticated() && req.user.isAdmin) { 
+    return next(); 
+  }
+  res.status(403).send('Access denied: Admin privileges required');
 }
 
 // Google OAuth routes
@@ -80,13 +88,27 @@ app.get('/auth/google',
 app.get('/auth/google/callback', 
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
-    res.redirect('/admin');
+    // After successful authentication, redirect back to the frontend
+    const frontendUrl = process.env.FRONTEND_URL || 'https://repspheres.netlify.app';
+    res.redirect(frontendUrl);
   }
 );
 
 // Protected admin dashboard
-app.get('/admin', ensureAuthenticated, (req, res) => {
+app.get('/admin', ensureAdmin, (req, res) => {
   res.send(`Welcome to the admin dashboard, ${req.user.displayName}!`);
+});
+
+// Authentication status endpoint
+app.get('/auth/status', (req, res) => {
+  res.json({
+    authenticated: req.isAuthenticated(),
+    user: req.isAuthenticated() ? {
+      id: req.user.id,
+      displayName: req.user.displayName,
+      email: req.user.emails?.[0]?.value
+    } : null
+  });
 });
 
 // Supabase client setup
