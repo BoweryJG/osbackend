@@ -39,11 +39,10 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: true,
-  // Commented out to use default MemoryStore instead
-  // store: new SupabaseSessionStore({
-  //   table: 'sessions',
-  //   ttl: 86400 // 1 day
-  // })
+  store: new SupabaseSessionStore({
+    table: 'sessions',
+    ttl: 86400 // 1 day
+  })
 }));
 app.use(passport.initialize());
 app.use(passport.session());
