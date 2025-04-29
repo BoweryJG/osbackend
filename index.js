@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 app.set('trust proxy', 1); // Ensure correct protocol for OAuth redirects on Render
 app.use(cors({
-  origin: 'https://ollieiq.netlify.app',
+  origin: 'https://repspheres.netlify.app',
   credentials: true
 }));
 app.use(express.json());
