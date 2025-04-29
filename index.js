@@ -17,14 +17,17 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+// Use memory store for sessions to avoid connection issues
+// but keep Supabase for activity logging and other functionality
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: true,
-  store: new SupabaseSessionStore({
-    table: 'sessions',
-    ttl: 86400 // 1 day
-  })
+  // Commented out to use default MemoryStore instead
+  // store: new SupabaseSessionStore({
+  //   table: 'sessions',
+  //   ttl: 86400 // 1 day
+  // })
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -102,9 +105,34 @@ async function logActivity(task, result) {
   return data;
 }
 
+// Helper function to check if a model is free based on its ID
+function isFreeModel(modelId) {
+  // List of free models or patterns that identify free models
+  const freeModels = [
+    'google/gemini-pro',
+    'google/gemini-1.5-pro',
+    'anthropic/claude-instant',
+    'mistralai/mistral',
+    'meta-llama/llama-2'
+  ];
+  
+  // Check if the model ID contains any of the free model patterns
+  return freeModels.some(freeModel => modelId.toLowerCase().includes(freeModel.toLowerCase()));
+}
+
 // Main endpoint: receive task, call LLM, log to Supabase
 app.post('/task', async (req, res) => {
   const { model, prompt, llm_model } = req.body;
+  
+  // Check if the model is paid and if the user is authenticated
+  if (!isFreeModel(model) && !req.isAuthenticated()) {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Authentication required for this model',
+      response: 'Please log in to use premium models.'
+    });
+  }
+  
   try {
     const llmResult = await callLLM(model, prompt, llm_model);
     await logActivity({ model, prompt, llm_model }, llmResult);
