@@ -42,7 +42,12 @@ app.use(session({
   store: new SupabaseSessionStore({
     table: 'sessions',
     ttl: 86400 // 1 day
-  })
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 1 day
+  }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
