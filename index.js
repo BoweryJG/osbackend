@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import session from 'express-session';
-import pgSession from 'connect-pg-simple';
+import SupabaseSessionStore from './supabaseSessionStore.js';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
@@ -21,10 +21,9 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: true,
-  // Use Supabase/PostgreSQL for session storage
-  store: new (pgSession(session))({
-    conString: process.env.SUPABASE_DB_URL,
-    tableName: 'session'
+  store: new SupabaseSessionStore({
+    table: 'sessions',
+    ttl: 86400 // 1 day
   })
 }));
 app.use(passport.initialize());
