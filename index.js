@@ -24,6 +24,7 @@ app.use(cors({
     // In production, check against allowed origins
     const allowedOrigins = [
       'https://repspheres.netlify.app',
+      'https://repspheres.com',
       'http://localhost:5176',
       'https://*.netlify.app'
     ];
