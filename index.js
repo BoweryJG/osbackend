@@ -1,9 +1,17 @@
 import express from 'express';
-import cors from 'cors';
+import axios from 'axios';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file if present
-dotenv.config();
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env file
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 // Create Express app
 const app = express();
@@ -52,7 +60,159 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Task endpoint - the one that was returning 404
+// Supabase client setup
+let supabase;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    console.log('Connecting to Supabase at:', process.env.SUPABASE_URL);
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+  } else {
+    console.warn('Supabase credentials not found. Supabase features will be disabled.');
+  }
+} catch (err) {
+  console.error('Error initializing Supabase client:', err);
+}
+
+// Call LLM endpoint using OpenRouter
+async function callLLM(model, prompt, llm_model) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error('OpenRouter API key not configured');
+  }
+  
+  // Use OpenRouter API for all LLM calls
+  const modelToUse = llm_model || process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
+  
+  try {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: modelToUse,
+        messages: [{ role: 'user', content: prompt }],
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error calling OpenRouter API:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    throw error;
+  }
+}
+
+// Log activity to Supabase
+async function logActivity(task, result) {
+  if (!supabase) {
+    console.warn('Supabase not configured. Activity logging skipped.');
+    return null;
+  }
+  
+  try {
+    const { data, error } = await supabase.from('activity_log').insert([{ task, result }]);
+    if (error) {
+      console.error('Error logging activity to Supabase:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Exception logging activity to Supabase:', err);
+    return null;
+  }
+}
+
+// Helper function to check if a model is free based on its ID
+function isFreeModel(modelId) {
+  if (!modelId) return true;
+  
+  // List of free models or patterns that identify free models
+  const freeModels = [
+    'google/gemini-pro',
+    'google/gemini-1.5-pro',
+    'google/gemini-2.0-flash',  // Using Gemini 2.0 Flash which is free
+    'anthropic/claude-instant',
+    'mistralai/mistral',
+    'meta-llama/llama-2'
+  ];
+  
+  // Only consider all models as free if explicitly in development mode
+  if (process.env.NODE_ENV === 'development' || process.env.LOCAL_DEV === 'true') {
+    console.log('Local development mode: All models are considered free');
+    return true;
+  }
+  
+  // Check if the model ID contains any of the free model patterns
+  return freeModels.some(freeModel => modelId.toLowerCase().includes(freeModel.toLowerCase()));
+}
+
+// Helper function to check if a model is ASM level
+function isAsmModel(modelId) {
+  if (!modelId) return false;
+  
+  // ASM level models - more accessible paid models
+  const asmModels = [
+    'microsoft/phi',
+    'anthropic/claude-instant',
+    'mistralai/mistral-medium',
+    'google/gemini-1.5-flash'
+  ];
+  
+  // Check if the model ID contains any of the ASM model patterns
+  return asmModels.some(asmModel => modelId.toLowerCase().includes(asmModel.toLowerCase()));
+}
+
+// Helper function to check user's subscription level
+async function getUserSubscription(email) {
+  if (!email || !supabase) return 'free';
+  
+  try {
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .select('subscription_level')
+      .eq('email', email)
+      .single();
+    
+    if (error || !data) {
+      console.log(`No subscription found for ${email}, defaulting to free`);
+      return 'free';
+    }
+    
+    return data.subscription_level;
+  } catch (err) {
+    console.error('Error fetching subscription:', err);
+    return 'free';
+  }
+}
+
+// Helper function to check if user can access a model
+async function canAccessModel(email, modelId) {
+  // Free models are accessible to everyone
+  if (isFreeModel(modelId)) return true;
+  
+  // If no email, user can only access free models
+  if (!email) return false;
+  
+  const subscriptionLevel = await getUserSubscription(email);
+  
+  switch (subscriptionLevel) {
+    case 'rsm':
+      return true; // RSM users get access to all models
+    case 'asm':
+      // ASM users get access to free models and ASM models
+      return isFreeModel(modelId) || isAsmModel(modelId);
+    case 'free':
+    default:
+      return isFreeModel(modelId);
+  }
+}
+
+// Task endpoint
 app.post('/task', async (req, res) => {
   try {
     // Log the incoming request for debugging
@@ -67,22 +227,61 @@ app.post('/task', async (req, res) => {
     // Extract data from request body
     const { model, prompt, llm_model, token } = req.body;
     
-    // Return a dummy success response
-    res.json({
-      success: true,
-      llmResult: {
-        choices: [{
-          message: {
-            content: "This is a dummy response from the /task endpoint. Your request was received successfully."
-          }
-        }],
-        model: model || llm_model || "dummy-model",
-        prompt: prompt || "No prompt provided"
-      }
-    });
+    // Check if OpenRouter API key is configured
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.warn('OpenRouter API key not configured. Returning dummy response.');
+      return res.json({
+        success: true,
+        llmResult: {
+          choices: [{
+            message: {
+              content: "OpenRouter API key not configured. Please set the OPENROUTER_API_KEY environment variable."
+            }
+          }],
+          model: model || llm_model || "dummy-model",
+          prompt: prompt || "No prompt provided"
+        }
+      });
+    }
     
-    // Log success
-    console.log('Successfully processed /task request');
+    try {
+      // Call the LLM API
+      const llmResult = await callLLM(model, prompt, llm_model);
+      
+      // Try to log activity, but don't fail the request if logging fails
+      try {
+        await logActivity({ model, prompt, llm_model }, llmResult);
+      } catch (logErr) {
+        console.error('Error logging activity:', logErr);
+      }
+      
+      // Return the LLM result
+      res.json({ success: true, llmResult });
+    } catch (err) {
+      console.error('Error calling LLM:', err);
+      
+      // Handle specific error codes
+      if (err.response && err.response.status === 402) {
+        // Payment Required error from OpenRouter
+        return res.json({ 
+          success: true, 
+          llmResult: {
+            choices: [{ 
+              message: { 
+                content: "I'm sorry, but there seems to be an issue with the API key or credits. The OpenRouter service returned a 'Payment Required' error. This is likely because the API key has expired or has insufficient credits. Please try again later or contact the administrator to update the API key." 
+              } 
+            }]
+          }
+        });
+      }
+      
+      // For other errors, return a generic error response
+      res.status(500).json({
+        success: false,
+        error: err.message,
+        response: "Sorry, there was an error processing your request. Please try again later."
+      });
+    }
   } catch (err) {
     // Log the error
     console.error('Error processing /task request:', err);
