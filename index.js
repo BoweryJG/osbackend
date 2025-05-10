@@ -624,6 +624,82 @@ app.post('/task', async (req, res) => {
   }
 });
 
+// Webhook endpoint for backward compatibility with existing frontends
+app.post('/webhook', async (req, res) => {
+  try {
+    console.log('Received request to /webhook endpoint:', {
+      body: req.body,
+      headers: {
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      }
+    });
+
+    // Extract the filename or fileUrl if it exists in the request body
+    let fileUrl = '';
+    if (req.body.data?.fileUrl) {
+      fileUrl = req.body.data.fileUrl;
+    } else if (req.body.fileUrl) {
+      fileUrl = req.body.fileUrl;
+    }
+
+    // Default prompt
+    let prompt = "Please analyze this conversation.";
+    if (req.body.data?.prompt) {
+      prompt = req.body.data.prompt;
+    } else if (req.body.prompt) {
+      prompt = req.body.prompt;
+    }
+
+    // Include the file URL in the prompt if it exists
+    if (fileUrl) {
+      prompt = `Please analyze this conversation from file: ${fileUrl}. ${prompt}`;
+    }
+
+    try {
+      // Route to LLM processing
+      const llmResult = await callLLM(null, prompt, null);
+      
+      // Return a modified response structure compatible with webhook expectations
+      return res.json({
+        message: "Processing started",
+        user_id: "webhook-user",
+        result: llmResult,
+        usage: {
+          current: 1,
+          limit: 10
+        }
+      });
+    } catch (err) {
+      console.error('Error calling LLM from webhook:', err);
+      
+      return res.status(500).json({
+        success: false,
+        error: err.message,
+        message: "Error processing webhook request"
+      });
+    }
+  } catch (err) {
+    console.error('Error processing webhook request:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+      message: "Error processing webhook request"
+    });
+  }
+});
+
+// User usage endpoint for frontend compatibility
+app.get('/user/usage', (req, res) => {
+  // Return mock usage data as the real endpoint isn't implemented yet
+  res.json({
+    tier: 'free',
+    usage: 0,
+    quota: 10,
+    reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+  });
+});
+
 // Catch-all route for undefined endpoints
 app.use('*', (req, res) => {
   console.log(`Received request for undefined route: ${req.originalUrl}`);
