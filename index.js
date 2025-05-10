@@ -75,7 +75,7 @@ async function connectToSupabase(retryCount = 0) {
       supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
       
       // Test the connection by making a simple query
-      const { data, error } = await supabase.from('user_subscriptions').select('count(*)', { count: 'exact' });
+      const { data, error } = await supabase.from('user_subscriptions').select('*').limit(1);
       
       if (error) {
         throw error;
