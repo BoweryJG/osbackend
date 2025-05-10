@@ -60,18 +60,60 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Supabase client setup
+// Supabase client setup with connection retry
 let supabase;
-try {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-    console.log('Connecting to Supabase at:', process.env.SUPABASE_URL);
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  } else {
-    console.warn('Supabase credentials not found. Supabase features will be disabled.');
+let supabaseConnected = false;
+const MAX_RETRIES = 5;
+const RETRY_DELAY = 2000; // 2 seconds
+
+async function connectToSupabase(retryCount = 0) {
+  try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+      console.log(`Connecting to Supabase at: ${process.env.SUPABASE_URL} (Attempt ${retryCount + 1})`);
+      
+      // Create a new Supabase client
+      supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+      
+      // Test the connection by making a simple query
+      const { data, error } = await supabase.from('user_subscriptions').select('count(*)', { count: 'exact' });
+      
+      if (error) {
+        throw error;
+      }
+      
+      console.log('Successfully connected to Supabase!');
+      supabaseConnected = true;
+      return true;
+    } else {
+      console.warn('Supabase credentials not found. Supabase features will be disabled.');
+      return false;
+    }
+  } catch (err) {
+    console.error(`Error connecting to Supabase (Attempt ${retryCount + 1}):`, err);
+    
+    if (retryCount < MAX_RETRIES) {
+      console.log(`Retrying connection in ${RETRY_DELAY / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return connectToSupabase(retryCount + 1);
+    } else {
+      console.error(`Failed to connect to Supabase after ${MAX_RETRIES} attempts.`);
+      return false;
+    }
   }
-} catch (err) {
-  console.error('Error initializing Supabase client:', err);
 }
+
+// Call connectToSupabase immediately and then set up periodic reconnection attempts if it fails
+connectToSupabase().then(connected => {
+  if (!connected) {
+    // Try to reconnect every 30 seconds
+    setInterval(() => {
+      if (!supabaseConnected) {
+        console.log('Attempting to reconnect to Supabase...');
+        connectToSupabase();
+      }
+    }, 30000);
+  }
+});
 
 // Call LLM endpoint using OpenRouter
 async function callLLM(model, prompt, llm_model) {
@@ -190,6 +232,43 @@ async function getUserSubscription(email) {
   }
 }
 
+// Helper function to check if user has access to a specific module
+async function hasModuleAccess(email, moduleName) {
+  if (!email || !supabase) return false;
+  
+  try {
+    // First get the user_id from user_subscriptions
+    const { data: userData, error: userError } = await supabase
+      .from('user_subscriptions')
+      .select('user_id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      console.log(`No user found for ${email}, denying module access`);
+      return false;
+    }
+    
+    // Then check module access
+    const { data, error } = await supabase
+      .from('module_access')
+      .select('has_access')
+      .eq('user_id', userData.user_id)
+      .eq('module', moduleName)
+      .single();
+    
+    if (error || !data) {
+      console.log(`No module access found for ${email}/${moduleName}, denying access`);
+      return false;
+    }
+    
+    return data.has_access;
+  } catch (err) {
+    console.error('Error checking module access:', err);
+    return false;
+  }
+}
+
 // Helper function to check if user can access a model
 async function canAccessModel(email, modelId) {
   // Free models are accessible to everyone
@@ -211,6 +290,254 @@ async function canAccessModel(email, modelId) {
       return isFreeModel(modelId);
   }
 }
+
+// Module access check endpoint
+app.get('/api/modules/access', async (req, res) => {
+  try {
+    const email = req.query.email;
+    const module = req.query.module;
+    
+    if (!email || !module) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Email and module parameters are required'
+      });
+    }
+    
+    const hasAccess = await hasModuleAccess(email, module);
+    
+    return res.json({
+      success: true,
+      hasAccess
+    });
+  } catch (err) {
+    console.error('Error checking module access:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error checking module access'
+    });
+  }
+});
+
+// List all modules a user has access to
+app.get('/api/modules/list', async (req, res) => {
+  try {
+    const email = req.query.email;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Email parameter is required'
+      });
+    }
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'Supabase connection is not available'
+      });
+    }
+    
+    // First get the user_id from user_subscriptions
+    const { data: userData, error: userError } = await supabase
+      .from('user_subscriptions')
+      .select('user_id')
+      .eq('email', email)
+      .single();
+    
+    if (userError || !userData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: 'User not found'
+      });
+    }
+    
+    // Then get all modules user has access to
+    const { data, error } = await supabase
+      .from('module_access')
+      .select('module')
+      .eq('user_id', userData.user_id)
+      .eq('has_access', true);
+    
+    if (error) {
+      throw error;
+    }
+    
+    return res.json({
+      success: true,
+      modules: data.map(item => item.module)
+    });
+  } catch (err) {
+    console.error('Error listing accessible modules:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error listing accessible modules'
+    });
+  }
+});
+
+// App data CRUD endpoints
+// Create/update app data
+app.post('/api/data/:appName', async (req, res) => {
+  try {
+    const { appName } = req.params;
+    const { userId, data } = req.body;
+    
+    if (!appName || !userId || !data) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'App name, user ID, and data are required'
+      });
+    }
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'Supabase connection is not available'
+      });
+    }
+    
+    // Check if record already exists
+    const { data: existingData, error: selectError } = await supabase
+      .from('app_data')
+      .select('id')
+      .eq('app_name', appName)
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    let result;
+    
+    if (existingData) {
+      // Update existing record
+      const { data: updateData, error: updateError } = await supabase
+        .from('app_data')
+        .update({ data })
+        .eq('id', existingData.id)
+        .select();
+      
+      if (updateError) throw updateError;
+      result = updateData[0];
+    } else {
+      // Insert new record
+      const { data: insertData, error: insertError } = await supabase
+        .from('app_data')
+        .insert([{ app_name: appName, user_id: userId, data }])
+        .select();
+      
+      if (insertError) throw insertError;
+      result = insertData[0];
+    }
+    
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (err) {
+    console.error('Error saving app data:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error saving app data'
+    });
+  }
+});
+
+// Get app data
+app.get('/api/data/:appName', async (req, res) => {
+  try {
+    const { appName } = req.params;
+    const userId = req.query.userId;
+    
+    if (!appName || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'App name and user ID are required'
+      });
+    }
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'Supabase connection is not available'
+      });
+    }
+    
+    const { data, error } = await supabase
+      .from('app_data')
+      .select('*')
+      .eq('app_name', appName)
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (error) throw error;
+    
+    return res.json({
+      success: true,
+      data: data || null
+    });
+  } catch (err) {
+    console.error('Error fetching app data:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error fetching app data'
+    });
+  }
+});
+
+// Delete app data
+app.delete('/api/data/:appName', async (req, res) => {
+  try {
+    const { appName } = req.params;
+    const userId = req.query.userId;
+    
+    if (!appName || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'App name and user ID are required'
+      });
+    }
+    
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        message: 'Supabase connection is not available'
+      });
+    }
+    
+    const { error } = await supabase
+      .from('app_data')
+      .delete()
+      .eq('app_name', appName)
+      .eq('user_id', userId);
+    
+    if (error) throw error;
+    
+    return res.json({
+      success: true,
+      message: 'App data deleted successfully'
+    });
+  } catch (err) {
+    console.error('Error deleting app data:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error deleting app data'
+    });
+  }
+});
 
 // Task endpoint
 app.post('/task', async (req, res) => {

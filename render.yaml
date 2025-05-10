@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sphere-os-backend
+    name: spheres-consolidated-backend
     env: node
     buildCommand: npm install
     startCommand: node index.js
@@ -18,4 +18,4 @@ services:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://repspheres.netlify.app
+        value: https://repspheres.com
