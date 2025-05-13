@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Connection Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .card {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 300px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        #chart {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        .chart-container {
+            width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Spheres Backend Connection Demo</h1>
+    <p>This page demonstrates connection to the Spheres consolidated backend at <code>https://osbackend-zl1h.onrender.com</code></p>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Backend Health Check</h2>
+            <div id="healthStatus" class="status loading">Checking backend status...</div>
+            <button onclick="checkHealth()">Check Health</button>
+            <div id="healthResult"></div>
+        </div>
+        
+        <div class="card">
+            <h2>Module Access</h2>
+            <div id="moduleStatus" class="status">Enter email and module to check access</div>
+            <div>
+                <label for="email">Email:</label>
+                <input type="email" id="email" placeholder="user@example.com">
+            </div>
+            <div>
+                <label for="module">Module:</label>
+                <select id="module">
+                    <option value="workspace">Workspace</option>
+                    <option value="linguistics">Linguistics</option>
+                    <option value="market_insights">Market Insights</option>
+                    <option value="crm">CRM</option>
+                    <option value="blog">Blog</option>
+                </select>
+            </div>
+            <button onclick="checkModuleAccess()">Check Access</button>
+            <div id="moduleResult"></div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Data Storage Demo</h2>
+            <div id="dataStatus" class="status">Enter user ID and app name to test data storage</div>
+            <div>
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" placeholder="user-123">
+            </div>
+            <div>
+                <label for="appName">App Name:</label>
+                <select id="appName">
+                    <option value="workspace">Workspace</option>
+                    <option value="linguistics">Linguistics</option>
+                    <option value="market_insights">Market Insights</option>
+                    <option value="crm">CRM</option>
+                    <option value="blog">Blog</option>
+                </select>
+            </div>
+            <div>
+                <label for="dataContent">Data Content (JSON):</label>
+                <textarea id="dataContent" rows="5" cols="30">{"sample": "data", "timestamp": "2025-05-13T18:30:00Z"}</textarea>
+            </div>
+            <button onclick="saveData()">Save Data</button>
+            <button onclick="loadData()">Load Data</button>
+            <div id="dataResult"></div>
+        </div>
+        
+        <div class="card">
+            <h2>LLM Integration</h2>
+            <div id="llmStatus" class="status">Enter a prompt to test LLM integration</div>
+            <div>
+                <label for="prompt">Prompt:</label>
+                <textarea id="prompt" rows="5" cols="30">Summarize the key market trends for 2025.</textarea>
+            </div>
+            <div>
+                <label for="llmModel">Model (optional):</label>
+                <input type="text" id="llmModel" placeholder="e.g., openai/gpt-3.5-turbo">
+            </div>
+            <button onclick="callLLM()">Call LLM</button>
+            <div id="llmResult"></div>
+        </div>
+    </div>
+    
+    <div class="card chart-container">
+        <h2>Data Visualization Demo</h2>
+        <div>
+            <label for="chartType">Chart Type:</label>
+            <select id="chartType" onchange="updateChart()">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+            </select>
+            <button onclick="generateRandomData()">Generate Random Data</button>
+        </div>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <script>
+        // Configuration
+        const BACKEND_URL = 'https://osbackend-zl1h.onrender.com';
+        let myChart = null;
+        
+        // Helper function to make API calls
+        async function callApi(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(`${BACKEND_URL}${endpoint}`, options);
+                return await response.json();
+            } catch (error) {
+                console.error(`Error calling ${endpoint}:`, error);
+                return { error: error.message };
+            }
+        }
+        
+        // Health check function
+        async function checkHealth() {
+            const healthStatus = document.getElementById('healthStatus');
+            const healthResult = document.getElementById('healthResult');
+            
+            healthStatus.className = 'status loading';
+            healthStatus.textContent = 'Checking backend status...';
+            
+            try {
+                const result = await callApi('/health');
+                
+                if (result.status === 'ok') {
+                    healthStatus.className = 'status success';
+                    healthStatus.textContent = 'Backend is online!';
+                } else {
+                    healthStatus.className = 'status error';
+                    healthStatus.textContent = 'Backend returned an unexpected response.';
+                }
+                
+                healthResult.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                healthStatus.className = 'status error';
+                healthStatus.textContent = 'Failed to connect to backend.';
+                healthResult.innerHTML = `<pre>${error.message}</pre>`;
+            }
+        }
+        
+        // Module access check function
+        async function checkModuleAccess() {
+            const moduleStatus = document.getElementById('moduleStatus');
+            const moduleResult = document.getElementById('moduleResult');
+            const email = document.getElementById('email').value;
+            const module = document.getElementById('module').value;
+            
+            if (!email) {
+                moduleStatus.className = 'status error';
+                moduleStatus.textContent = 'Please enter an email address.';
+                return;
+            }
+            
+            moduleStatus.className = 'status loading';
+            moduleStatus.textContent = 'Checking module access...';
+            
+            try {
+                const result = await callApi(`/api/modules/access?email=${encodeURIComponent(email)}&module=${module}`);
+                
+                if (result.success) {
+                    moduleStatus.className = 'status success';
+                    moduleStatus.textContent = result.hasAccess ? 
+                        `User has access to ${module} module.` : 
+                        `User does NOT have access to ${module} module.`;
+                } else {
+                    moduleStatus.className = 'status error';
+                    moduleStatus.textContent = 'Failed to check module access.';
+                }
+                
+                moduleResult.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                moduleStatus.className = 'status error';
+                moduleStatus.textContent = 'Failed to connect to backend.';
+                moduleResult.innerHTML = `<pre>${error.message}</pre>`;
+            }
+        }
+        
+        // Save data function
+        async function saveData() {
+            const dataStatus = document.getElementById('dataStatus');
+            const dataResult = document.getElementById('dataResult');
+            const userId = document.getElementById('userId').value;
+            const appName = document.getElementById('appName').value;
+            let dataContent;
+            
+            try {
+                dataContent = JSON.parse(document.getElementById('dataContent').value);
+            } catch (error) {
+                dataStatus.className = 'status error';
+                dataStatus.textContent = 'Invalid JSON data.';
+                return;
+            }
+            
+            if (!userId) {
+                dataStatus.className = 'status error';
+                dataStatus.textContent = 'Please enter a user ID.';
+                return;
+            }
+            
+            dataStatus.className = 'status loading';
+            dataStatus.textContent = 'Saving data...';
+            
+            try {
+                const result = await callApi(`/api/data/${appName}`, 'POST', {
+                    userId,
+                    data: dataContent
+                });
+                
+                if (result.success) {
+                    dataStatus.className = 'status success';
+                    dataStatus.textContent = 'Data saved successfully!';
+                } else {
+                    dataStatus.className = 'status error';
+                    dataStatus.textContent = 'Failed to save data.';
+                }
+                
+                dataResult.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                dataStatus.className = 'status error';
+                dataStatus.textContent = 'Failed to connect to backend.';
+                dataResult.innerHTML = `<pre>${error.message}</pre>`;
+            }
+        }
+        
+        // Load data function
+        async function loadData() {
+            const dataStatus = document.getElementById('dataStatus');
+            const dataResult = document.getElementById('dataResult');
+            const userId = document.getElementById('userId').value;
+            const appName = document.getElementById('appName').value;
+            
+            if (!userId) {
+                dataStatus.className = 'status error';
+                dataStatus.textContent = 'Please enter a user ID.';
+                return;
+            }
+            
+            dataStatus.className = 'status loading';
+            dataStatus.textContent = 'Loading data...';
+            
+            try {
+                const result = await callApi(`/api/data/${appName}?userId=${encodeURIComponent(userId)}`);
+                
+                if (result.success) {
+                    dataStatus.className = 'status success';
+                    dataStatus.textContent = result.data ? 'Data loaded successfully!' : 'No data found.';
+                    
+                    if (result.data && result.data.data) {
+                        document.getElementById('dataContent').value = JSON.stringify(result.data.data, null, 2);
+                    }
+                } else {
+                    dataStatus.className = 'status error';
+                    dataStatus.textContent = 'Failed to load data.';
+                }
+                
+                dataResult.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                dataStatus.className = 'status error';
+                dataStatus.textContent = 'Failed to connect to backend.';
+                dataResult.innerHTML = `<pre>${error.message}</pre>`;
+            }
+        }
+        
+        // Call LLM function
+        async function callLLM() {
+            const llmStatus = document.getElementById('llmStatus');
+            const llmResult = document.getElementById('llmResult');
+            const prompt = document.getElementById('prompt').value;
+            const llmModel = document.getElementById('llmModel').value;
+            
+            if (!prompt) {
+                llmStatus.className = 'status error';
+                llmStatus.textContent = 'Please enter a prompt.';
+                return;
+            }
+            
+            llmStatus.className = 'status loading';
+            llmStatus.textContent = 'Calling LLM...';
+            
+            try {
+                const body = {
+                    prompt
+                };
+                
+                if (llmModel) {
+                    body.llm_model = llmModel;
+                }
+                
+                const result = await callApi('/task', 'POST', body);
+                
+                if (result.success) {
+                    llmStatus.className = 'status success';
+                    llmStatus.textContent = 'LLM response received!';
+                    
+                    // Extract the response content
+                    const content = result.llmResult?.choices?.[0]?.message?.content || 'No content in response';
+                    llmResult.innerHTML = `<h3>Response:</h3><div>${content.replace(/\n/g, '<br>')}</div>`;
+                } else {
+                    llmStatus.className = 'status error';
+                    llmStatus.textContent = 'Failed to call LLM.';
+                    llmResult.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                llmStatus.className = 'status error';
+                llmStatus.textContent = 'Failed to connect to backend.';
+                llmResult.innerHTML = `<pre>${error.message}</pre>`;
+            }
+        }
+        
+        // Chart functions
+        function generateRandomData() {
+            const labels = ['January', 'February', 'March', 'April', 'May', 'June', 'July'];
+            const data = labels.map(() => Math.floor(Math.random() * 100));
+            
+            // Store the data in the window object for reuse
+            window.chartData = {
+                labels,
+                datasets: [{
+                    label: 'Sample Data',
+                    data,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)',
+                        'rgba(199, 199, 199, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(199, 199, 199, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            };
+            
+            updateChart();
+        }
+        
+        function updateChart() {
+            const chartType = document.getElementById('chartType').value;
+            const ctx = document.getElementById('chart').getContext('2d');
+            
+            // If no data exists yet, generate some
+            if (!window.chartData) {
+                generateRandomData();
+                return;
+            }
+            
+            // Destroy existing chart if it exists
+            if (myChart) {
+                myChart.destroy();
+            }
+            
+            // Create new chart
+            myChart = new Chart(ctx, {
+                type: chartType,
+                data: window.chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize the page
+        window.onload = function() {
+            checkHealth();
+            generateRandomData();
+        };
+    </script>
+</body>
+</html>
