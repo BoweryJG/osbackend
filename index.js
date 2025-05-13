@@ -236,6 +236,11 @@ async function getUserSubscription(email) {
 
 // Helper function to check if user has access to a specific module
 async function hasModuleAccess(email, moduleName) {
+  // Temporary override: grant access to all modules for all users
+  return true;
+  
+  // Original code is kept but commented out for future reference
+  /*
   if (!email || !supabase) return false;
   
   try {
@@ -269,6 +274,7 @@ async function hasModuleAccess(email, moduleName) {
     console.error('Error checking module access:', err);
     return false;
   }
+  */
 }
 
 // Helper function to check if user can access a model
