@@ -299,6 +299,51 @@ async function canAccessModel(email, modelId) {
   }
 }
 
+
+// API endpoint to fetch models from OpenRouter
+app.get('/api/models', async (req, res) => {
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error('OpenRouter API key not configured');
+    return res.status(500).json({ message: 'OpenRouter API key not configured' });
+  }
+
+  try {
+    const response = await axios.get('https://openrouter.ai/api/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        // Optional: Add HTTP-Referer and X-Title if OpenRouter requires/recommends for backend calls
+        // 'HTTP-Referer': process.env.SITE_URL || 'https://repspheres.com',
+        // 'X-Title': process.env.APP_NAME || 'RepSpheres Backend'
+      }
+    });
+
+    if (response.data && response.data.data) {
+      const formattedModels = response.data.data.map(model => ({
+        id: model.id,
+        name: model.name || model.id, // Fallback to id if name is not present
+        description: model.description || 'No description available.',
+        // Determine pricing status based on actual costs from OpenRouter
+        // The frontend ModelPicker.jsx expects a 'pricing' field with 'paid' or 'free'
+        pricing: (parseFloat(model.pricing?.prompt) > 0 || parseFloat(model.pricing?.completion) > 0) ? 'paid' : 'free',
+        context_length: model.context_length,
+        architecture: model.architecture?.modality, // e.g., 'text-to-text'
+        // You can include more details if needed by the frontend in the future
+        // e.g., model.provider, model.pricing (for detailed costs)
+      }));
+      res.json(formattedModels);
+    } else {
+      console.error('Unexpected response structure from OpenRouter:', response.data);
+      res.status(500).json({ message: 'Failed to fetch models due to unexpected response structure' });
+    }
+  } catch (error) {
+    console.error('Error fetching models from OpenRouter:', error.response ? error.response.data : error.message);
+    res.status(error.response?.status || 500).json({ 
+      message: 'Failed to fetch models from OpenRouter',
+      details: error.response?.data?.error?.message || error.message
+    });
+  }
+});
+
 // Module access check endpoint
 app.get('/api/modules/access', async (req, res) => {
   try {
