@@ -23,8 +23,10 @@ A unified backend server for all Spheres applications, with centralized data sto
 3. Copy `.env.example` to `.env` and fill in your credentials:
    - `SUPABASE_URL` - Your Supabase project URL
    - `SUPABASE_KEY` - Your Supabase anon or service key
-   - `OPENROUTER_API_KEY` - Your OpenRouter API key (if using LLM features)
+   - `OPENROUTER_API_KEY` - Your OpenRouter API key (required for the transcription service)
+   - `OPENAI_API_KEY` - Your OpenAI API key (required for the transcription service)
    - See `ENV_VARIABLE_GUIDE.md` for detailed instructions on setting up environment variables locally and on Render
+   - The Supabase keys and both API keys above are required if you plan to use the transcription service
 4. Run the SQL scripts to set up the Supabase database tables:
    - `create_user_registrations_table.sql`
    - `create_subscriptions_table.sql`
