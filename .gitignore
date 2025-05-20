@@ -1,4 +1,20 @@
 node_modules/
 .env
-.env
 .DS_Store
+
+# Log and temporary files
+server.log
+*.log
+logs/
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Deployment artifacts
+netlify-deploy/
+dist/
+build/
+*.zip
+*.tar
+
