@@ -31,6 +31,7 @@ app.use(cors({
     
     // In production, check against allowed origins
     const allowedOrigins = [
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
       'https://repspheres.netlify.app',
       'https://repspheres.com',
       'http://localhost:5176',
