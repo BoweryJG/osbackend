@@ -30,14 +30,18 @@ app.use(cors({
     }
     
     // In production, check against allowed origins
-    const allowedOrigins = [
+    const allowedOrigins = [];
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    allowedOrigins.push(
       'https://repspheres.netlify.app',
       'https://repspheres.com',
       'http://localhost:5176',
       'https://localhost:5176',
       'https://*.netlify.app',
       '*' // Allow all origins temporarily during testing
-    ];
+    );
     
     // Check if origin matches any allowed pattern
     const isAllowed = !origin || allowedOrigins.some(allowed => {
