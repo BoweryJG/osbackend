@@ -122,7 +122,7 @@ connectToSupabase().then(connected => {
 });
 
 // Call LLM endpoint using OpenRouter
-async function callLLM(model, prompt, llm_model) {
+async function callLLM(prompt, llm_model) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key not configured');
   }
@@ -603,7 +603,7 @@ app.post('/task', async (req, res) => {
     });
 
     // Extract data from request body
-    const { model, prompt, llm_model, token } = req.body;
+    const { prompt, llm_model, token } = req.body;
     
     // Check if OpenRouter API key is configured
     if (!process.env.OPENROUTER_API_KEY) {
@@ -616,7 +616,7 @@ app.post('/task', async (req, res) => {
               content: "OpenRouter API key not configured. Please set the OPENROUTER_API_KEY environment variable."
             }
           }],
-          model: model || llm_model || "dummy-model",
+          model: llm_model || "dummy-model",
           prompt: prompt || "No prompt provided"
         }
       });
@@ -624,11 +624,11 @@ app.post('/task', async (req, res) => {
     
     try {
       // Call the LLM API
-      const llmResult = await callLLM(model, prompt, llm_model);
+      const llmResult = await callLLM(prompt, llm_model);
       
       // Try to log activity, but don't fail the request if logging fails
       try {
-        await logActivity({ model, prompt, llm_model }, llmResult);
+        await logActivity({ prompt, llm_model }, llmResult);
       } catch (logErr) {
         console.error('Error logging activity:', logErr);
       }
@@ -707,7 +707,7 @@ app.post('/webhook', async (req, res) => {
 
     try {
       // Route to LLM processing
-      const llmResult = await callLLM(null, prompt, null);
+      const llmResult = await callLLM(prompt, null);
       
       // Return a modified response structure compatible with webhook expectations
       return res.json({
