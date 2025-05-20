@@ -240,13 +240,8 @@ async function getUserSubscription(email) {
 
 // Helper function to check if user has access to a specific module
 async function hasModuleAccess(email, moduleName) {
-  // Temporary override: grant access to all modules for all users
-  return true;
-  
-  // Original code is kept but commented out for future reference
-  /*
   if (!email || !supabase) return false;
-  
+
   try {
     // First get the user_id from user_subscriptions
     const { data: userData, error: userError } = await supabase
@@ -254,12 +249,12 @@ async function hasModuleAccess(email, moduleName) {
       .select('user_id')
       .eq('email', email)
       .single();
-    
+
     if (userError || !userData) {
       console.log(`No user found for ${email}, denying module access`);
       return false;
     }
-    
+
     // Then check module access
     const { data, error } = await supabase
       .from('module_access')
@@ -267,18 +262,17 @@ async function hasModuleAccess(email, moduleName) {
       .eq('user_id', userData.user_id)
       .eq('module', moduleName)
       .single();
-    
+
     if (error || !data) {
       console.log(`No module access found for ${email}/${moduleName}, denying access`);
       return false;
     }
-    
+
     return data.has_access;
   } catch (err) {
     console.error('Error checking module access:', err);
     return false;
   }
-  */
 }
 
 // Helper function to check if user can access a model
