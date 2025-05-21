@@ -38,9 +38,7 @@ app.use(cors({
       'https://repspheres.netlify.app',
       'https://repspheres.com',
       'http://localhost:5176',
-      'https://localhost:5176',
-      'https://*.netlify.app',
-      '*' // Allow all origins temporarily during testing
+      'https://localhost:5176'
     );
     
     // Check if origin matches any allowed pattern
