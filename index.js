@@ -603,7 +603,7 @@ app.post('/task', async (req, res) => {
     });
 
     // Extract data from request body
-    const { prompt, llm_model, token } = req.body;
+    const { prompt, llm_model, email } = req.body;
     
     // Check if OpenRouter API key is configured
     if (!process.env.OPENROUTER_API_KEY) {
@@ -623,6 +623,16 @@ app.post('/task', async (req, res) => {
     }
     
     try {
+      // Verify the user can access the requested model
+      const hasAccess = await canAccessModel(email, llm_model);
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Access to requested model is not allowed'
+        });
+      }
+
       // Call the LLM API
       const llmResult = await callLLM(prompt, llm_model);
       
