@@ -14,9 +14,25 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 // Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openAiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+let openai = null;
+
+if (!openAiApiKey) {
+  console.warn('No OpenAI or OpenRouter API key configured. Transcription features will be disabled.');
+} else {
+  const openAiOptions = { apiKey: openAiApiKey };
+
+  // If using OpenRouter for Whisper, set the base URL and required headers
+  if (!process.env.OPENAI_API_KEY && process.env.OPENROUTER_API_KEY) {
+    openAiOptions.baseURL = 'https://openrouter.ai/api/v1';
+    openAiOptions.defaultHeaders = {
+      'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
+      'X-Title': 'Transcription Service'
+    };
+  }
+
+  openai = new OpenAI(openAiOptions);
+}
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -125,6 +141,9 @@ async function uploadFileToStorage(userId, file) {
  */
 async function transcribeAudio(fileUrl) {
   try {
+    if (!openai) {
+      throw new Error('OpenAI/OpenRouter API key not configured');
+    }
     console.log(`Transcribing audio file: ${fileUrl}`);
     
     // Download the file from Supabase if it's a Supabase URL

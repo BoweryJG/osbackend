@@ -5,7 +5,7 @@ This guide explains how to use the transcription and analysis service integrated
 ## Overview
 
 The service uses:
-- **OpenAI Whisper API** for audio transcription
+- **OpenAI Whisper API** (or OpenRouter as a proxy) for audio transcription
 - **OpenRouter API** for transcription analysis
 
 The service allows you to:
@@ -24,7 +24,7 @@ The service allows you to:
 
 **Parameters:**
 - `audio` (file): The audio file to transcribe
-- `userId` (string): The ID of the user
+- `userId` (string): The ID of the user (use the `x-user-id` header or include it as a form field)
 
 **Example Request:**
 ```bash
@@ -167,10 +167,10 @@ npm run test:transcription
 Make sure the following environment variables are set in your `.env` file:
 
 ```
-# OpenAI Configuration (for Whisper transcription only)
-OPENAI_API_KEY=your_openai_api_key
+# Whisper Configuration (OpenAI or OpenRouter)
+OPENAI_API_KEY=your_openai_api_key # or use OPENROUTER_API_KEY for Whisper
 
-# OpenRouter Configuration (for analysis)
+# OpenRouter Configuration (for analysis and optional Whisper)
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_MODEL=openai/gpt-3.5-turbo
 
