@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
+import Stripe from 'stripe';
 import {
   processAudioFile,
   getUserTranscriptions,
@@ -21,11 +22,71 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+// Initialize Stripe if configured
+let stripe = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' });
+}
+
 // Create Express app
 const app = express();
 
 // Configure middleware
 app.set('trust proxy', 1); // Trust first proxy - important for Render
+
+// Stripe webhook needs raw body
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+  }
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'invoice.paid': {
+        const session = event.data.object;
+        const email = session.customer_email || session.customer_details?.email;
+        if (supabase && email) {
+          await supabase.from('user_subscriptions')
+            .update({
+              stripe_customer_id: session.customer,
+              stripe_subscription_id: session.subscription,
+              subscription_status: 'active'
+            })
+            .eq('email', email);
+        }
+        break;
+      }
+      case 'invoice.payment_failed':
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        if (supabase) {
+          await supabase.from('user_subscriptions')
+            .update({ subscription_status: 'past_due' })
+            .or(`stripe_subscription_id.eq.${sub.id},stripe_customer_id.eq.${sub.customer}`);
+        }
+        break;
+      }
+      default:
+        console.log(`Unhandled Stripe event: ${event.type}`);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Error processing Stripe webhook:', err);
+    res.status(500).send('Webhook handler failed');
+  }
+});
+
+// JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
 
 // Ensure the upload directory exists for multer
@@ -249,7 +310,7 @@ async function getUserSubscription(email) {
   try {
     const { data, error } = await supabase
       .from('user_subscriptions')
-      .select('subscription_level')
+      .select('subscription_level, subscription_status')
       .eq('email', email)
       .single();
     
@@ -258,6 +319,10 @@ async function getUserSubscription(email) {
       return 'free';
     }
     
+    if (data.subscription_status !== 'active') {
+      return 'free';
+    }
+
     return data.subscription_level;
   } catch (err) {
     console.error('Error fetching subscription:', err);
@@ -270,16 +335,22 @@ async function hasModuleAccess(email, moduleName) {
   if (!email || !supabase) return false;
 
   try {
-    // First get the user_id from user_subscriptions
+    // First get the user_id and subscription info
     const { data: userData, error: userError } = await supabase
       .from('user_subscriptions')
-      .select('user_id')
+      .select('user_id, subscription_level, subscription_status')
       .eq('email', email)
       .single();
 
     if (userError || !userData) {
       console.log(`No user found for ${email}, denying module access`);
       return false;
+    }
+
+    // If subscription is inactive, limit to default free modules
+    if (userData.subscription_status !== 'active' && userData.subscription_level !== 'free') {
+      const freeModules = ['workspace', 'blog'];
+      return freeModules.includes(moduleName);
     }
 
     // Then check module access
@@ -366,6 +437,33 @@ app.get('/api/models', async (req, res) => {
       message: 'Failed to fetch models from OpenRouter',
       details: error.response?.data?.error?.message || error.message
     });
+  }
+});
+
+// Create a Stripe Checkout session
+app.post('/api/checkout', async (req, res) => {
+  if (!stripe || !process.env.STRIPE_PRICE_ID) {
+    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+  }
+
+  const email = req.body.email;
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Email is required' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      customer_email: email,
+      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/cancel`
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Error creating Stripe checkout session:', err);
+    res.status(500).json({ success: false, message: 'Failed to create checkout session' });
   }
 });
 
