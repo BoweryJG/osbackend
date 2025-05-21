@@ -5,6 +5,14 @@ import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import multer from 'multer';
+import {
+  processAudioFile,
+  getUserTranscriptions,
+  getTranscriptionById,
+  deleteTranscription
+} from './transcription_service.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -19,6 +27,27 @@ const app = express();
 // Configure middleware
 app.set('trust proxy', 1); // Trust first proxy - important for Render
 app.use(express.json()); // Parse JSON request bodies
+
+// Ensure the upload directory exists for multer
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: uploadDir,
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '50000000') },
+  fileFilter: (req, file, cb) => {
+    const allowed = (process.env.ALLOWED_FILE_TYPES ||
+      'audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg').split(',');
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  }
+});
 
 // Configure CORS
 app.use(cors({
@@ -587,6 +616,83 @@ app.delete('/api/data/:appName', async (req, res) => {
       error: 'Internal Server Error',
       message: 'Error deleting app data'
     });
+  }
+});
+
+// Transcription service routes
+app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+  const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
+  if (!userId || !req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID and audio file are required'
+    });
+  }
+
+  try {
+    const result = await processAudioFile(userId, req.file);
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: 'Audio file processed successfully',
+        transcription: result.transcription
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: result.error || 'Error processing audio file'
+    });
+  } catch (err) {
+    console.error('Error processing audio file:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/transcriptions', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  if (!userId) {
+    return res.status(400).json({ success: false, message: 'User ID is required' });
+  }
+
+  try {
+    const transcriptions = await getUserTranscriptions(userId);
+    return res.json({ success: true, transcriptions });
+  } catch (err) {
+    console.error('Error getting user transcriptions:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/transcriptions/:id', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  const { id } = req.params;
+  if (!userId || !id) {
+    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+  }
+
+  try {
+    const transcription = await getTranscriptionById(id, userId);
+    return res.json({ success: true, transcription });
+  } catch (err) {
+    console.error('Error getting transcription:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/transcriptions/:id', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  const { id } = req.params;
+  if (!userId || !id) {
+    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+  }
+
+  try {
+    await deleteTranscription(id, userId);
+    return res.json({ success: true, message: 'Transcription deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting transcription:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

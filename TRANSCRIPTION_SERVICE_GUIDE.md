@@ -24,7 +24,7 @@ The service allows you to:
 
 **Parameters:**
 - `audio` (file): The audio file to transcribe
-- `userId` (string): The ID of the user
+- `userId` (string): The ID of the user (use the `x-user-id` header or include it as a form field)
 
 **Example Request:**
 ```bash
