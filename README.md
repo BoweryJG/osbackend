@@ -70,6 +70,14 @@ A unified backend server for all Spheres applications, with centralized data sto
   - Body: `{ "model": "openai", "prompt": "your prompt here", "llm_model": "specific-model-if-needed" }`
   - Response: `{ success: true, llmResult: { /* LLM response */ } }`
 
+### Transcription Service
+- `POST /api/transcribe` - Upload an audio file for transcription and analysis. Send the file as `audio` (multipart/form-data) and include the user ID in the `x-user-id` header or as `userId`.
+- `GET /api/transcriptions` - List all transcriptions for a user.
+- `GET /api/transcriptions/:id` - Get a specific transcription record.
+- `DELETE /api/transcriptions/:id` - Delete a transcription.
+  
+See `TRANSCRIPTION_SERVICE_GUIDE.md` for full request and response examples.
+
 ## Deployment
 The service is configured to deploy to Render.com using the included `render.yaml` file.
 
