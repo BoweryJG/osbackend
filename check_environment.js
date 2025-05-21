@@ -30,7 +30,8 @@ function checkEnvironmentVariables() {
   ];
   
   const openAIVars = [
-    'OPENAI_API_KEY'
+    'OPENAI_API_KEY',
+    'OPENROUTER_API_KEY'
   ];
   
   const openRouterVars = [
@@ -39,7 +40,7 @@ function checkEnvironmentVariables() {
   ];
   
   let allVarsPresent = true;
-  let openAIPresent = true;
+  let openAIPresent = false;
   let openRouterPresent = true;
   
   console.log('Checking required variables:');
@@ -56,17 +57,14 @@ function checkEnvironmentVariables() {
     }
   }
   
-  console.log('\nChecking OpenAI variables (for transcription):');
+  console.log('\nChecking transcription API keys (OpenAI or OpenRouter):');
   for (const varName of openAIVars) {
-    if (!process.env[varName]) {
-      console.error(`❌ Missing OpenAI variable: ${varName}`);
-      openAIPresent = false;
-    } else {
-      // Mask the API keys for security
-      const value = varName.includes('KEY') || varName.includes('SECRET') 
-        ? `${process.env[varName].substring(0, 4)}...${process.env[varName].substring(process.env[varName].length - 4)}`
-        : process.env[varName];
+    if (process.env[varName]) {
+      const value = `${process.env[varName].substring(0, 4)}...${process.env[varName].substring(process.env[varName].length - 4)}`;
       console.log(`✅ ${varName} is set: ${value}`);
+      openAIPresent = true;
+    } else {
+      console.log(`ℹ️ ${varName} not set`);
     }
   }
   
@@ -85,7 +83,7 @@ function checkEnvironmentVariables() {
   }
   
   if (!openAIPresent) {
-    console.warn('\n⚠️ OpenAI variables missing - transcription functionality will not work');
+    console.warn('\n⚠️ No API key configured for Whisper transcription');
   }
   
   if (!openRouterPresent) {
@@ -155,8 +153,10 @@ async function testSupabaseConnection() {
 async function testOpenAIConnection() {
   console.log('\n=== Testing OpenAI Connection (for Transcription) ===');
   
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OpenAI API key not found. Cannot test connection.');
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+
+  if (!openAiApiKey) {
+    console.error('❌ No OpenAI or OpenRouter API key found. Cannot test transcription connection.');
     return false;
   }
   
@@ -164,9 +164,16 @@ async function testOpenAIConnection() {
     console.log('Initializing OpenAI client...');
     
     // Initialize OpenAI client
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const openAiOptions = { apiKey: openAiApiKey };
+    if (!process.env.OPENAI_API_KEY && process.env.OPENROUTER_API_KEY) {
+      openAiOptions.baseURL = 'https://openrouter.ai/api/v1';
+      openAiOptions.defaultHeaders = {
+        'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
+        'X-Title': 'Transcription Service'
+      };
+    }
+
+    const openai = new OpenAI(openAiOptions);
     
     // Test the connection with a simple models list request
     console.log('Testing OpenAI API connection...');
@@ -275,14 +282,16 @@ async function runDiagnostics() {
   
   // Test connections
   const supabaseOk = await testSupabaseConnection();
-  const openaiOk = process.env.OPENAI_API_KEY ? await testOpenAIConnection() : false;
+  const openAiConfigured = !!(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY);
+  const openaiOk = openAiConfigured ? await testOpenAIConnection() : false;
   const openrouterOk = process.env.OPENROUTER_API_KEY ? await testOpenRouterConnection() : false;
   
   // Summary
   console.log('\n=== Diagnostics Summary ===');
   console.log(`Environment Variables: ${envVarsOk ? '✅ OK' : '❌ Issues Found'}`);
   console.log(`Supabase Connection: ${supabaseOk ? '✅ OK' : '❌ Issues Found'}`);
-  console.log(`OpenAI Connection (Transcription): ${openaiOk ? '✅ OK' : process.env.OPENAI_API_KEY ? '❌ Issues Found' : '⚠️ Not Configured'}`);
+  const whisperConfigured = openAiConfigured;
+  console.log(`Whisper Connection: ${openaiOk ? '✅ OK' : whisperConfigured ? '❌ Issues Found' : '⚠️ Not Configured'}`);
   console.log(`OpenRouter Connection (Analysis): ${openrouterOk ? '✅ OK' : process.env.OPENROUTER_API_KEY ? '❌ Issues Found' : '⚠️ Not Configured'}`);
   
   // Check if at least one of OpenAI or OpenRouter is working
@@ -291,10 +300,10 @@ async function runDiagnostics() {
   if (envVarsOk && supabaseOk && hasWorkingAI) {
     console.log('\n✅ Environment is correctly set up for the transcription service!');
     
-    if (!openaiOk && process.env.OPENAI_API_KEY) {
-      console.log('\n⚠️ OpenAI connection failed - transcription functionality may not work');
+    if (!openaiOk && openAiConfigured) {
+      console.log('\n⚠️ Whisper connection failed - transcription functionality may not work');
     } else if (!openaiOk) {
-      console.log('\n⚠️ OpenAI not configured - transcription functionality will not work');
+      console.log('\n⚠️ Whisper service not configured - transcription functionality will not work');
     }
     
     if (!openrouterOk && process.env.OPENROUTER_API_KEY) {
@@ -318,10 +327,10 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_or_service_key
 SUPABASE_STORAGE_BUCKET=audio_recordings
 
-# OpenAI Configuration (for Whisper transcription)
-OPENAI_API_KEY=your_openai_api_key
+# Whisper Configuration (OpenAI or OpenRouter)
+OPENAI_API_KEY=your_openai_api_key # or use OPENROUTER_API_KEY for Whisper
 
-# OpenRouter Configuration (for analysis)
+# OpenRouter Configuration (for analysis and optional Whisper)
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_MODEL=openai/gpt-3.5-turbo
       `);
@@ -334,11 +343,11 @@ OPENROUTER_MODEL=openai/gpt-3.5-turbo
       console.log('3. Verify that your Supabase project is active and accessible');
     }
     
-    if (!openaiOk && process.env.OPENAI_API_KEY) {
-      console.log('\nFor OpenAI issues:');
-      console.log('1. Check that your OpenAI API key is correct and active');
-      console.log('2. Verify that your OpenAI account has billing set up');
-      console.log('3. Make sure you have access to the Whisper API');
+    if (!openaiOk && openAiConfigured) {
+      console.log('\nFor Whisper API issues:');
+      console.log('1. Verify your API key is correct (OPENAI_API_KEY or OPENROUTER_API_KEY)');
+      console.log('2. Ensure your account has billing enabled or sufficient credits');
+      console.log('3. Confirm that Whisper access is permitted by your provider');
     }
     
     if (!openrouterOk && process.env.OPENROUTER_API_KEY) {

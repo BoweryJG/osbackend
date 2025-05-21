@@ -8,9 +8,9 @@ These are the environment variables required for your backend to function proper
 
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_KEY` - Your Supabase anon or service key
-- `OPENROUTER_API_KEY` - Your OpenRouter API key for LLM access
-- `OPENAI_API_KEY` - Your OpenAI API key for Whisper transcription
-- The Supabase keys and both API keys above are required for the transcription service
+- `OPENROUTER_API_KEY` - Your OpenRouter API key for LLM access (required for analysis and optional for Whisper)
+- `OPENAI_API_KEY` - Your OpenAI API key for Whisper transcription (optional if using OpenRouter)
+- The Supabase keys and at least one API key above are required for the transcription service
 - `OPENROUTER_MODEL` - Default model to use (optional)
 - `NODE_ENV` - Set to `production` for deployed environments
 - `FRONTEND_URL` - Your main frontend URL (for CORS)
