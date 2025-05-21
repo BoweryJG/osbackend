@@ -10,7 +10,8 @@
     "test:webhook": "node test_webhook.js",
     "test:supabase": "node test_supabase.js",
     "test:openrouter": "node test_openrouter_analysis.js",
-    "check:env": "node check_environment.js"
+    "check:env": "node check_environment.js",
+    "test:stripe": "node test_stripe_checkout.js && node test_stripe_webhook.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -24,6 +25,7 @@
     "openai": "^4.28.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "stripe": "^14.25.0"
   }
 }

@@ -17,6 +17,9 @@ These are the environment variables required for your backend to function proper
 - `GOOGLE_CLIENT_ID` - If using Google auth
 - `GOOGLE_CLIENT_SECRET` - If using Google auth
 - `SESSION_SECRET` - Random string for session encryption
+- `STRIPE_SECRET_KEY` - Your Stripe secret API key
+- `STRIPE_WEBHOOK_SECRET` - Webhook signing secret for verifying Stripe events
+- `STRIPE_PRICE_ID` - Price ID for your subscription product
 
 ## Setting Variables on Render.com
 

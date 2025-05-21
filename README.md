@@ -25,6 +25,9 @@ A unified backend server for all Spheres applications, with centralized data sto
    - `SUPABASE_KEY` - Your Supabase anon or service key
    - `OPENROUTER_API_KEY` - Your OpenRouter API key (required for analysis and optional for Whisper)
    - `OPENAI_API_KEY` - Your OpenAI API key for Whisper transcription (optional if using OpenRouter)
+   - `STRIPE_SECRET_KEY` - Your Stripe secret API key
+   - `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
+   - `STRIPE_PRICE_ID` - Price ID for your subscription product
    - See `ENV_VARIABLE_GUIDE.md` for detailed instructions on setting up environment variables locally and on Render
    - The Supabase keys and either OpenAI or OpenRouter API key are required if you plan to use the transcription service
 4. Run the SQL scripts to set up the Supabase database tables:
@@ -32,6 +35,7 @@ A unified backend server for all Spheres applications, with centralized data sto
    - `create_subscriptions_table.sql`
    - `create_module_access_table.sql`
    - `create_app_data_table.sql`
+   - `add_stripe_fields_to_subscriptions.sql`
    - `fix_type_mismatches.sql` (run this if you encounter any type mismatch errors)
 5. Start the server:
    ```bash
@@ -75,6 +79,10 @@ A unified backend server for all Spheres applications, with centralized data sto
 - `GET /api/transcriptions` - List all transcriptions for a user.
 - `GET /api/transcriptions/:id` - Get a specific transcription record.
 - `DELETE /api/transcriptions/:id` - Delete a transcription.
+
+### Billing
+- `POST /api/checkout` - Create a Stripe Checkout session for the authenticated user and return the session URL.
+- `POST /stripe/webhook` - Stripe webhook endpoint to update subscription status. Handled automatically by Stripe; no direct user call needed.
   
 See `TRANSCRIPTION_SERVICE_GUIDE.md` for full request and response examples.
 
