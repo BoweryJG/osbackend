@@ -5,6 +5,19 @@ import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { 
+  validateTwilioSignature,
+  generateVoiceResponse,
+  generateSmsResponse,
+  makeCall,
+  sendSms,
+  saveCallRecord,
+  saveSmsRecord,
+  saveRecordingRecord,
+  processRecording,
+  getCallHistory,
+  getSmsHistory
+} from './twilio_service.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -749,6 +762,313 @@ app.get('/user/usage', (req, res) => {
     quota: 10,
     reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
   });
+});
+
+// ============================================
+// TWILIO ENDPOINTS
+// ============================================
+
+// Middleware to parse URL-encoded bodies (Twilio sends data this way)
+app.use(express.urlencoded({ extended: true }));
+
+// Twilio voice webhook - handles incoming calls
+app.post('/api/twilio/voice', async (req, res) => {
+  try {
+    console.log('Incoming voice call:', req.body);
+    
+    // Validate Twilio signature in production
+    if (process.env.NODE_ENV === 'production') {
+      const signature = req.headers['x-twilio-signature'];
+      const url = `https://osbackend-zl1h.onrender.com${req.originalUrl}`;
+      if (!validateTwilioSignature(signature, url, req.body)) {
+        return res.status(403).send('Forbidden');
+      }
+    }
+    
+    // Save call record
+    await saveCallRecord({
+      call_sid: req.body.CallSid,
+      phone_number_sid: req.body.To === process.env.TWILIO_PHONE_NUMBER ? process.env.TWILIO_PHONE_NUMBER_SID : null,
+      from_number: req.body.From,
+      to_number: req.body.To,
+      direction: 'inbound',
+      status: req.body.CallStatus,
+      metadata: {
+        from_city: req.body.FromCity,
+        from_state: req.body.FromState,
+        from_country: req.body.FromCountry
+      }
+    });
+    
+    // Generate response
+    const twiml = generateVoiceResponse(
+      'Hello! Thank you for calling. Your call will be recorded for quality and training purposes. Please speak after the beep.',
+      { record: true }
+    );
+    
+    res.type('text/xml');
+    res.send(twiml);
+  } catch (error) {
+    console.error('Error handling voice webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Twilio SMS webhook - handles incoming SMS
+app.post('/api/twilio/sms', async (req, res) => {
+  try {
+    console.log('Incoming SMS:', req.body);
+    
+    // Validate Twilio signature in production
+    if (process.env.NODE_ENV === 'production') {
+      const signature = req.headers['x-twilio-signature'];
+      const url = `https://osbackend-zl1h.onrender.com${req.originalUrl}`;
+      if (!validateTwilioSignature(signature, url, req.body)) {
+        return res.status(403).send('Forbidden');
+      }
+    }
+    
+    // Save SMS record
+    await saveSmsRecord({
+      message_sid: req.body.MessageSid,
+      from_number: req.body.From,
+      to_number: req.body.To,
+      body: req.body.Body,
+      direction: 'inbound',
+      status: 'received',
+      num_segments: parseInt(req.body.NumSegments) || 1,
+      metadata: {
+        from_city: req.body.FromCity,
+        from_state: req.body.FromState,
+        from_country: req.body.FromCountry
+      }
+    });
+    
+    // Generate auto-response
+    const responseMessage = 'Thank you for your message. We will get back to you soon!';
+    const twiml = generateSmsResponse(responseMessage);
+    
+    res.type('text/xml');
+    res.send(twiml);
+  } catch (error) {
+    console.error('Error handling SMS webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Twilio call status webhook
+app.post('/api/twilio/status', async (req, res) => {
+  try {
+    console.log('Call status update:', req.body);
+    
+    // Update call record with new status
+    await saveCallRecord({
+      call_sid: req.body.CallSid,
+      status: req.body.CallStatus,
+      duration: parseInt(req.body.CallDuration) || 0
+    });
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error handling status webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Twilio recording webhook - called when recording is ready
+app.post('/api/twilio/recording', async (req, res) => {
+  try {
+    console.log('Recording ready:', req.body);
+    
+    // Continue the call after recording
+    const twiml = generateVoiceResponse(
+      'Thank you for your message. Goodbye!',
+      { hangup: true }
+    );
+    
+    res.type('text/xml');
+    res.send(twiml);
+  } catch (error) {
+    console.error('Error handling recording webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Twilio recording status webhook
+app.post('/api/twilio/recording-status', async (req, res) => {
+  try {
+    console.log('Recording status update:', req.body);
+    
+    const { RecordingSid, RecordingUrl, CallSid, RecordingDuration, RecordingStatus } = req.body;
+    
+    if (RecordingStatus === 'completed') {
+      // Save recording record
+      await saveRecordingRecord({
+        recording_sid: RecordingSid,
+        call_sid: CallSid,
+        recording_url: RecordingUrl,
+        duration: parseInt(RecordingDuration) || 0,
+        status: 'pending'
+      });
+      
+      // Update call record with recording info
+      await saveCallRecord({
+        call_sid: CallSid,
+        recording_url: RecordingUrl,
+        recording_sid: RecordingSid
+      });
+      
+      // Process the recording asynchronously
+      processRecording(RecordingSid, RecordingUrl, CallSid)
+        .then(result => {
+          console.log('Recording processed successfully:', result);
+        })
+        .catch(error => {
+          console.error('Error processing recording:', error);
+        });
+    }
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error handling recording status webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// API endpoint to make outbound calls
+app.post('/api/twilio/make-call', async (req, res) => {
+  try {
+    const { to, message, record, userId, metadata } = req.body;
+    
+    if (!to || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Phone number and message are required'
+      });
+    }
+    
+    const call = await makeCall(to, message, {
+      record: record || false,
+      metadata: { ...metadata, user_id: userId }
+    });
+    
+    res.json({
+      success: true,
+      call: {
+        sid: call.sid,
+        status: call.status,
+        to: call.to,
+        from: call.from
+      }
+    });
+  } catch (error) {
+    console.error('Error making call:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to send SMS
+app.post('/api/twilio/send-sms', async (req, res) => {
+  try {
+    const { to, body, userId, metadata } = req.body;
+    
+    if (!to || !body) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Phone number and message body are required'
+      });
+    }
+    
+    const message = await sendSms(to, body, {
+      metadata: { ...metadata, user_id: userId }
+    });
+    
+    res.json({
+      success: true,
+      message: {
+        sid: message.sid,
+        status: message.status,
+        to: message.to,
+        from: message.from,
+        body: message.body
+      }
+    });
+  } catch (error) {
+    console.error('Error sending SMS:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to get call history
+app.get('/api/twilio/calls', async (req, res) => {
+  try {
+    const { phoneNumber, limit } = req.query;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Phone number is required'
+      });
+    }
+    
+    const calls = await getCallHistory(phoneNumber, {
+      limit: limit ? parseInt(limit) : 50
+    });
+    
+    res.json({
+      success: true,
+      calls
+    });
+  } catch (error) {
+    console.error('Error getting call history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to get SMS history
+app.get('/api/twilio/sms', async (req, res) => {
+  try {
+    const { phoneNumber, limit } = req.query;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Phone number is required'
+      });
+    }
+    
+    const messages = await getSmsHistory(phoneNumber, {
+      limit: limit ? parseInt(limit) : 50
+    });
+    
+    res.json({
+      success: true,
+      messages
+    });
+  } catch (error) {
+    console.error('Error getting SMS history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: error.message
+    });
+  }
 });
 
 // Catch-all route for undefined endpoints
