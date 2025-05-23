@@ -140,6 +140,7 @@ app.use(cors({
     allowedOrigins.push(
       'https://repspheres.netlify.app',
       'https://repspheres.com',
+      'https://workspace.repspheres.com', // Added your frontend URL
       'http://localhost:5176',
       'https://localhost:5176'
     );
