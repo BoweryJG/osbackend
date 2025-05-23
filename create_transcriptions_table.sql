@@ -1,32 +1,46 @@
--- Create table for storing transcriptions from various sources (audio uploads, Twilio calls, etc.)
+-- Create transcriptions table for storing audio transcription records
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS transcriptions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID,
-    filename VARCHAR(255),
-    file_url TEXT,
-    transcription TEXT NOT NULL,
-    duration_seconds INTEGER,
-    analysis JSONB,
-    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID,
+  filename VARCHAR(255),
+  file_url TEXT NOT NULL,
+  transcription TEXT,
+  duration_seconds INTEGER,
+  analysis JSONB,
+  status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
+  metadata JSONB DEFAULT '{}',
+  error TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create indexes for better query performance
-CREATE INDEX idx_transcriptions_user_id ON transcriptions(user_id);
-CREATE INDEX idx_transcriptions_status ON transcriptions(status);
-CREATE INDEX idx_transcriptions_created_at ON transcriptions(created_at);
+-- Indexes for common lookups
+CREATE INDEX IF NOT EXISTS idx_transcriptions_user_id ON transcriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transcriptions_created_at ON transcriptions(created_at);
+CREATE INDEX IF NOT EXISTS idx_transcriptions_status ON transcriptions(status);
 
--- Add updated_at trigger function if it doesn't exist
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- Automatically update the updated_at column
+CREATE OR REPLACE FUNCTION update_transcriptions_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
+  NEW.updated_at := NOW();
+  RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
--- Create trigger to automatically update the updated_at column
-CREATE TRIGGER update_transcriptions_updated_at BEFORE UPDATE ON transcriptions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_transcriptions_updated_at
+BEFORE UPDATE ON transcriptions
+FOR EACH ROW
+EXECUTE FUNCTION update_transcriptions_updated_at();
+
+-- Enable row level security and policies
+ALTER TABLE transcriptions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY transcriptions_user_policy ON transcriptions
+  USING (user_id = auth.uid());
+
+CREATE POLICY transcriptions_service_policy ON transcriptions
+  USING (TRUE)
+  WITH CHECK (TRUE);

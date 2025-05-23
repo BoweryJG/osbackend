@@ -8,13 +8,18 @@ These are the environment variables required for your backend to function proper
 
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_KEY` - Your Supabase anon or service key
-- `OPENROUTER_API_KEY` - Your OpenRouter API key for LLM access
+- `OPENROUTER_API_KEY` - Your OpenRouter API key for LLM access (required for analysis and optional for Whisper)
+- `OPENAI_API_KEY` - Your OpenAI API key for Whisper transcription (optional if using OpenRouter)
+- The Supabase keys and at least one API key above are required for the transcription service
 - `OPENROUTER_MODEL` - Default model to use (optional)
 - `NODE_ENV` - Set to `production` for deployed environments
 - `FRONTEND_URL` - Your main frontend URL (for CORS)
 - `GOOGLE_CLIENT_ID` - If using Google auth
 - `GOOGLE_CLIENT_SECRET` - If using Google auth
 - `SESSION_SECRET` - Random string for session encryption
+- `STRIPE_SECRET_KEY` - Your Stripe secret API key
+- `STRIPE_WEBHOOK_SECRET` - Webhook signing secret for verifying Stripe events
+- `STRIPE_PRICE_ID` - Price ID for your subscription product
 
 ## Setting Variables on Render.com
 

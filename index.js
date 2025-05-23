@@ -5,6 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import multer from 'multer';
+import Stripe from 'stripe';
+import {
+  processAudioFile,
+  getUserTranscriptions,
+  getTranscriptionById,
+  deleteTranscription
+} from './transcription_service.js';
 import { 
   validateTwilioSignature,
   generateVoiceResponse,
@@ -26,12 +35,93 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+// Initialize Stripe if configured
+let stripe = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' });
+}
+
 // Create Express app
 const app = express();
 
 // Configure middleware
 app.set('trust proxy', 1); // Trust first proxy - important for Render
+
+// Stripe webhook needs raw body
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+  }
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Stripe webhook verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'invoice.paid': {
+        const session = event.data.object;
+        const email = session.customer_email || session.customer_details?.email;
+        if (supabase && email) {
+          await supabase.from('user_subscriptions')
+            .update({
+              stripe_customer_id: session.customer,
+              stripe_subscription_id: session.subscription,
+              subscription_status: 'active'
+            })
+            .eq('email', email);
+        }
+        break;
+      }
+      case 'invoice.payment_failed':
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        if (supabase) {
+          await supabase.from('user_subscriptions')
+            .update({ subscription_status: 'past_due' })
+            .or(`stripe_subscription_id.eq.${sub.id},stripe_customer_id.eq.${sub.customer}`);
+        }
+        break;
+      }
+      default:
+        console.log(`Unhandled Stripe event: ${event.type}`);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Error processing Stripe webhook:', err);
+    res.status(500).send('Webhook handler failed');
+  }
+});
+
+// JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
+
+// Ensure the upload directory exists for multer
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: uploadDir,
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '50000000') },
+  fileFilter: (req, file, cb) => {
+    const allowed = (process.env.ALLOWED_FILE_TYPES ||
+      'audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg').split(',');
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  }
+});
 
 // Configure CORS
 app.use(cors({
@@ -43,14 +133,16 @@ app.use(cors({
     }
     
     // In production, check against allowed origins
-    const allowedOrigins = [
+    const allowedOrigins = [];
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    allowedOrigins.push(
       'https://repspheres.netlify.app',
       'https://repspheres.com',
       'http://localhost:5176',
-      'https://localhost:5176',
-      'https://*.netlify.app',
-      '*' // Allow all origins temporarily during testing
-    ];
+      'https://localhost:5176'
+    );
     
     // Check if origin matches any allowed pattern
     const isAllowed = !origin || allowedOrigins.some(allowed => {
@@ -131,7 +223,7 @@ connectToSupabase().then(connected => {
 });
 
 // Call LLM endpoint using OpenRouter
-async function callLLM(model, prompt, llm_model) {
+async function callLLM(prompt, llm_model) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key not configured');
   }
@@ -231,7 +323,7 @@ async function getUserSubscription(email) {
   try {
     const { data, error } = await supabase
       .from('user_subscriptions')
-      .select('subscription_level')
+      .select('subscription_level, subscription_status')
       .eq('email', email)
       .single();
     
@@ -240,6 +332,10 @@ async function getUserSubscription(email) {
       return 'free';
     }
     
+    if (data.subscription_status !== 'active') {
+      return 'free';
+    }
+
     return data.subscription_level;
   } catch (err) {
     console.error('Error fetching subscription:', err);
@@ -249,26 +345,27 @@ async function getUserSubscription(email) {
 
 // Helper function to check if user has access to a specific module
 async function hasModuleAccess(email, moduleName) {
-  // Temporary override: grant access to all modules for all users
-  return true;
-  
-  // Original code is kept but commented out for future reference
-  /*
   if (!email || !supabase) return false;
-  
+
   try {
-    // First get the user_id from user_subscriptions
+    // First get the user_id and subscription info
     const { data: userData, error: userError } = await supabase
       .from('user_subscriptions')
-      .select('user_id')
+      .select('user_id, subscription_level, subscription_status')
       .eq('email', email)
       .single();
-    
+
     if (userError || !userData) {
       console.log(`No user found for ${email}, denying module access`);
       return false;
     }
-    
+
+    // If subscription is inactive, limit to default free modules
+    if (userData.subscription_status !== 'active' && userData.subscription_level !== 'free') {
+      const freeModules = ['workspace', 'blog'];
+      return freeModules.includes(moduleName);
+    }
+
     // Then check module access
     const { data, error } = await supabase
       .from('module_access')
@@ -276,18 +373,17 @@ async function hasModuleAccess(email, moduleName) {
       .eq('user_id', userData.user_id)
       .eq('module', moduleName)
       .single();
-    
+
     if (error || !data) {
       console.log(`No module access found for ${email}/${moduleName}, denying access`);
       return false;
     }
-    
+
     return data.has_access;
   } catch (err) {
     console.error('Error checking module access:', err);
     return false;
   }
-  */
 }
 
 // Helper function to check if user can access a model
@@ -354,6 +450,33 @@ app.get('/api/models', async (req, res) => {
       message: 'Failed to fetch models from OpenRouter',
       details: error.response?.data?.error?.message || error.message
     });
+  }
+});
+
+// Create a Stripe Checkout session
+app.post('/api/checkout', async (req, res) => {
+  if (!stripe || !process.env.STRIPE_PRICE_ID) {
+    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+  }
+
+  const email = req.body.email;
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Email is required' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      customer_email: email,
+      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/cancel`
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Error creating Stripe checkout session:', err);
+    res.status(500).json({ success: false, message: 'Failed to create checkout session' });
   }
 });
 
@@ -605,6 +728,83 @@ app.delete('/api/data/:appName', async (req, res) => {
   }
 });
 
+// Transcription service routes
+app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+  const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
+  if (!userId || !req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID and audio file are required'
+    });
+  }
+
+  try {
+    const result = await processAudioFile(userId, req.file);
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: 'Audio file processed successfully',
+        transcription: result.transcription
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: result.error || 'Error processing audio file'
+    });
+  } catch (err) {
+    console.error('Error processing audio file:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/transcriptions', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  if (!userId) {
+    return res.status(400).json({ success: false, message: 'User ID is required' });
+  }
+
+  try {
+    const transcriptions = await getUserTranscriptions(userId);
+    return res.json({ success: true, transcriptions });
+  } catch (err) {
+    console.error('Error getting user transcriptions:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/transcriptions/:id', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  const { id } = req.params;
+  if (!userId || !id) {
+    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+  }
+
+  try {
+    const transcription = await getTranscriptionById(id, userId);
+    return res.json({ success: true, transcription });
+  } catch (err) {
+    console.error('Error getting transcription:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/transcriptions/:id', async (req, res) => {
+  const userId = req.header('x-user-id') || req.query.userId;
+  const { id } = req.params;
+  if (!userId || !id) {
+    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+  }
+
+  try {
+    await deleteTranscription(id, userId);
+    return res.json({ success: true, message: 'Transcription deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting transcription:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Task endpoint
 app.post('/task', async (req, res) => {
   try {
@@ -618,7 +818,7 @@ app.post('/task', async (req, res) => {
     });
 
     // Extract data from request body
-    const { model, prompt, llm_model, token } = req.body;
+    const { prompt, llm_model, email } = req.body;
     
     // Check if OpenRouter API key is configured
     if (!process.env.OPENROUTER_API_KEY) {
@@ -631,19 +831,29 @@ app.post('/task', async (req, res) => {
               content: "OpenRouter API key not configured. Please set the OPENROUTER_API_KEY environment variable."
             }
           }],
-          model: model || llm_model || "dummy-model",
+          model: llm_model || "dummy-model",
           prompt: prompt || "No prompt provided"
         }
       });
     }
     
     try {
+      // Verify the user can access the requested model
+      const hasAccess = await canAccessModel(email, llm_model);
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Access to requested model is not allowed'
+        });
+      }
+
       // Call the LLM API
-      const llmResult = await callLLM(model, prompt, llm_model);
+      const llmResult = await callLLM(prompt, llm_model);
       
       // Try to log activity, but don't fail the request if logging fails
       try {
-        await logActivity({ model, prompt, llm_model }, llmResult);
+        await logActivity({ prompt, llm_model }, llmResult);
       } catch (logErr) {
         console.error('Error logging activity:', logErr);
       }
@@ -679,435 +889,130 @@ app.post('/task', async (req, res) => {
     // Log the error
     console.error('Error processing /task request:', err);
     
-    // Return a friendly error response
+    // Return a generic error response
     res.status(500).json({
       success: false,
-      error: err.message,
-      response: "Sorry, there was an error processing your request. Please try again later."
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred while processing your request.'
     });
   }
 });
 
-// Webhook endpoint for backward compatibility with existing frontends
-app.post('/webhook', async (req, res) => {
+// Twilio webhook endpoints
+app.post('/twilio/voice', express.urlencoded({ extended: false }), async (req, res) => {
   try {
-    console.log('Received request to /webhook endpoint:', {
-      body: req.body,
-      headers: {
-        'content-type': req.headers['content-type'],
-        'user-agent': req.headers['user-agent']
-      }
-    });
-
-    // Extract the filename or fileUrl if it exists in the request body
-    let fileUrl = '';
-    if (req.body.data?.fileUrl) {
-      fileUrl = req.body.data.fileUrl;
-    } else if (req.body.fileUrl) {
-      fileUrl = req.body.fileUrl;
+    // Validate the request is from Twilio
+    if (!validateTwilioSignature(req, process.env.TWILIO_AUTH_TOKEN)) {
+      return res.status(403).send('Forbidden');
     }
 
-    // Default prompt
-    let prompt = "Please analyze this conversation.";
-    if (req.body.data?.prompt) {
-      prompt = req.body.data.prompt;
-    } else if (req.body.prompt) {
-      prompt = req.body.prompt;
-    }
-
-    // Include the file URL in the prompt if it exists
-    if (fileUrl) {
-      prompt = `Please analyze this conversation from file: ${fileUrl}. ${prompt}`;
-    }
-
-    try {
-      // Route to LLM processing
-      const llmResult = await callLLM(null, prompt, null);
-      
-      // Return a modified response structure compatible with webhook expectations
-      return res.json({
-        message: "Processing started",
-        user_id: "webhook-user",
-        result: llmResult,
-        usage: {
-          current: 1,
-          limit: 10
-        }
-      });
-    } catch (err) {
-      console.error('Error calling LLM from webhook:', err);
-      
-      return res.status(500).json({
-        success: false,
-        error: err.message,
-        message: "Error processing webhook request"
-      });
-    }
-  } catch (err) {
-    console.error('Error processing webhook request:', err);
-    return res.status(500).json({
-      success: false,
-      error: err.message,
-      message: "Error processing webhook request"
-    });
-  }
-});
-
-// User usage endpoint for frontend compatibility
-app.get('/user/usage', (req, res) => {
-  // Return mock usage data as the real endpoint isn't implemented yet
-  res.json({
-    tier: 'free',
-    usage: 0,
-    quota: 10,
-    reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
-  });
-});
-
-// ============================================
-// TWILIO ENDPOINTS
-// ============================================
-
-// Middleware to parse URL-encoded bodies (Twilio sends data this way)
-app.use(express.urlencoded({ extended: true }));
-
-// Twilio voice webhook - handles incoming calls
-app.post('/api/twilio/voice', async (req, res) => {
-  try {
-    console.log('Incoming voice call:', req.body);
-    
-    // Validate Twilio signature in production
-    if (process.env.NODE_ENV === 'production') {
-      const signature = req.headers['x-twilio-signature'];
-      const url = `https://osbackend-zl1h.onrender.com${req.originalUrl}`;
-      if (!validateTwilioSignature(signature, url, req.body)) {
-        return res.status(403).send('Forbidden');
-      }
-    }
-    
     // Save call record
-    await saveCallRecord({
-      call_sid: req.body.CallSid,
-      phone_number_sid: req.body.To === process.env.TWILIO_PHONE_NUMBER ? process.env.TWILIO_PHONE_NUMBER_SID : null,
-      from_number: req.body.From,
-      to_number: req.body.To,
-      direction: 'inbound',
-      status: req.body.CallStatus,
-      metadata: {
-        from_city: req.body.FromCity,
-        from_state: req.body.FromState,
-        from_country: req.body.FromCountry
-      }
-    });
-    
-    // Generate response
-    const twiml = generateVoiceResponse(
-      'Hello! Thank you for calling. Your call will be recorded for quality and training purposes. Please speak after the beep.',
-      { record: true }
-    );
-    
+    await saveCallRecord(req.body);
+
+    // Generate TwiML response
+    const twiml = generateVoiceResponse(req.body);
     res.type('text/xml');
     res.send(twiml);
-  } catch (error) {
-    console.error('Error handling voice webhook:', error);
+  } catch (err) {
+    console.error('Error handling voice webhook:', err);
     res.status(500).send('Internal Server Error');
   }
 });
 
-// Twilio SMS webhook - handles incoming SMS
+app.post('/twilio/sms', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    // Validate the request is from Twilio
+    if (!validateTwilioSignature(req, process.env.TWILIO_AUTH_TOKEN)) {
+      return res.status(403).send('Forbidden');
+    }
+
+    // Save SMS record
+    await saveSmsRecord(req.body);
+
+    // Generate TwiML response
+    const twiml = generateSmsResponse(req.body);
+    res.type('text/xml');
+    res.send(twiml);
+  } catch (err) {
+    console.error('Error handling SMS webhook:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/twilio/recording', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    // Validate the request is from Twilio
+    if (!validateTwilioSignature(req, process.env.TWILIO_AUTH_TOKEN)) {
+      return res.status(403).send('Forbidden');
+    }
+
+    // Save recording record
+    await saveRecordingRecord(req.body);
+
+    // Process the recording asynchronously
+    processRecording(req.body).catch(err => {
+      console.error('Error processing recording:', err);
+    });
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Error handling recording webhook:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Twilio API endpoints
+app.post('/api/twilio/call', async (req, res) => {
+  try {
+    const { to, from, url } = req.body;
+    const result = await makeCall(to, from, url);
+    res.json({ success: true, callSid: result.sid });
+  } catch (err) {
+    console.error('Error making call:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/twilio/sms', async (req, res) => {
   try {
-    console.log('Incoming SMS:', req.body);
-    
-    // Validate Twilio signature in production
-    if (process.env.NODE_ENV === 'production') {
-      const signature = req.headers['x-twilio-signature'];
-      const url = `https://osbackend-zl1h.onrender.com${req.originalUrl}`;
-      if (!validateTwilioSignature(signature, url, req.body)) {
-        return res.status(403).send('Forbidden');
-      }
-    }
-    
-    // Save SMS record
-    await saveSmsRecord({
-      message_sid: req.body.MessageSid,
-      from_number: req.body.From,
-      to_number: req.body.To,
-      body: req.body.Body,
-      direction: 'inbound',
-      status: 'received',
-      num_segments: parseInt(req.body.NumSegments) || 1,
-      metadata: {
-        from_city: req.body.FromCity,
-        from_state: req.body.FromState,
-        from_country: req.body.FromCountry
-      }
-    });
-    
-    // Generate auto-response
-    const responseMessage = 'Thank you for your message. We will get back to you soon!';
-    const twiml = generateSmsResponse(responseMessage);
-    
-    res.type('text/xml');
-    res.send(twiml);
-  } catch (error) {
-    console.error('Error handling SMS webhook:', error);
-    res.status(500).send('Internal Server Error');
+    const { to, from, body } = req.body;
+    const result = await sendSms(to, from, body);
+    res.json({ success: true, messageSid: result.sid });
+  } catch (err) {
+    console.error('Error sending SMS:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Twilio call status webhook
-app.post('/api/twilio/status', async (req, res) => {
-  try {
-    console.log('Call status update:', req.body);
-    
-    // Update call record with new status
-    await saveCallRecord({
-      call_sid: req.body.CallSid,
-      status: req.body.CallStatus,
-      duration: parseInt(req.body.CallDuration) || 0
-    });
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Error handling status webhook:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-// Twilio recording webhook - called when recording is ready
-app.post('/api/twilio/recording', async (req, res) => {
-  try {
-    console.log('Recording ready:', req.body);
-    
-    // Continue the call after recording
-    const twiml = generateVoiceResponse(
-      'Thank you for your message. Goodbye!',
-      { hangup: true }
-    );
-    
-    res.type('text/xml');
-    res.send(twiml);
-  } catch (error) {
-    console.error('Error handling recording webhook:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-// Twilio recording status webhook
-app.post('/api/twilio/recording-status', async (req, res) => {
-  try {
-    console.log('Recording status update:', req.body);
-    
-    const { RecordingSid, RecordingUrl, CallSid, RecordingDuration, RecordingStatus } = req.body;
-    
-    if (RecordingStatus === 'completed') {
-      // Save recording record
-      await saveRecordingRecord({
-        recording_sid: RecordingSid,
-        call_sid: CallSid,
-        recording_url: RecordingUrl,
-        duration: parseInt(RecordingDuration) || 0,
-        status: 'pending'
-      });
-      
-      // Update call record with recording info
-      await saveCallRecord({
-        call_sid: CallSid,
-        recording_url: RecordingUrl,
-        recording_sid: RecordingSid
-      });
-      
-      // Process the recording asynchronously
-      processRecording(RecordingSid, RecordingUrl, CallSid)
-        .then(result => {
-          console.log('Recording processed successfully:', result);
-        })
-        .catch(error => {
-          console.error('Error processing recording:', error);
-        });
-    }
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Error handling recording status webhook:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-// API endpoint to make outbound calls
-app.post('/api/twilio/make-call', async (req, res) => {
-  try {
-    const { to, message, record, userId, metadata } = req.body;
-    
-    if (!to || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Phone number and message are required'
-      });
-    }
-    
-    const call = await makeCall(to, message, {
-      record: record || false,
-      metadata: { ...metadata, user_id: userId }
-    });
-    
-    res.json({
-      success: true,
-      call: {
-        sid: call.sid,
-        status: call.status,
-        to: call.to,
-        from: call.from
-      }
-    });
-  } catch (error) {
-    console.error('Error making call:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: error.message
-    });
-  }
-});
-
-// API endpoint to send SMS
-app.post('/api/twilio/send-sms', async (req, res) => {
-  try {
-    const { to, body, userId, metadata } = req.body;
-    
-    if (!to || !body) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Phone number and message body are required'
-      });
-    }
-    
-    const message = await sendSms(to, body, {
-      metadata: { ...metadata, user_id: userId }
-    });
-    
-    res.json({
-      success: true,
-      message: {
-        sid: message.sid,
-        status: message.status,
-        to: message.to,
-        from: message.from,
-        body: message.body
-      }
-    });
-  } catch (error) {
-    console.error('Error sending SMS:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: error.message
-    });
-  }
-});
-
-// API endpoint to get call history
 app.get('/api/twilio/calls', async (req, res) => {
   try {
-    const { phoneNumber, limit } = req.query;
-    
-    if (!phoneNumber) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Phone number is required'
-      });
-    }
-    
-    const calls = await getCallHistory(phoneNumber, {
-      limit: limit ? parseInt(limit) : 50
-    });
-    
-    res.json({
-      success: true,
-      calls
-    });
-  } catch (error) {
-    console.error('Error getting call history:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: error.message
-    });
+    const { userId, limit, offset } = req.query;
+    const calls = await getCallHistory(userId, limit, offset);
+    res.json({ success: true, calls });
+  } catch (err) {
+    console.error('Error getting call history:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// API endpoint to get SMS history
-app.get('/api/twilio/sms', async (req, res) => {
+app.get('/api/twilio/messages', async (req, res) => {
   try {
-    const { phoneNumber, limit } = req.query;
-    
-    if (!phoneNumber) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Phone number is required'
-      });
-    }
-    
-    const messages = await getSmsHistory(phoneNumber, {
-      limit: limit ? parseInt(limit) : 50
-    });
-    
-    res.json({
-      success: true,
-      messages
-    });
-  } catch (error) {
-    console.error('Error getting SMS history:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: error.message
-    });
+    const { userId, limit, offset } = req.query;
+    const messages = await getSmsHistory(userId, limit, offset);
+    res.json({ success: true, messages });
+  } catch (err) {
+    console.error('Error getting SMS history:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
-});
-
-// Catch-all route for undefined endpoints
-app.use('*', (req, res) => {
-  console.log(`Received request for undefined route: ${req.originalUrl}`);
-  res.status(404).json({
-    success: false,
-    error: 'Not Found',
-    message: `The requested endpoint ${req.originalUrl} does not exist.`
-  });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'An unexpected error occurred' 
-      : err.message
-  });
 });
 
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Server time: ${new Date().toISOString()}`);
-});
-
-// Handle uncaught exceptions and unhandled rejections
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
-  // Keep the process running despite the error
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
-  // Keep the process running despite the error
+  console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!process.env.SUPABASE_KEY}`);
+  console.log(`OpenRouter configured: ${!!process.env.OPENROUTER_API_KEY}`);
+  console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
+  console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
 });
