@@ -141,7 +141,8 @@ app.use(cors({
       'https://repspheres.netlify.app',
       'https://repspheres.com',
       'https://workspace.repspheres.com', 
-      'https://linguistics.repspheres.com', // Added mUiLinguisticsFrontEnd URL
+      'https://linguistics.repspheres.com', 
+      'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
       'http://localhost:5176',
       'https://localhost:5176'
     );
