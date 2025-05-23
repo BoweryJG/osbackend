@@ -4,7 +4,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import { processAudioFile, transcribeAudio, analyzeTranscription } from './transcription_service.js';
+import transcriptionService from './transcription_service.js';
+const { processAudioFile, transcribeAudio, analyzeTranscription } = transcriptionService;
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
