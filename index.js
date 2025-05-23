@@ -140,7 +140,8 @@ app.use(cors({
     allowedOrigins.push(
       'https://repspheres.netlify.app',
       'https://repspheres.com',
-      'https://workspace.repspheres.com', // Added your frontend URL
+      'https://workspace.repspheres.com', 
+      'https://linguistics.repspheres.com', // Added mUiLinguisticsFrontEnd URL
       'http://localhost:5176',
       'https://localhost:5176'
     );
