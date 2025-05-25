@@ -12,7 +12,8 @@
     "test:openrouter": "node test_openrouter_analysis.js",
     "check:env": "node check_environment.js",
     "test:twilio": "node test_twilio.js",
-    "test:stripe": "node test_stripe_checkout.js && node test_stripe_webhook.js"
+    "test:stripe": "node test_stripe_checkout.js && node test_stripe_webhook.js",
+    "test:brave": "node test_brave_search.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -23,6 +24,7 @@
     "express": "^4.19.2",
     "express-session": "^1.18.1",
     "multer": "^1.4.5-lts.1",
+    "node-cache": "^5.1.2",
     "openai": "^4.28.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

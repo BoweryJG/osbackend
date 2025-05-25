@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>McPollie - Poll Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .section {
+            flex: 1;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .poll-form {
+            background-color: #f9f9f9;
+        }
+        .poll-list {
+            background-color: #f0f8ff;
+        }
+        input, button, textarea {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .option-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .option-input input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .option-input button {
+            width: auto;
+            background-color: #f44336;
+        }
+        .poll-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .poll-item:hover {
+            background-color: #e9e9e9;
+        }
+        .option-vote {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin-bottom: 8px;
+            background-color: white;
+            border-radius: 4px;
+        }
+        .vote-button {
+            background-color: #2196F3;
+            padding: 5px 10px;
+            width: auto;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+        .progress {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            text-align: center;
+            color: white;
+            line-height: 20px;
+        }
+        .error {
+            color: #f44336;
+            margin-bottom: 10px;
+        }
+        .success {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>McPollie - Poll Test</h1>
+    
+    <div class="container">
+        <!-- Create Poll Section -->
+        <div class="section poll-form">
+            <h2>Create a Poll</h2>
+            <div id="createPollMessage" class="success" style="display: none;"></div>
+            <form id="createPollForm">
+                <label for="question">Question:</label>
+                <input type="text" id="question" required placeholder="Enter your question">
+                
+                <label>Options:</label>
+                <div id="optionsContainer">
+                    <div class="option-input">
+                        <input type="text" class="option" required placeholder="Option 1">
+                        <button type="button" class="remove-option" disabled>-</button>
+                    </div>
+                    <div class="option-input">
+                        <input type="text" class="option" required placeholder="Option 2">
+                        <button type="button" class="remove-option" disabled>-</button>
+                    </div>
+                </div>
+                
+                <button type="button" id="addOption">+ Add Option</button>
+                <button type="submit">Create Poll</button>
+            </form>
+        </div>
+        
+        <!-- Poll List Section -->
+        <div class="section poll-list">
+            <h2>Available Polls</h2>
+            <div id="pollsList"></div>
+        </div>
+    </div>
+
+    <div id="pollDetail" style="margin-top: 20px; display: none;">
+        <h2 id="pollQuestion"></h2>
+        <div id="pollOptions"></div>
+        <div id="voteMessage" class="success" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let currentPollId = null;
+
+        // DOM Elements
+        const createPollForm = document.getElementById('createPollForm');
+        const questionInput = document.getElementById('question');
+        const optionsContainer = document.getElementById('optionsContainer');
+        const addOptionBtn = document.getElementById('addOption');
+        const createPollMessage = document.getElementById('createPollMessage');
+        const pollsList = document.getElementById('pollsList');
+        const pollDetail = document.getElementById('pollDetail');
+        const pollQuestion = document.getElementById('pollQuestion');
+        const pollOptions = document.getElementById('pollOptions');
+        const voteMessage = document.getElementById('voteMessage');
+
+        // Add option button
+        addOptionBtn.addEventListener('click', () => {
+            const optionCount = optionsContainer.children.length + 1;
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'option-input';
+            optionDiv.innerHTML = `
+                <input type="text" class="option" required placeholder="Option ${optionCount}">
+                <button type="button" class="remove-option">-</button>
+            `;
+            optionsContainer.appendChild(optionDiv);
+            
+            // Enable remove buttons if there are more than 2 options
+            if (optionsContainer.children.length > 2) {
+                document.querySelectorAll('.remove-option').forEach(btn => {
+                    btn.disabled = false;
+                });
+            }
+            
+            // Add event listener to the new remove button
+            optionDiv.querySelector('.remove-option').addEventListener('click', function() {
+                optionsContainer.removeChild(optionDiv);
+                
+                // Disable remove buttons if there are only 2 options left
+                if (optionsContainer.children.length <= 2) {
+                    document.querySelectorAll('.remove-option').forEach(btn => {
+                        btn.disabled = true;
+                    });
+                }
+                
+                // Update placeholders
+                updateOptionPlaceholders();
+            });
+        });
+
+        // Update option placeholders
+        function updateOptionPlaceholders() {
+            const optionInputs = optionsContainer.querySelectorAll('.option');
+            optionInputs.forEach((input, index) => {
+                input.placeholder = `Option ${index + 1}`;
+            });
+        }
+
+        // Create poll form submission
+        createPollForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = questionInput.value.trim();
+            const optionInputs = optionsContainer.querySelectorAll('.option');
+            const options = Array.from(optionInputs).map(input => input.value.trim());
+            
+            if (!question) {
+                showMessage(createPollMessage, 'Please enter a question', 'error');
+                return;
+            }
+            
+            if (options.some(option => !option)) {
+                showMessage(createPollMessage, 'Please fill in all options', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/polls`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question, options })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(createPollMessage, 'Poll created successfully!', 'success');
+                    createPollForm.reset();
+                    fetchPolls();
+                } else {
+                    showMessage(createPollMessage, data.error || 'Failed to create poll', 'error');
+                }
+            } catch (error) {
+                showMessage(createPollMessage, 'Error creating poll: ' + error.message, 'error');
+            }
+        });
+
+        // Show message
+        function showMessage(element, message, type) {
+            element.textContent = message;
+            element.className = type;
+            element.style.display = 'block';
+            
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 3000);
+        }
+
+        // Fetch all polls
+        async function fetchPolls() {
+            try {
+                const response = await fetch(`${API_URL}/polls`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayPolls(data.polls);
+                } else {
+                    pollsList.innerHTML = `<p class="error">Failed to load polls: ${data.error}</p>`;
+                }
+            } catch (error) {
+                pollsList.innerHTML = `<p class="error">Error loading polls: ${error.message}</p>`;
+            }
+        }
+
+        // Display polls
+        function displayPolls(polls) {
+            if (polls.length === 0) {
+                pollsList.innerHTML = '<p>No polls available</p>';
+                return;
+            }
+            
+            pollsList.innerHTML = '';
+            polls.forEach(poll => {
+                const pollItem = document.createElement('div');
+                pollItem.className = 'poll-item';
+                pollItem.innerHTML = `
+                    <h3>${poll.question}</h3>
+                    <p>${poll.options.length} options · ${poll.total_votes} votes</p>
+                `;
+                
+                pollItem.addEventListener('click', () => {
+                    displayPollDetail(poll);
+                });
+                
+                pollsList.appendChild(pollItem);
+            });
+        }
+
+        // Display poll detail
+        function displayPollDetail(poll) {
+            currentPollId = poll.id;
+            pollQuestion.textContent = poll.question;
+            pollOptions.innerHTML = '';
+            
+            const totalVotes = poll.total_votes;
+            
+            poll.options.forEach(option => {
+                const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
+                
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option-vote';
+                optionDiv.innerHTML = `
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>${option.text}</span>
+                            <span>${option.votes} votes (${percentage}%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress" style="width: ${percentage}%">${percentage}%</div>
+                        </div>
+                    </div>
+                    <button class="vote-button" data-option-id="${option.id}">Vote</button>
+                `;
+                
+                pollOptions.appendChild(optionDiv);
+                
+                // Add vote button event listener
+                optionDiv.querySelector('.vote-button').addEventListener('click', async () => {
+                    try {
+                        const response = await fetch(`${API_URL}/polls/${poll.id}/vote`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ optionId: option.id })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            showMessage(voteMessage, 'Vote recorded successfully!', 'success');
+                            displayPollDetail(data.poll);
+                            fetchPolls();
+                        } else {
+                            showMessage(voteMessage, data.error || 'Failed to record vote', 'error');
+                        }
+                    } catch (error) {
+                        showMessage(voteMessage, 'Error recording vote: ' + error.message, 'error');
+                    }
+                });
+            });
+            
+            pollDetail.style.display = 'block';
+        }
+
+        // Initial fetch
+        fetchPolls();
+    </script>
+</body>
+</html>

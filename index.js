@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
 import Stripe from 'stripe';
+import NodeCache from 'node-cache';
 import {
   processAudioFile,
   getUserTranscriptions,
@@ -31,6 +32,9 @@ import {
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize cache for API responses
+const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
@@ -143,6 +147,7 @@ app.use(cors({
       'https://workspace.repspheres.com', 
       'https://linguistics.repspheres.com', 
       'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
+      'https://marketdata.repspheres.com', // Added MarketData frontend URL
       'http://localhost:5176',
       'https://localhost:5176'
     );
@@ -181,19 +186,25 @@ async function connectToSupabase(retryCount = 0) {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
       console.log(`Connecting to Supabase at: ${process.env.SUPABASE_URL} (Attempt ${retryCount + 1})`);
       
-      // Create a new Supabase client
-      supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-      
-      // Test the connection by making a simple query
-      const { data, error } = await supabase.from('user_subscriptions').select('*').limit(1);
-      
-      if (error) {
-        throw error;
+      try {
+        // Create a new Supabase client
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+        
+        // Test the connection by making a simple query
+        const { data, error } = await supabase.from('user_subscriptions').select('*').limit(1);
+        
+        if (error && !error.message.includes('does not exist')) {
+          throw error;
+        }
+        
+        console.log('Successfully connected to Supabase!');
+        supabaseConnected = true;
+        return true;
+      } catch (err) {
+        console.warn('Error connecting to Supabase:', err.message);
+        console.warn('Continuing with Supabase features disabled.');
+        return false;
       }
-      
-      console.log('Successfully connected to Supabase!');
-      supabaseConnected = true;
-      return true;
     } else {
       console.warn('Supabase credentials not found. Supabase features will be disabled.');
       return false;
@@ -1006,6 +1017,236 @@ app.get('/api/twilio/messages', async (req, res) => {
   } catch (err) {
     console.error('Error getting SMS history:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Brave Search API endpoints
+// Endpoint to proxy Brave web search
+app.get('/api/search/brave', async (req, res) => {
+  try {
+    const { query, q, limit = 10 } = req.query;
+    const searchQuery = query || q || '';
+
+    if (!searchQuery) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    const cacheKey = `brave-search-${searchQuery}-${limit}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    if (!process.env.BRAVE_SEARCH_API_KEY) {
+      return res.status(500).json({ error: 'Brave Search API key not configured' });
+    }
+
+    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+      params: { q: searchQuery, count: limit },
+      headers: { 
+        'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY,
+        'Accept': 'application/json'
+      }
+    });
+
+    cache.set(cacheKey, response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching Brave search results:', error);
+    if (error.response) {
+      console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
+      console.error('Error status:', error.response.status);
+    }
+    res.status(500).json({ 
+      error: 'Failed to fetch Brave search results',
+      details: error.response?.data || error.message 
+    });
+  }
+});
+
+// Endpoint to fetch news from Brave Search
+app.get('/api/news/brave', async (req, res) => {
+  try {
+    const { query, limit = 5 } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    const cacheKey = `brave-news-${query}-${limit}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    if (!process.env.BRAVE_SEARCH_API_KEY) {
+      return res.status(500).json({ error: 'Brave Search API key not configured' });
+    }
+
+    // Use the web search endpoint and filter for news results
+    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+      params: { 
+        q: `${query} news`, 
+        count: limit,
+        search_lang: 'en'
+      },
+      headers: { 
+        'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY,
+        'Accept': 'application/json'
+      }
+    });
+
+    // Format the response to look like a news API response
+    const formattedResponse = {
+      query: response.data.query,
+      news: {
+        results: response.data.web.results
+          .filter(result => 
+            result.subtype === 'news' || 
+            result.url.includes('/news/') || 
+            result.title.toLowerCase().includes('news')
+          )
+          .map(result => ({
+            title: result.title,
+            url: result.url,
+            description: result.description,
+            source: result.profile?.name || 'Unknown Source',
+            published_date: result.age || 'Unknown Date',
+            thumbnail: result.thumbnail?.src
+          }))
+      }
+    };
+
+    cache.set(cacheKey, formattedResponse);
+    res.json(formattedResponse);
+  } catch (error) {
+    console.error('Error fetching Brave news:', error);
+    res.status(500).json({ error: 'Failed to fetch Brave news' });
+  }
+});
+
+// In-memory storage for polls
+const polls = [];
+
+// Create a new poll
+app.post('/api/polls', (req, res) => {
+  try {
+    const { question, options } = req.body;
+    
+    if (!question || !options || !Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Question and at least 2 options are required'
+      });
+    }
+    
+    const pollId = Date.now().toString();
+    const newPoll = {
+      id: pollId,
+      question,
+      options: options.map(option => ({
+        id: Math.random().toString(36).substring(2, 15),
+        text: option,
+        votes: 0
+      })),
+      created_at: new Date().toISOString(),
+      total_votes: 0
+    };
+    
+    polls.push(newPoll);
+    
+    return res.status(201).json({
+      success: true,
+      poll: newPoll
+    });
+  } catch (err) {
+    console.error('Error creating poll:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error creating poll'
+    });
+  }
+});
+
+// Get all polls
+app.get('/api/polls', (req, res) => {
+  return res.json({
+    success: true,
+    polls
+  });
+});
+
+// Get a specific poll
+app.get('/api/polls/:id', (req, res) => {
+  const { id } = req.params;
+  const poll = polls.find(p => p.id === id);
+  
+  if (!poll) {
+    return res.status(404).json({
+      success: false,
+      error: 'Not Found',
+      message: 'Poll not found'
+    });
+  }
+  
+  return res.json({
+    success: true,
+    poll
+  });
+});
+
+// Vote on a poll
+app.post('/api/polls/:id/vote', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { optionId } = req.body;
+    
+    if (!optionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Option ID is required'
+      });
+    }
+    
+    const pollIndex = polls.findIndex(p => p.id === id);
+    
+    if (pollIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: 'Poll not found'
+      });
+    }
+    
+    const poll = polls[pollIndex];
+    const optionIndex = poll.options.findIndex(o => o.id === optionId);
+    
+    if (optionIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: 'Option not found'
+      });
+    }
+    
+    // Increment vote count
+    poll.options[optionIndex].votes++;
+    poll.total_votes++;
+    
+    return res.json({
+      success: true,
+      poll
+    });
+  } catch (err) {
+    console.error('Error voting on poll:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: 'Error voting on poll'
+    });
   }
 });
 
