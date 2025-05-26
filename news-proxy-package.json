@@ -1,0 +1,31 @@
+{
+  "name": "repspheres-news-proxy",
+  "version": "1.0.0",
+  "description": "News proxy service for RepSpheres applications",
+  "main": "news-proxy-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node news-proxy-server.js",
+    "dev": "node --watch news-proxy-server.js",
+    "test": "node test-news-proxy.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "node-cache": "^5.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "news",
+    "proxy",
+    "brave-search",
+    "api",
+    "repspheres"
+  ],
+  "author": "RepSpheres",
+  "license": "MIT"
+}

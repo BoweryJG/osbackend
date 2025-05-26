@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: repspheres-news-proxy
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false # This will need to be set manually in Render dashboard
+    domains:
+      - repspheres-news-proxy.onrender.com
