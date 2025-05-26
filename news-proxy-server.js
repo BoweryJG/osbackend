@@ -93,11 +93,6 @@ app.get('/api/search/brave', async (req, res) => {
     // Cache the successful response
     cache.set(cacheKey, response.data);
     
-    // Add CORS headers explicitly (though cors middleware should handle this)
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching Brave search results:', error.message);
@@ -192,11 +187,6 @@ app.get('/api/news/brave', async (req, res) => {
 
     cache.set(cacheKey, formattedResponse);
     
-    // Add CORS headers explicitly
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    
     res.json(formattedResponse);
   } catch (error) {
     console.error('Error fetching Brave news:', error.message);
@@ -205,15 +195,6 @@ app.get('/api/news/brave', async (req, res) => {
       message: 'An error occurred while processing your news request'
     });
   }
-});
-
-// Handle preflight requests
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Max-Age', '86400'); // 24 hours
-  res.sendStatus(200);
 });
 
 // Error handling middleware
