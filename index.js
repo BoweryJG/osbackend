@@ -821,24 +821,37 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
   }
 });
 
-// Webhook endpoint for audio processing (compatibility layer for frontend)
+// Webhook endpoint for audio processing (requires authentication)
 app.post('/webhook', async (req, res) => {
   try {
-    // Get user ID from headers, body, or query, or generate one for anonymous users
-    let userId = req.header('x-user-id') || req.body.userId || req.query.userId;
+    // Get user ID from headers, body, or query
+    const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
     const { filename } = req.body;
+    
+    // Check if user is authenticated
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please sign in to use this service.',
+        error: 'UNAUTHENTICATED'
+      });
+    }
+
+    // Validate that userId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format. Please provide a valid UUID.',
+        error: 'INVALID_USER_ID'
+      });
+    }
     
     if (!filename) {
       return res.status(400).json({
         success: false,
         message: 'Filename is required'
       });
-    }
-
-    // Generate a UUID for anonymous users
-    if (!userId) {
-      userId = uuidv4();
-      console.log('Generated anonymous user ID:', userId);
     }
 
     console.log('Processing audio from webhook:', { userId, filename });
@@ -850,8 +863,7 @@ app.post('/webhook', async (req, res) => {
       return res.json({
         success: true,
         message: 'Audio file processed successfully',
-        transcription: result.transcription,
-        userId: userId // Return the user ID so frontend can track it
+        transcription: result.transcription
       });
     }
 
