@@ -819,6 +819,39 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
   }
 });
 
+// Webhook endpoint for audio processing (compatibility layer for frontend)
+app.post('/webhook', async (req, res) => {
+  try {
+    const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
+    const { filename } = req.body;
+    
+    if (!userId || !filename) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and filename are required'
+      });
+    }
+
+    // For now, return a mock response to test CORS
+    // TODO: Implement actual file processing from URL
+    return res.json({
+      success: true,
+      message: 'Webhook endpoint reached successfully',
+      data: {
+        filename: filename,
+        userId: userId,
+        status: 'processing'
+      }
+    });
+  } catch (err) {
+    console.error('Error in webhook endpoint:', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
 // Task endpoint
 app.post('/task', async (req, res) => {
   try {
