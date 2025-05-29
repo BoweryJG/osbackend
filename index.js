@@ -11,6 +11,7 @@ import Stripe from 'stripe';
 import NodeCache from 'node-cache';
 import {
   processAudioFile,
+  processAudioFromUrl,
   getUserTranscriptions,
   getTranscriptionById,
   deleteTranscription
@@ -832,16 +833,22 @@ app.post('/webhook', async (req, res) => {
       });
     }
 
-    // For now, return a mock response to test CORS
-    // TODO: Implement actual file processing from URL
-    return res.json({
-      success: true,
-      message: 'Webhook endpoint reached successfully',
-      data: {
-        filename: filename,
-        userId: userId,
-        status: 'processing'
-      }
+    console.log('Processing audio from webhook:', { userId, filename });
+
+    // Process the audio file from URL
+    const result = await processAudioFromUrl(userId, filename, filename);
+    
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: 'Audio file processed successfully',
+        transcription: result.transcription
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: result.error || 'Error processing audio file'
     });
   } catch (err) {
     console.error('Error in webhook endpoint:', err);

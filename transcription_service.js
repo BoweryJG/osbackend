@@ -378,6 +378,82 @@ export async function processAudioFile(userId, file) {
 }
 
 /**
+ * Process audio from a URL
+ * @param {string} userId - The user ID
+ * @param {string} fileUrl - The URL of the audio file
+ * @param {string} filename - The original filename
+ * @returns {Promise<Object>} - The result of the transcription
+ */
+export async function processAudioFromUrl(userId, fileUrl, filename) {
+  try {
+    // Step 1: Create a pending transcription record
+    const { data: pendingRecord, error: pendingError } = await supabase
+      .from('transcriptions')
+      .insert([{
+        user_id: userId,
+        filename: filename || 'audio_file.mp3',
+        file_url: fileUrl,
+        status: 'processing'
+      }])
+      .select();
+    
+    if (pendingError) {
+      console.error('Error creating pending transcription record:', pendingError);
+      throw pendingError;
+    }
+    
+    try {
+      // Step 2: Transcribe the audio directly from URL
+      console.log('Transcribing audio from URL:', fileUrl);
+      const transcriptionResult = await transcribeAudio(fileUrl);
+      
+      // Step 3: Analyze the transcription
+      console.log('Analyzing transcription');
+      const analysisResult = await analyzeTranscription(transcriptionResult.text);
+      
+      // Step 4: Update the transcription record
+      const { data: updatedRecord, error: updateError } = await supabase
+        .from('transcriptions')
+        .update({
+          transcription: transcriptionResult.text,
+          duration_seconds: Math.ceil(transcriptionResult.duration || 0),
+          analysis: analysisResult,
+          status: 'completed'
+        })
+        .eq('id', pendingRecord[0].id)
+        .select();
+      
+      if (updateError) {
+        console.error('Error updating transcription record:', updateError);
+        throw updateError;
+      }
+      
+      return {
+        success: true,
+        transcription: updatedRecord[0]
+      };
+    } catch (error) {
+      // Update record to failed status
+      await supabase
+        .from('transcriptions')
+        .update({
+          status: 'failed',
+          error_message: error.message
+        })
+        .eq('id', pendingRecord[0].id);
+      
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error processing audio from URL:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Get transcriptions for a user
  * @param {string} userId - The user ID
  * @returns {Promise<Array>} - The transcriptions
@@ -495,6 +571,7 @@ export async function deleteTranscription(transcriptionId, userId) {
 
 export default {
   processAudioFile,
+  processAudioFromUrl,
   getUserTranscriptions,
   getTranscriptionById,
   deleteTranscription,
