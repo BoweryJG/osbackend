@@ -996,8 +996,17 @@ app.post('/webhook', async (req, res) => {
     const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
     const { filename } = req.body;
     
+    console.log('Webhook received:', { 
+      userId, 
+      filename, 
+      headers: req.headers, 
+      body: req.body,
+      query: req.query 
+    });
+    
     // Check if user is authenticated
     if (!userId) {
+      console.log('No userId found in request');
       return res.status(401).json({
         success: false,
         message: 'Authentication required. Please sign in to use this service.',
