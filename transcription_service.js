@@ -386,19 +386,29 @@ export async function processAudioFile(userId, file) {
  */
 export async function processAudioFromUrl(userId, fileUrl, filename) {
   try {
+    console.log('Starting processAudioFromUrl:', { userId, fileUrl, filename });
+    
     // Step 1: Create a pending transcription record
+    const insertData = {
+      user_id: userId,
+      filename: filename || 'audio_file.mp3',
+      file_url: fileUrl,
+      status: 'processing',
+      transcription: '',  // Use empty string instead of null
+      analysis: {},       // Use empty object instead of null
+      duration_seconds: 0 // Use 0 instead of null
+    };
+    
+    console.log('Inserting transcription record:', insertData);
+    
     const { data: pendingRecord, error: pendingError } = await supabase
       .from('transcriptions')
-      .insert([{
-        user_id: userId,
-        filename: filename || 'audio_file.mp3',
-        file_url: fileUrl,
-        status: 'processing'
-      }])
+      .insert([insertData])
       .select();
     
     if (pendingError) {
       console.error('Error creating pending transcription record:', pendingError);
+      console.error('Error details:', JSON.stringify(pendingError, null, 2));
       throw pendingError;
     }
     
