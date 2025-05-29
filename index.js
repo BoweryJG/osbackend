@@ -9,6 +9,7 @@ import fs from 'fs';
 import multer from 'multer';
 import Stripe from 'stripe';
 import NodeCache from 'node-cache';
+import { v4 as uuidv4 } from 'uuid';
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -823,14 +824,21 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
 // Webhook endpoint for audio processing (compatibility layer for frontend)
 app.post('/webhook', async (req, res) => {
   try {
-    const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
+    // Get user ID from headers, body, or query, or generate one for anonymous users
+    let userId = req.header('x-user-id') || req.body.userId || req.query.userId;
     const { filename } = req.body;
     
-    if (!userId || !filename) {
+    if (!filename) {
       return res.status(400).json({
         success: false,
-        message: 'User ID and filename are required'
+        message: 'Filename is required'
       });
+    }
+
+    // Generate a UUID for anonymous users
+    if (!userId) {
+      userId = uuidv4();
+      console.log('Generated anonymous user ID:', userId);
     }
 
     console.log('Processing audio from webhook:', { userId, filename });
@@ -842,7 +850,8 @@ app.post('/webhook', async (req, res) => {
       return res.json({
         success: true,
         message: 'Audio file processed successfully',
-        transcription: result.transcription
+        transcription: result.transcription,
+        userId: userId // Return the user ID so frontend can track it
       });
     }
 
