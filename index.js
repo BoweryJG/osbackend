@@ -47,6 +47,67 @@ if (process.env.STRIPE_SECRET_KEY) {
   stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' });
 }
 
+// Pricing Structure
+const pricingPlans = {
+  free: {
+    name: 'Free',
+    price: 0,
+    features: {
+      users: 1,
+      aiQueries: 10,
+      categories: 2,
+      automation: false,
+      support: 'community',
+      transcriptionMinutes: 30
+    }
+  },
+  starter: {
+    name: 'Starter',
+    price: 99,
+    features: {
+      users: 1,
+      aiQueries: 100,
+      categories: 5,
+      automation: false,
+      support: 'email',
+      transcriptionMinutes: 300
+    }
+  },
+  professional: {
+    name: 'Professional',
+    price: 299,
+    features: {
+      users: 5,
+      aiQueries: 1000,
+      categories: 'unlimited',
+      automation: true,
+      support: 'priority',
+      transcriptionMinutes: 1500
+    }
+  },
+  enterprise: {
+    name: 'Enterprise',
+    price: 'custom',
+    features: {
+      users: 'unlimited',
+      aiQueries: 'unlimited',
+      categories: 'unlimited',
+      automation: true,
+      support: 'dedicated',
+      transcriptionMinutes: 'unlimited'
+    }
+  }
+};
+
+// Usage-Based Add-ons
+const usageProducts = {
+  aiQuery: { price: 0.50 }, // Per query over limit
+  automationRun: { price: 2.00 }, // Per automation execution
+  premiumData: { price: 5.00 }, // Per premium report
+  apiCall: { price: 0.10 }, // Per API call
+  transcriptionMinute: { price: 0.25 } // Per minute over limit
+};
+
 // Create Express app
 const app = express();
 
@@ -332,30 +393,137 @@ function isAsmModel(modelId) {
   return asmModels.some(asmModel => modelId.toLowerCase().includes(asmModel.toLowerCase()));
 }
 
-// Helper function to check user's subscription level
+// Helper function to check user's subscription level and features
 async function getUserSubscription(email) {
-  if (!email || !supabase) return 'free';
+  if (!email || !supabase) return { plan: 'free', features: pricingPlans.free.features };
   
   try {
     const { data, error } = await supabase
       .from('user_subscriptions')
-      .select('subscription_level, subscription_status')
+      .select('subscription_level, subscription_status, plan_id')
       .eq('email', email)
       .single();
     
     if (error || !data) {
       console.log(`No subscription found for ${email}, defaulting to free`);
-      return 'free';
+      return { plan: 'free', features: pricingPlans.free.features };
     }
     
     if (data.subscription_status !== 'active') {
-      return 'free';
+      return { plan: 'free', features: pricingPlans.free.features };
     }
 
-    return data.subscription_level;
+    const planId = data.plan_id || data.subscription_level || 'free';
+    const plan = pricingPlans[planId] || pricingPlans.free;
+    
+    return { 
+      plan: planId, 
+      features: plan.features,
+      status: data.subscription_status 
+    };
   } catch (err) {
     console.error('Error fetching subscription:', err);
-    return 'free';
+    return { plan: 'free', features: pricingPlans.free.features };
+  }
+}
+
+// Helper function to check if user can perform action based on subscription
+async function checkUsageLimit(userId, action, amount = 1) {
+  if (!supabase) return { allowed: true, remaining: 'unlimited' };
+  
+  try {
+    // Get user subscription info
+    const { data: userSub, error: subError } = await supabase
+      .from('user_subscriptions')
+      .select('plan_id, subscription_status, email')
+      .eq('user_id', userId)
+      .single();
+    
+    if (subError || !userSub) {
+      console.log(`No subscription found for user ${userId}, using free plan`);
+      return checkPlanLimits('free', action, amount, userId);
+    }
+    
+    const planId = userSub.plan_id || 'free';
+    return checkPlanLimits(planId, action, amount, userId);
+  } catch (err) {
+    console.error('Error checking usage limit:', err);
+    return { allowed: false, error: 'Failed to check usage limits' };
+  }
+}
+
+// Check plan limits for specific actions
+async function checkPlanLimits(planId, action, amount, userId) {
+  const plan = pricingPlans[planId] || pricingPlans.free;
+  const limit = plan.features[action];
+  
+  if (limit === 'unlimited') {
+    return { allowed: true, remaining: 'unlimited' };
+  }
+  
+  // Get current usage for this month
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  
+  const { data: usage, error } = await supabase
+    .from('usage_logs')
+    .select('quantity')
+    .eq('user_id', userId)
+    .eq('product_type', action)
+    .gte('timestamp', startOfMonth.toISOString())
+    .order('timestamp', { ascending: false });
+  
+  if (error) {
+    console.error('Error fetching usage:', error);
+    return { allowed: false, error: 'Failed to fetch usage data' };
+  }
+  
+  const currentUsage = usage.reduce((total, record) => total + record.quantity, 0);
+  const remaining = limit - currentUsage;
+  
+  if (currentUsage + amount > limit) {
+    return { 
+      allowed: false, 
+      remaining: remaining,
+      overage: (currentUsage + amount) - limit,
+      overagePrice: usageProducts[action]?.price || 0
+    };
+  }
+  
+  return { 
+    allowed: true, 
+    remaining: remaining - amount,
+    currentUsage: currentUsage
+  };
+}
+
+// Log usage for billing
+async function logUsage(userId, productType, quantity = 1, metadata = {}) {
+  if (!supabase) return null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('usage_logs')
+      .insert([{
+        user_id: userId,
+        product_type: productType,
+        quantity: quantity,
+        metadata: metadata,
+        timestamp: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error logging usage:', error);
+      return null;
+    }
+    
+    return data;
+  } catch (err) {
+    console.error('Error in logUsage:', err);
+    return null;
   }
 }
 
@@ -856,14 +1024,47 @@ app.post('/webhook', async (req, res) => {
 
     console.log('Processing audio from webhook:', { userId, filename });
 
+    // Check if user can transcribe (usage limits)
+    const usageCheck = await checkUsageLimit(userId, 'aiQueries', 1);
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: 'Monthly transcription limit exceeded',
+        error: 'QUOTA_EXCEEDED',
+        remaining: usageCheck.remaining,
+        overage: usageCheck.overage,
+        overagePrice: usageCheck.overagePrice
+      });
+    }
+
     // Process the audio file from URL
     const result = await processAudioFromUrl(userId, filename, filename);
     
     if (result.success) {
+      // Log usage for billing
+      await logUsage(userId, 'aiQueries', 1, {
+        filename: filename,
+        transcriptionId: result.transcription.id,
+        duration: result.transcription.duration_seconds
+      });
+
+      // Also log transcription minutes if we have duration
+      if (result.transcription.duration_seconds) {
+        const minutes = Math.ceil(result.transcription.duration_seconds / 60);
+        await logUsage(userId, 'transcriptionMinutes', minutes, {
+          transcriptionId: result.transcription.id,
+          filename: filename
+        });
+      }
+
       return res.json({
         success: true,
         message: 'Audio file processed successfully',
-        transcription: result.transcription
+        transcription: result.transcription,
+        usage: {
+          remaining: usageCheck.remaining - 1,
+          currentUsage: usageCheck.currentUsage + 1
+        }
       });
     }
 
@@ -876,6 +1077,135 @@ app.post('/webhook', async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       error: err.message 
+    });
+  }
+});
+
+// Pricing and subscription endpoints
+app.get('/api/pricing', (req, res) => {
+  res.json({
+    success: true,
+    plans: pricingPlans,
+    usage: usageProducts
+  });
+});
+
+app.get('/api/subscription/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    // Get subscription info
+    const { data: subscription, error } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    const planId = subscription?.plan_id || 'free';
+    const plan = pricingPlans[planId];
+
+    // Get current month usage
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { data: usage, error: usageError } = await supabase
+      .from('usage_logs')
+      .select('product_type, quantity')
+      .eq('user_id', userId)
+      .gte('timestamp', startOfMonth.toISOString());
+
+    if (usageError) {
+      console.error('Error fetching usage:', usageError);
+    }
+
+    // Calculate usage by type
+    const usageSummary = {};
+    if (usage) {
+      usage.forEach(record => {
+        if (!usageSummary[record.product_type]) {
+          usageSummary[record.product_type] = 0;
+        }
+        usageSummary[record.product_type] += record.quantity;
+      });
+    }
+
+    res.json({
+      success: true,
+      subscription: subscription || { plan_id: 'free', status: 'free' },
+      plan: plan,
+      usage: usageSummary,
+      limits: plan.features
+    });
+  } catch (err) {
+    console.error('Error fetching subscription:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+app.post('/api/create-checkout-session', async (req, res) => {
+  try {
+    const { planId, userId, email } = req.body;
+
+    if (!stripe) {
+      return res.status(503).json({
+        success: false,
+        message: 'Stripe not configured'
+      });
+    }
+
+    const plan = pricingPlans[planId];
+    if (!plan || planId === 'free') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid plan selected'
+      });
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{
+        price: process.env[`STRIPE_${planId.toUpperCase()}_PRICE_ID`],
+        quantity: 1,
+      }],
+      success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/subscription/cancel`,
+      customer_email: email,
+      metadata: {
+        userId: userId,
+        planId: planId
+      }
+    });
+
+    res.json({
+      success: true,
+      sessionId: session.id,
+      url: session.url
+    });
+  } catch (err) {
+    console.error('Error creating checkout session:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 });
