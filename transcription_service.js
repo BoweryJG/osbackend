@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -146,11 +147,22 @@ async function transcribeAudio(fileUrl) {
     }
     console.log(`Transcribing audio file: ${fileUrl}`);
     
-    // Download the file from Supabase if it's a Supabase URL
+    // Download the file if it's a URL (not a local file path)
     let fileToTranscribe = fileUrl;
     let tempFilePath = null;
     
-    if (fileUrl.includes(process.env.SUPABASE_URL)) {
+    // Check if it's a URL (starts with http:// or https://)
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      // Create temp directory if it doesn't exist
+      const tempDir = path.join(__dirname, 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      // Generate temp file path
+      tempFilePath = path.join(tempDir, `${uuidv4()}.mp3`);
+      
+      if (fileUrl.includes(process.env.SUPABASE_URL)) {
       // Extract the path from the URL
       const urlParts = new URL(fileUrl);
       const pathParts = urlParts.pathname.split('/');
@@ -177,6 +189,27 @@ async function transcribeAudio(fileUrl) {
       // Write the file to disk
       fs.writeFileSync(tempFilePath, Buffer.from(await data.arrayBuffer()));
       fileToTranscribe = tempFilePath;
+      } else {
+        // Download from external URL
+        console.log('Downloading audio from external URL...');
+        const response = await axios({
+          method: 'GET',
+          url: fileUrl,
+          responseType: 'stream'
+        });
+        
+        // Save to temp file
+        const writer = fs.createWriteStream(tempFilePath);
+        response.data.pipe(writer);
+        
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        
+        fileToTranscribe = tempFilePath;
+        console.log('Audio downloaded successfully to:', tempFilePath);
+      }
     }
     
     // Transcribe the audio using OpenAI Whisper API
@@ -200,6 +233,14 @@ async function transcribeAudio(fileUrl) {
     };
   } catch (err) {
     console.error('Error transcribing audio:', err);
+    // Clean up temporary file if it exists
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupErr) {
+        console.error('Error cleaning up temp file:', cleanupErr);
+      }
+    }
     throw err;
   }
 }
