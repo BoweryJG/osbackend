@@ -587,6 +587,163 @@ router.post('/research/batch', async (req, res) => {
   });
 });
 
+// Brave Search endpoint for Canvas
+router.post('/brave-search', async (req, res) => {
+  try {
+    const { query, count = 10 } = req.body;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Query is required' });
+    }
+
+    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+      headers: {
+        'Accept': 'application/json',
+        'X-Subscription-Token': process.env.BRAVE_API_KEY
+      },
+      params: {
+        q: query,
+        count: Math.min(count, 20)
+      }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('Brave search error:', error);
+    res.status(500).json({ 
+      error: 'Brave search failed', 
+      message: error.message 
+    });
+  }
+});
+
+// Firecrawl Scrape endpoint for Canvas
+router.post('/firecrawl-scrape', async (req, res) => {
+  try {
+    const { url, formats = ['markdown'] } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+      url,
+      formats
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('Firecrawl error:', error);
+    res.status(500).json({ 
+      error: 'Firecrawl scrape failed', 
+      message: error.message 
+    });
+  }
+});
+
+// OpenRouter endpoint for Canvas
+router.post('/openrouter', async (req, res) => {
+  try {
+    const { prompt, model = 'anthropic/claude-3-sonnet' } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 4000
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://canvas.repspheres.com',
+          'X-Title': 'Canvas Sales Intelligence'
+        }
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('OpenRouter error:', error);
+    res.status(500).json({ 
+      error: 'OpenRouter API failed', 
+      message: error.message 
+    });
+  }
+});
+
+// NPI Lookup endpoint for Canvas
+router.get('/npi-lookup', async (req, res) => {
+  try {
+    const { search } = req.query;
+    
+    if (!search || search.length < 2) {
+      return res.json({ results: [] });
+    }
+
+    // Use NPI Registry API
+    const npiUrl = `https://npiregistry.cms.hhs.gov/api/?version=2.1&enumeration_type=NPI-1&pretty=true`;
+    
+    // Search by name
+    const searchTerms = search.trim().split(' ');
+    let queryParams = '';
+    
+    if (searchTerms.length >= 2) {
+      // Assume first name and last name
+      queryParams = `&first_name=${encodeURIComponent(searchTerms[0])}&last_name=${encodeURIComponent(searchTerms.slice(1).join(' '))}`;
+    } else {
+      // Single term - search last name
+      queryParams = `&last_name=${encodeURIComponent(search)}`;
+    }
+    
+    const response = await axios.get(npiUrl + queryParams);
+    
+    if (!response.data || !response.data.results) {
+      return res.json({ results: [] });
+    }
+
+    // Transform results to match Canvas format
+    const doctors = response.data.results.map(result => {
+      const basic = result.basic || {};
+      const address = result.addresses?.[0] || {};
+      const taxonomy = result.taxonomies?.[0] || {};
+      
+      return {
+        npi: result.number,
+        displayName: `${basic.first_name} ${basic.last_name}${basic.credential ? ', ' + basic.credential : ''}`,
+        firstName: basic.first_name,
+        lastName: basic.last_name,
+        credential: basic.credential || '',
+        specialty: taxonomy.desc || 'Healthcare Provider',
+        city: address.city || '',
+        state: address.state || '',
+        fullAddress: `${address.address_1 || ''} ${address.city || ''}, ${address.state || ''} ${address.postal_code || ''}`.trim(),
+        phone: address.telephone_number || '',
+        organizationName: basic.organization_name || ''
+      };
+    }).filter(doc => doc.city && doc.state); // Only return doctors with location
+
+    res.json({ results: doctors.slice(0, 20) }); // Limit to 20 results
+    
+  } catch (error) {
+    console.error('NPI lookup error:', error);
+    res.status(500).json({ 
+      error: 'Failed to search NPI registry',
+      message: error.message 
+    });
+  }
+});
+
 // Health check
 router.get('/health', (req, res) => {
   res.json({

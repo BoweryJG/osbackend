@@ -1,0 +1,86 @@
+{
+  "companyName": "RepSpheres",
+  "campaignId": "repspheres-launch-2025",
+  "prVersions": {
+    "main": {
+      "title": "RepSpheres Launches Revolutionary AI-Powered Sales Intelligence Platform with 95% Confidence Scoring",
+      "subtitle": "Canvas Module Transforms Medical Device Sales with Real-Time Doctor Research and Competitive Analysis",
+      "leadParagraph": "SAN FRANCISCO, CA - January 7, 2025 - RepSpheres, an innovative sales intelligence company, today announced the launch of its comprehensive AI-powered platform that revolutionizes how sales teams research prospects and close deals. The platform's flagship Canvas module achieves 95% confidence scoring in doctor research, providing medical device sales teams with unprecedented insights into buying signals, pain points, and competitive landscapes.",
+      "body": [
+        "The $50 billion medical device industry has long struggled with inefficient prospect research, with sales reps spending up to 40% of their time gathering basic information about potential clients. RepSpheres changes this paradigm by automating the entire research process, delivering actionable intelligence in under 60 seconds per prospect.",
+        "\"Sales teams shouldn't waste hours on Google trying to piece together prospect information,\" said the founder of RepSpheres. \"Our platform uses advanced AI to analyze websites, aggregate reviews, identify buying signals, and generate personalized approach strategies - all while the rep is driving to their next appointment.\"",
+        "Key features of the RepSpheres platform include:\n• Canvas Sales Intelligence: 95% confidence doctor research with NPI verification\n• Multi-LLM AI Support: Access to Claude, GPT-4, and Gemini for optimal results\n• Real-Time Competitive Analysis: Instant insights on local market dynamics\n• Automated Review Aggregation: Synthesis from multiple trusted sources\n• Batch Processing: Research hundreds of prospects simultaneously\n• Module-Based Architecture: Specialized tools for CRM, linguistics, market data, and more",
+        "Early adopters in the medical device industry have reported dramatic improvements in sales efficiency. Beta users experienced a 3x increase in qualified meetings and reduced research time by 85%. One dental implant sales team reported closing 40% more deals within their first month using Canvas.",
+        "The platform leverages cutting-edge technologies including OpenRouter for AI orchestration, Brave Search API for real-time web data, and Firecrawl for intelligent website analysis. With built-in transcription services, Twilio integration, and Stripe-powered subscription management, RepSpheres offers a complete sales enablement ecosystem.",
+        "RepSpheres is available immediately with a free tier for individual sales reps and scalable enterprise plans. The company plans to expand beyond medical device sales to serve pharmaceutical, B2B software, and financial services sectors in Q2 2025."
+      ],
+      "boilerplate": "About RepSpheres: RepSpheres is a sales intelligence platform that empowers sales teams with AI-driven prospect research, competitive analysis, and personalized approach strategies. With modules spanning CRM, market insights, linguistics analysis, and more, RepSpheres serves as the complete operating system for modern sales organizations. The platform processes millions of data points daily to deliver actionable intelligence that drives revenue growth.",
+      "contact": "Media Contact:\nRepSpheres Press Team\npress@repspheres.com\nhttps://repspheres.com\nhttps://canvas.repspheres.com"
+    },
+    "short": {
+      "title": "RepSpheres Launches AI Sales Intelligence Platform with 95% Accuracy",
+      "content": "RepSpheres today announced its AI-powered sales intelligence platform that transforms prospect research. The Canvas module achieves 95% confidence in doctor research, reducing sales research time by 85% while increasing qualified meetings 3x. Features include real-time competitive analysis, automated review aggregation, and multi-LLM support. Available now with free tier at repspheres.com."
+    },
+    "social": {
+      "twitter": "🚀 Introducing RepSpheres: AI that does your sales research in 60 seconds. 95% confidence scoring. 3x more qualified meetings. Try Canvas free: https://canvas.repspheres.com #SalesIntelligence #AI #MedicalDeviceSales",
+      "linkedin": "Excited to announce the launch of RepSpheres! 🎯\n\nWe're transforming sales intelligence with AI that:\n• Researches prospects in 60 seconds\n• Achieves 95% confidence scoring\n• Identifies buying signals automatically\n• Generates personalized approach strategies\n\nMedical device sales teams using our Canvas module report 85% less time researching and 40% more closed deals.\n\nDiscover the future of sales intelligence: https://repspheres.com",
+      "facebook": "Big news! RepSpheres is officially live! 🚀 We're using AI to revolutionize how sales teams research prospects. No more hours on Google - get complete prospect intelligence in 60 seconds. Medical device reps are already seeing 3x more qualified meetings. Check out our Canvas module: https://canvas.repspheres.com"
+    }
+  },
+  "distribution": {
+    "targetDate": "Tuesday, January 9, 2025, 10 AM EST",
+    "platforms": [
+      "PRLog",
+      "OpenPR",
+      "24-7PressRelease",
+      "PRFree",
+      "NewswireToday",
+      "PR.com",
+      "PRBuzz",
+      "PRUrgent"
+    ],
+    "categories": [
+      "Technology",
+      "Business",
+      "Software",
+      "Artificial Intelligence",
+      "Sales & Marketing",
+      "Healthcare Technology",
+      "B2B",
+      "Startups"
+    ],
+    "tags": [
+      "RepSpheres",
+      "sales intelligence",
+      "AI platform",
+      "medical device sales",
+      "Canvas",
+      "sales automation",
+      "B2B software",
+      "prospect research",
+      "competitive intelligence",
+      "sales enablement"
+    ]
+  },
+  "seo": {
+    "keywords": [
+      "RepSpheres",
+      "AI sales intelligence",
+      "Canvas sales platform",
+      "medical device sales software",
+      "prospect research automation",
+      "sales enablement AI",
+      "B2B sales intelligence",
+      "doctor research platform",
+      "competitive analysis software",
+      "sales productivity tools"
+    ],
+    "metaDescription": "RepSpheres launches AI-powered sales intelligence platform with 95% confidence scoring. Canvas module transforms medical device sales with instant prospect research and competitive analysis."
+  },
+  "angles": {
+    "tech": "Focus on AI/ML capabilities, multi-LLM orchestration, API integrations",
+    "business": "ROI metrics, efficiency gains, revenue impact",
+    "medical": "Healthcare sales transformation, NPI verification, doctor insights",
+    "startup": "Innovation story, founder vision, market disruption"
+  }
+}
