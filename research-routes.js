@@ -596,6 +596,12 @@ router.post('/brave-search', async (req, res) => {
       return res.status(400).json({ error: 'Query is required' });
     }
 
+    // Debug: Check if API key is set
+    if (!process.env.BRAVE_API_KEY) {
+      console.error('BRAVE_API_KEY not set in environment');
+      return res.status(500).json({ error: 'Brave API key not configured' });
+    }
+
     const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
       headers: {
         'Accept': 'application/json',
@@ -609,10 +615,11 @@ router.post('/brave-search', async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error('Brave search error:', error);
+    console.error('Brave search error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Brave search failed', 
-      message: error.message 
+      message: error.message,
+      details: error.response?.data
     });
   }
 });
@@ -793,7 +800,7 @@ router.get('/health', (req, res) => {
     uptime: process.uptime(),
     activeJobs: researchJobs.size,
     cacheSize: researchCache.size,
-    version: '1.0.2' // Fixed Brave API headers
+    version: '1.0.3' // Added debugging for API keys
   });
 });
 
