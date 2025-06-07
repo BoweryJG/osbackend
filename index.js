@@ -1439,14 +1439,14 @@ app.get('/api/search/brave', async (req, res) => {
       return res.json(cachedData);
     }
 
-    if (!process.env.BRAVE_SEARCH_API_KEY) {
+    if (!process.env.BRAVE_API_KEY) {
       return res.status(500).json({ error: 'Brave Search API key not configured' });
     }
 
     const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
       params: { q: searchQuery, count: limit },
       headers: { 
-        'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY,
+        'X-Subscription-Token': process.env.BRAVE_API_KEY,
         'Accept': 'application/json'
       }
     });
@@ -1481,7 +1481,7 @@ app.get('/api/news/brave', async (req, res) => {
       return res.json(cachedData);
     }
 
-    if (!process.env.BRAVE_SEARCH_API_KEY) {
+    if (!process.env.BRAVE_API_KEY) {
       return res.status(500).json({ error: 'Brave Search API key not configured' });
     }
 
@@ -1493,7 +1493,7 @@ app.get('/api/news/brave', async (req, res) => {
         search_lang: 'en'
       },
       headers: { 
-        'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY,
+        'X-Subscription-Token': process.env.BRAVE_API_KEY,
         'Accept': 'application/json'
       }
     });
