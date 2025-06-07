@@ -687,26 +687,41 @@ router.get('/npi-lookup', async (req, res) => {
   try {
     const { search } = req.query;
     
-    if (!search || search.length < 2) {
+    if (!search || search.length < 3) {
       return res.json({ results: [] });
     }
 
-    // Use NPI Registry API
-    const npiUrl = `https://npiregistry.cms.hhs.gov/api/?version=2.1&enumeration_type=NPI-1&pretty=true`;
+    // Parse search term - handle variations
+    const searchLower = search.toLowerCase().trim();
+    const terms = search.trim().split(/\s+/);
+    let firstName = terms[0];
+    let lastName = terms.length > 1 ? terms[terms.length - 1] : '';
+    let state = '';
+    let city = '';
     
-    // Search by name
-    const searchTerms = search.trim().split(' ');
-    let queryParams = '';
-    
-    if (searchTerms.length >= 2) {
-      // Assume first name and last name
-      queryParams = `&first_name=${encodeURIComponent(searchTerms[0])}&last_name=${encodeURIComponent(searchTerms.slice(1).join(' '))}`;
-    } else {
-      // Single term - search last name
-      queryParams = `&last_name=${encodeURIComponent(search)}`;
+    // Check if search includes location hints
+    if (searchLower.includes('buffalo') || searchLower.includes('ny')) {
+      // For Buffalo area, don't specify city - just use state
+      // This catches suburbs like Williamsville, Amherst, etc.
+      if (searchLower.includes('ny')) {
+        state = 'NY';
+        // Don't set city for Buffalo area - too many suburbs
+      }
     }
-    
-    const response = await axios.get(npiUrl + queryParams);
+
+    // Build NPI API URL with flexible parameters
+    const params = new URLSearchParams({
+      version: '2.1',
+      limit: '20',  // Increased limit
+      first_name: firstName,
+      ...(lastName && { last_name: lastName }),
+      ...(state && { state: state }),
+      ...(city && { city: city })
+    });
+
+    const response = await axios.get(
+      `https://npiregistry.cms.hhs.gov/api/?${params}`
+    );
     
     if (!response.data || !response.data.results) {
       return res.json({ results: [] });
@@ -715,25 +730,51 @@ router.get('/npi-lookup', async (req, res) => {
     // Transform results to match Canvas format
     const doctors = response.data.results.map(result => {
       const basic = result.basic || {};
-      const address = result.addresses?.[0] || {};
-      const taxonomy = result.taxonomies?.[0] || {};
+      // Prefer location address over mailing address
+      const locationAddress = result.addresses?.find(a => a.address_purpose === 'LOCATION') || {};
+      const mailingAddress = result.addresses?.find(a => a.address_purpose === 'MAILING') || {};
+      const address = locationAddress.address_1 ? locationAddress : mailingAddress;
+      
+      const taxonomy = result.taxonomies?.find(t => t.primary) || {};
+      
+      // Format name properly
+      const formattedFirstName = basic.first_name
+        ? basic.first_name.charAt(0).toUpperCase() + basic.first_name.slice(1).toLowerCase()
+        : '';
+      const formattedLastName = basic.last_name
+        ? basic.last_name.charAt(0).toUpperCase() + basic.last_name.slice(1).toLowerCase()
+        : '';
       
       return {
         npi: result.number,
-        displayName: `${basic.first_name} ${basic.last_name}${basic.credential ? ', ' + basic.credential : ''}`,
-        firstName: basic.first_name,
-        lastName: basic.last_name,
+        displayName: `Dr. ${formattedFirstName} ${formattedLastName}${basic.credential ? ', ' + basic.credential : ''}`,
+        firstName: formattedFirstName,
+        lastName: formattedLastName,
         credential: basic.credential || '',
-        specialty: taxonomy.desc || 'Healthcare Provider',
+        specialty: taxonomy.desc || 'Not specified',
         city: address.city || '',
         state: address.state || '',
-        fullAddress: `${address.address_1 || ''} ${address.city || ''}, ${address.state || ''} ${address.postal_code || ''}`.trim(),
+        fullAddress: address.address_1 
+          ? `${address.address_1}, ${address.city}, ${address.state} ${address.postal_code}`
+          : '',
         phone: address.telephone_number || '',
         organizationName: basic.organization_name || ''
       };
-    }).filter(doc => doc.city && doc.state); // Only return doctors with location
+    }).filter(doc => {
+      // Filter for dental and aesthetic specialties
+      const specialtyLower = doc.specialty.toLowerCase();
+      return (
+        specialtyLower.includes('dent') ||
+        specialtyLower.includes('oral') ||
+        specialtyLower.includes('maxillofacial') ||
+        specialtyLower.includes('dermat') ||
+        specialtyLower.includes('plastic') ||
+        specialtyLower.includes('aesthetic') ||
+        specialtyLower.includes('cosmetic')
+      ) && doc.city && doc.state;
+    });
 
-    res.json({ results: doctors.slice(0, 20) }); // Limit to 20 results
+    res.json({ results: doctors }); // Return all filtered results
     
   } catch (error) {
     console.error('NPI lookup error:', error);
