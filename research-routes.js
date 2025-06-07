@@ -792,7 +792,8 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     activeJobs: researchJobs.size,
-    cacheSize: researchCache.size
+    cacheSize: researchCache.size,
+    version: '1.0.1' // Updated to trigger redeploy
   });
 });
 
