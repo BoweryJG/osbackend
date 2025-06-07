@@ -1,99 +1,472 @@
-# Spheres Consolidated Backend
+# RepSpheres Backend API (osbackend)
 
-A unified backend server for all Spheres applications, with centralized data storage in Supabase and module-based access control.
+A comprehensive Node.js backend service powering multiple RepSpheres applications with AI capabilities, transcription services, and sales intelligence.
 
-## Features
-- Single backend for all Spheres applications
-- Centralized data storage in Supabase
-- Module-based access control
-- User subscription management 
-- LLM integration via OpenRouter with access control
-- Reliable Supabase connection with auto-retry
+## 🚀 Features
 
-## Modules Included
-- Workspace
-- Linguistics
-- Market Insights
-- CRM
-- Blog 
+### Core Services
+- **Multi-LLM Support** via OpenRouter (Claude, GPT-4, Gemini, etc.)
+- **Audio Transcription** with OpenAI Whisper
+- **Twilio Integration** for voice/SMS capabilities
+- **Stripe Payments** with subscription management
+- **Supabase Database** integration
+- **News Aggregation** via Brave Search API
+- **Polling System** for real-time feedback
+- **Module-based Access Control** for different apps
+- **Usage Tracking** and billing management
 
-## Setup
-1. Clone this repository
-2. Run `npm install`
-3. Copy `.env.example` to `.env` and fill in your credentials:
-   - `SUPABASE_URL` - Your Supabase project URL
-   - `SUPABASE_KEY` - Your Supabase anon or service key
-   - `OPENROUTER_API_KEY` - Your OpenRouter API key (required for analysis and optional for Whisper)
-   - `OPENAI_API_KEY` - Your OpenAI API key for Whisper transcription (optional if using OpenRouter)
-   - `STRIPE_SECRET_KEY` - Your Stripe secret API key
-   - `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
-   - `STRIPE_PRICE_ID` - Price ID for your subscription product
-   - See `ENV_VARIABLE_GUIDE.md` for detailed instructions on setting up environment variables locally and on Render
-   - The Supabase keys and either OpenAI or OpenRouter API key are required if you plan to use the transcription service
-4. Run the SQL scripts to set up the Supabase database tables:
-   - `create_user_registrations_table.sql`
-   - `create_subscriptions_table.sql`
-   - `create_module_access_table.sql`
-   - `create_app_data_table.sql`
-   - `add_stripe_fields_to_subscriptions.sql`
-   - `fix_type_mismatches.sql` (run this if you encounter any type mismatch errors)
+### Canvas Sales Intelligence (NEW)
+- **Enhanced Doctor Research** with 95% confidence scoring
+- **Website Discovery & Analysis** using Brave Search and Firecrawl
+- **Review Aggregation** from multiple sources
+- **Competitive Analysis** of local market
+- **AI-Powered Synthesis** generating actionable sales briefs
+- **Batch Processing** for multiple doctors
+- **Real-time Progress** via SSE streaming
+
+## 📱 Applications Supported
+- **Canvas** - Sales Intelligence Platform
+- **Workspace** - Project Management
+- **Linguistics** - Language Analysis
+- **Market Insights** - Market Research
+- **CRM** - Customer Relationship Management
+- **MarketData** - Financial Data Analysis
+- **Blog** - Content Management 
+
+## 📋 Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+- Supabase account (optional but recommended)
+- API keys for various services (see Environment Variables)
+
+## 🛠️ Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/BoweryJG/osbackend.git
+cd osbackend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Configure environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your API keys
+```
+
+4. Run database migrations (if using Supabase):
+```bash
+# Run these SQL files in your Supabase SQL editor:
+create_user_registrations_table.sql
+create_subscriptions_table.sql
+create_usage_logs_table.sql
+create_transcriptions_table.sql
+create_twilio_tables.sql
+create_module_access_table.sql
+create_app_data_table.sql
+add_stripe_fields_to_subscriptions.sql
+```
+
 5. Start the server:
-   ```bash
-   npm start
-   ```
+```bash
+npm start
+```
 
-## API Endpoints
+## 🔧 Configuration
 
-### Module Access
-- `GET /api/modules/access` - Check if a user has access to a specific module
-  - Query: `?email=user@example.com&module=moduleName`
-  - Response: `{ success: true, hasAccess: true|false }`
+### Required Environment Variables
 
-- `GET /api/modules/list` - List all modules a user has access to
-  - Query: `?email=user@example.com`
-  - Response: `{ success: true, modules: ["workspace", "blog", ...] }`
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=production
 
-### Data Storage
-- `POST /api/data/:appName` - Create or update app data
-  - Params: `appName` (e.g., "workspace", "linguistics")
-  - Body: `{ userId: "user123", data: { /* your JSON data */ } }`
-  - Response: `{ success: true, data: { /* saved data object */ } }`
+# Supabase (Required for full functionality)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
 
-- `GET /api/data/:appName` - Get app data
-  - Params: `appName`
-  - Query: `?userId=user123`
-  - Response: `{ success: true, data: { /* data object */ } }`
+# OpenRouter (Required for AI features)
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
+OPENROUTER_MODEL=anthropic/claude-3-haiku
 
-- `DELETE /api/data/:appName` - Delete app data
-  - Params: `appName`
-  - Query: `?userId=user123`
-  - Response: `{ success: true, message: "App data deleted successfully" }`
+# Brave Search (Required for Canvas and web search)
+BRAVE_API_KEY=your-brave-api-key
 
-### LLM Integration
-- `POST /task` - Call an LLM and log activity
-  - Body: `{ "model": "openai", "prompt": "your prompt here", "llm_model": "specific-model-if-needed" }`
-  - Response: `{ success: true, llmResult: { /* LLM response */ } }`
+# OpenAI (Required for transcription)
+OPENAI_API_KEY=sk-your-openai-key
+
+# Twilio (Optional - for voice/SMS)
+TWILIO_ACCOUNT_SID=your-account-sid
+TWILIO_AUTH_TOKEN=your-auth-token
+TWILIO_PHONE_NUMBER=+1234567890
+
+# Stripe (Optional - for payments)
+STRIPE_SECRET_KEY=sk_test_your-key
+STRIPE_WEBHOOK_SECRET=whsec_your-secret
+STRIPE_STARTER_PRICE_ID=price_starter
+STRIPE_PROFESSIONAL_PRICE_ID=price_pro
+STRIPE_ENTERPRISE_PRICE_ID=price_enterprise
+
+# Firecrawl (Optional - for Canvas website analysis)
+FIRECRAWL_API_KEY=fc-your-firecrawl-key
+
+# Frontend URLs (for CORS)
+FRONTEND_URL=https://your-frontend.com
+```
+
+See `ENV_VARIABLE_GUIDE.md` for detailed setup instructions.
+
+## 📡 API Endpoints
+
+### Health Check
+```http
+GET /health
+```
+
+### Canvas Sales Intelligence 🎯
+
+#### Start Research Job
+```http
+POST /api/research/start
+Content-Type: application/json
+
+{
+  "doctor": {
+    "displayName": "Dr. Smith",
+    "npi": "1234567890",
+    "specialty": "Dentistry",
+    "city": "New York",
+    "state": "NY",
+    "organizationName": "Smith Dental"
+  },
+  "product": "yomi",
+  "userId": "user-123"
+}
+```
+
+#### Check Job Status
+```http
+GET /api/research/:jobId/status
+```
+
+#### Get Results
+```http
+GET /api/research/:jobId
+```
+
+#### Stream Progress (SSE)
+```http
+GET /api/research/:jobId/stream
+```
+
+#### Batch Research
+```http
+POST /api/research/batch
+Content-Type: application/json
+
+{
+  "doctors": [...],
+  "product": "yomi",
+  "userId": "user-123"
+}
+```
+
+### AI/LLM Operations
+```http
+POST /task
+Content-Type: application/json
+
+{
+  "task": "Analyze this text...",
+  "llm_model": "anthropic/claude-3-opus",
+  "additional_input": "Context here"
+}
+```
 
 ### Transcription Service
-- `POST /api/transcribe` - Upload an audio file for transcription and analysis. Send the file as `audio` (multipart/form-data) and include the user ID in the `x-user-id` header or as `userId`.
-- `GET /api/transcriptions` - List all transcriptions for a user.
-- `GET /api/transcriptions/:id` - Get a specific transcription record.
-- `DELETE /api/transcriptions/:id` - Delete a transcription.
+```http
+POST /api/transcribe
+Content-Type: multipart/form-data
 
-### Billing
-- `POST /api/checkout` - Create a Stripe Checkout session for the authenticated user and return the session URL.
-- `POST /stripe/webhook` - Stripe webhook endpoint to update subscription status. Handled automatically by Stripe; no direct user call needed.
-  
-See `TRANSCRIPTION_SERVICE_GUIDE.md` for full request and response examples.
+audio: [audio file]
+userId: "user-123"
+```
 
-## Deployment
-The service is configured to deploy to Render.com using the included `render.yaml` file.
+```http
+GET /api/transcriptions?userId=user-123
+GET /api/transcriptions/:id
+DELETE /api/transcriptions/:id
+```
 
-## Frontend Integration
-Update all frontend applications to point to this consolidated backend URL:
-- Development: `http://localhost:3000`
-- Production: The URL of your deployed backend on Render
+### Module Access Control
+```http
+GET /api/modules/access?email=user@example.com&module=canvas
+GET /api/modules/list?email=user@example.com
+```
 
-## Requirements
-- Node.js 18+
-- Supabase project with PostgreSQL database
+### Data Storage
+```http
+POST /api/data/:appName
+GET /api/data/:appName?userId=user123
+DELETE /api/data/:appName?userId=user123
+```
+
+### Subscription & Billing
+```http
+GET /api/pricing
+GET /api/subscription/:userId
+POST /api/create-checkout-session
+POST /stripe/webhook (Webhook)
+```
+
+### Twilio Voice/SMS
+```http
+POST /api/twilio/call
+POST /api/twilio/sms
+GET /api/twilio/calls
+GET /api/twilio/messages
+POST /twilio/voice (Webhook)
+POST /twilio/sms (Webhook)
+```
+
+### News & Search
+```http
+GET /api/brave/news?query=medical+devices
+```
+
+### Polling System
+```http
+POST /api/polls
+GET /api/polls
+GET /api/polls/:id
+POST /api/polls/:id/vote
+```
+
+## 🏗️ Architecture
+
+### Canvas Research Pipeline
+
+1. **Doctor Search** → NPI verification
+2. **Website Discovery** → Brave Search API
+3. **Website Analysis** → Firecrawl scraping
+4. **Review Aggregation** → Multiple sources
+5. **Competitor Analysis** → Local market search
+6. **AI Synthesis** → OpenRouter LLM
+7. **Confidence Scoring** → Multi-factor algorithm
+
+### Confidence Scoring Algorithm
+
+```javascript
+Base Score Components:
+- NPI Verified: 35 points
+- Sources Found: 2 points each (max 30)
+- Website Analyzed: 15 points  
+- Reviews Found: up to 10 points
+- Analysis Quality: 10 points
+Total: Up to 95% confidence
+```
+
+### Rate Limiting
+
+- Canvas Research: 20 requests/minute per user
+- Transcription: Based on subscription tier
+- LLM Calls: Based on subscription tier
+
+### Caching Strategy
+
+- Research results: 3-day TTL
+- News results: 1-hour TTL
+- In-memory cache with LRU eviction
+
+## 🚀 Deployment
+
+### Render.com (Recommended)
+
+1. Create new Web Service
+2. Connect GitHub repository
+3. Set environment variables
+4. Deploy using `render.yaml`
+
+### Railway
+
+```bash
+railway init
+railway link
+railway up
+```
+
+### Manual Server
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start with PM2
+pm2 start index.js --name "repspheres-backend"
+
+# Save PM2 config
+pm2 save
+pm2 startup
+```
+
+## 🧪 Testing
+
+### Run All Tests
+```bash
+npm run check:env
+```
+
+### Test Specific Services
+```bash
+npm run test:transcription
+npm run test:twilio
+npm run test:stripe
+npm run test:brave
+npm run test:research  # Canvas features
+```
+
+### Test Canvas Research
+```bash
+# Start server
+npm start
+
+# In another terminal
+node test_research.js
+```
+
+Expected output:
+```
+✅ Health check: { status: 'healthy', ... }
+📊 Starting research for: Gregory White
+✅ Job started: uuid-here
+📍 Progress: 25% - website - Analyzing website...
+📍 Progress: 50% - reviews - Gathering reviews...
+📍 Progress: 75% - competition - Analyzing competition...
+📍 Progress: 100% - completed - Research complete!
+✅ Research completed!
+📊 Confidence Score: 87%
+📍 Sources found: 23
+🎯 Buying signals: 3
+```
+
+## 🤝 Frontend Integration
+
+### Canvas (Sales Intelligence)
+```javascript
+const BACKEND_URL = 'https://osbackend-zl1h.onrender.com';
+
+// Start research
+const response = await fetch(`${BACKEND_URL}/api/research/start`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ doctor, product, userId })
+});
+
+// Poll for status
+const status = await fetch(`${BACKEND_URL}/api/research/${jobId}/status`);
+```
+
+### CORS Allowed Origins
+- https://canvas.repspheres.com
+- https://workspace.repspheres.com
+- https://linguistics.repspheres.com
+- https://crm.repspheres.com
+- https://marketdata.repspheres.com
+- http://localhost:5173
+- http://localhost:5176
+
+## 📊 API Response Examples
+
+### Research Job Response
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716",
+  "status": "completed",
+  "progress": 100,
+  "data": {
+    "doctor": {...},
+    "confidence": {
+      "score": 87,
+      "breakdown": {
+        "npiVerified": 35,
+        "sourceCount": 28,
+        "websiteFound": 15,
+        "reviewsFound": 9,
+        "analysisQuality": 10
+      }
+    },
+    "synthesis": {
+      "executiveSummary": "Dr. White's practice shows strong growth...",
+      "buyingSignals": [
+        {
+          "signal": "Expanding to second location",
+          "evidence": "Website announcement",
+          "urgency": "high",
+          "relevanceToProduct": "Need for consistent tech across locations"
+        }
+      ],
+      "painPoints": [...],
+      "approachStrategy": {...},
+      "actionPlan": [...]
+    }
+  }
+}
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **"Supabase connection failed"**
+   - Check SUPABASE_URL and SUPABASE_KEY
+   - Service continues without Supabase features
+
+2. **"Rate limit exceeded"**
+   - Wait 1 minute before retrying
+   - Implement request queuing
+
+3. **"Research timeout"**
+   - Normal research takes 30-45 seconds
+   - Check API key validity
+
+### Debug Mode
+```bash
+DEBUG=* npm start
+```
+
+## 📝 Documentation
+
+- `ENV_VARIABLE_GUIDE.md` - Environment setup
+- `TRANSCRIPTION_SERVICE_GUIDE.md` - Audio transcription
+- `TWILIO_INTEGRATION_GUIDE.md` - Voice/SMS setup
+- `PRICING_ENV_SETUP.md` - Stripe configuration
+- `FRONTEND_CONNECTION_GUIDE.md` - Frontend integration
+
+## 🔄 Version History
+
+- **v2.0.0** - Added Canvas research routes with enhanced AI
+- **v1.5.0** - Pricing tiers and usage tracking
+- **v1.4.0** - Twilio voice/SMS integration  
+- **v1.3.0** - Stripe subscription management
+- **v1.2.0** - Multi-LLM support via OpenRouter
+- **v1.1.0** - Audio transcription service
+- **v1.0.0** - Initial release
+
+## 📄 License
+
+Proprietary - RepSpheres Inc.
+
+## 🆘 Support
+
+- Technical Issues: Create GitHub issue
+- API Questions: support@repspheres.com
+- Emergency: Check status at status.repspheres.com
+
+---
+
+Built with ❤️ by the RepSpheres Team
