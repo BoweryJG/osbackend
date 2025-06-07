@@ -793,7 +793,7 @@ router.get('/health', (req, res) => {
     uptime: process.uptime(),
     activeJobs: researchJobs.size,
     cacheSize: researchCache.size,
-    version: '1.0.1' // Updated to trigger redeploy
+    version: '1.0.2' // Fixed Brave API headers
   });
 });
 
