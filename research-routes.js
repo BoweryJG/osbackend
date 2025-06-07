@@ -800,7 +800,13 @@ router.get('/health', (req, res) => {
     uptime: process.uptime(),
     activeJobs: researchJobs.size,
     cacheSize: researchCache.size,
-    version: '1.0.3' // Added debugging for API keys
+    version: '1.0.4',
+    env: {
+      hasBraveKey: !!process.env.BRAVE_API_KEY,
+      hasFirecrawlKey: !!process.env.FIRECRAWL_API_KEY,
+      hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
+      nodeEnv: process.env.NODE_ENV
+    }
   });
 });
 
