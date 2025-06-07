@@ -30,6 +30,7 @@ import {
   getCallHistory,
   getSmsHistory
 } from './twilio_service.js';
+import researchRoutes from './research-routes.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -210,6 +211,7 @@ app.use(cors({
       'https://workspace.repspheres.com', 
       'https://linguistics.repspheres.com', 
       'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
+      'https://canvas.repspheres.com', // Canvas sales intelligence
       'https://marketdata.repspheres.com', // Added MarketData frontend URL
       'http://localhost:5176',
       'https://localhost:5176'
@@ -1649,6 +1651,9 @@ app.post('/api/polls/:id/vote', (req, res) => {
     });
   }
 });
+
+// Add Canvas research routes
+app.use('/api', researchRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
