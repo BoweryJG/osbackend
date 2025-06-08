@@ -914,6 +914,64 @@ router.get('/npi-lookup', async (req, res) => {
   }
 });
 
+// Apify Actor proxy
+router.post('/apify-actor', async (req, res) => {
+  const { actorId, input, waitForFinish = true } = req.body;
+  
+  if (!actorId || !input) {
+    return res.status(400).json({ error: 'Actor ID and input required' });
+  }
+  
+  const APIFY_API_KEY = process.env.APIFY_API_KEY;
+  if (!APIFY_API_KEY) {
+    console.error('APIFY_API_KEY not configured');
+    return res.status(500).json({ error: 'Apify not configured' });
+  }
+  
+  try {
+    // Start the actor run
+    const runResponse = await axios.post(
+      `https://api.apify.com/v2/acts/${actorId}/runs`,
+      input,
+      {
+        headers: {
+          'Authorization': `Bearer ${APIFY_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          waitForFinish: waitForFinish ? '300' : '0' // Wait up to 5 minutes
+        }
+      }
+    );
+    
+    const runId = runResponse.data.data.id;
+    
+    if (!waitForFinish) {
+      return res.json({ runId, status: 'RUNNING' });
+    }
+    
+    // Get the results
+    const resultsResponse = await axios.get(
+      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items`,
+      {
+        headers: {
+          'Authorization': `Bearer ${APIFY_API_KEY}`
+        }
+      }
+    );
+    
+    res.json({
+      runId,
+      status: runResponse.data.data.status,
+      results: resultsResponse.data
+    });
+    
+  } catch (error) {
+    console.error('Apify error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Apify API failed', message: error.message });
+  }
+});
+
 // Perplexity Research proxy
 router.post('/perplexity-research', async (req, res) => {
   const { query, model = 'sonar' } = req.body;
