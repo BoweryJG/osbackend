@@ -914,6 +914,53 @@ router.get('/npi-lookup', async (req, res) => {
   }
 });
 
+// Perplexity Research proxy
+router.post('/perplexity-research', async (req, res) => {
+  const { query, model = 'sonar' } = req.body;
+  
+  if (!query) {
+    return res.status(400).json({ error: 'Query required' });
+  }
+  
+  const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+  if (!PERPLEXITY_API_KEY) {
+    console.error('PERPLEXITY_API_KEY not configured');
+    return res.status(500).json({ error: 'Perplexity not configured' });
+  }
+  
+  try {
+    const response = await axios.post('https://api.perplexity.ai/chat/completions', {
+      model: model === 'sonar-pro' ? 'sonar-medium-online' : 'sonar-small-online',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a medical market research expert. Provide detailed, factual information with specific examples and data points.'
+        },
+        {
+          role: 'user',
+          content: query
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 1000
+    }, {
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    res.json({
+      answer: response.data.choices[0].message.content,
+      sources: response.data.citations || [],
+      model: response.data.model
+    });
+  } catch (error) {
+    console.error('Perplexity error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Perplexity API failed', message: error.message });
+  }
+});
+
 // Health check
 router.get('/health', (req, res) => {
   res.json({
