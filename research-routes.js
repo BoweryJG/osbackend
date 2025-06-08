@@ -301,7 +301,7 @@ BE SPECIFIC. NO GENERIC STATEMENTS.`;
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'anthropic/claude-3-haiku',
+        model: 'anthropic/claude-opus-4',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 2000
@@ -656,7 +656,7 @@ router.post('/firecrawl-scrape', async (req, res) => {
 // OpenRouter endpoint for Canvas
 router.post('/openrouter', async (req, res) => {
   try {
-    const { prompt, model = 'anthropic/claude-3-sonnet' } = req.body;
+    const { prompt, model = 'anthropic/claude-opus-4' } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -825,7 +825,7 @@ router.post('/brave-search', async (req, res) => {
 
 // OpenRouter proxy
 router.post('/openrouter', async (req, res) => {
-  const { prompt, model = 'anthropic/claude-3-haiku-20240307' } = req.body;
+  const { prompt, model = 'anthropic/claude-opus-4' } = req.body;
   
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
