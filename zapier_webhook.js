@@ -1,6 +1,6 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
+// Use built-in fetch in Node 18+
 import { processAudioWithAI } from './ai_service.js';
 import dotenv from 'dotenv';
 import path from 'path';
