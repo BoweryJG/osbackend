@@ -31,6 +31,7 @@ import {
   getSmsHistory
 } from './twilio_service.js';
 import researchRoutes from './research-routes.js';
+import zapierRoutes from './zapier_webhook.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -991,6 +992,70 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
   }
 });
 
+// External recording upload endpoint (for PLAUD and other external sources)
+app.post('/api/upload-external-recording', upload.single('file'), async (req, res) => {
+  try {
+    const userId = req.header('x-user-id') || req.body.userId;
+    const { 
+      contactId, 
+      contactName, 
+      practiceId, 
+      source,
+      externalId,
+      transcriptionProvider = 'openai',
+      analysisProvider = 'gemini'
+    } = req.body;
+
+    if (!userId || !req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID and audio file are required'
+      });
+    }
+
+    // Import the AI processing function
+    const { processAudioWithAI } = await import('./ai_service.js');
+
+    // Process the audio file
+    const result = await processAudioWithAI(req.file.buffer, {
+      transcriptionProvider,
+      analysisProvider,
+      contactName,
+      userId,
+      metadata: {
+        source: source || 'manual',
+        external_id: externalId,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        contactId,
+        practiceId
+      }
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Processing failed');
+    }
+
+    // Return the result
+    res.json({
+      success: true,
+      data: {
+        recordingId: result.recordingId,
+        analysis: result.analysis?.analysis || {},
+        transcription: result.transcription,
+        metadata: result.metadata
+      }
+    });
+
+  } catch (error) {
+    console.error('External recording upload error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to process recording'
+    });
+  }
+});
+
 // Webhook endpoint for audio processing (requires authentication)
 app.post('/webhook', async (req, res) => {
   try {
@@ -1654,6 +1719,9 @@ app.post('/api/polls/:id/vote', (req, res) => {
 
 // Add Canvas research routes
 app.use('/api', researchRoutes);
+
+// Add Zapier webhook routes
+app.use('/', zapierRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
