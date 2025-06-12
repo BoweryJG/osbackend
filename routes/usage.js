@@ -1,7 +1,8 @@
-const express = require('express');
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import { authenticateToken } from '../middleware/auth.js';
+
 const router = express.Router();
-const { createClient } = require('@supabase/supabase-js');
-const { authenticateToken } = require('../middleware/auth');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -237,4 +238,4 @@ function getTierLimits(tier) {
   return limits[tier] || limits.free;
 }
 
-module.exports = router;
+export default router;
