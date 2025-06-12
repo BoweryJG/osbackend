@@ -32,6 +32,7 @@ import {
 } from './twilio_service.js';
 import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
+import usageRoutes from './routes/usage.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -1729,7 +1730,6 @@ app.post('/api/polls/:id/vote', (req, res) => {
 app.use('/api', researchRoutes);
 
 // Add usage tracking routes
-const usageRoutes = require('./routes/usage.js');
 app.use('/api/usage', usageRoutes);
 
 // Add Zapier webhook routes
