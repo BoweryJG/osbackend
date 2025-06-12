@@ -13,7 +13,8 @@ A comprehensive Node.js backend service powering multiple RepSpheres application
 - **News Aggregation** via Brave Search API
 - **Polling System** for real-time feedback
 - **Module-based Access Control** for different apps
-- **Usage Tracking** and billing management
+- **Usage Tracking** with tier-based limits and billing management
+- **Authentication Middleware** with JWT token verification
 
 ### Canvas Sales Intelligence (NEW)
 - **Enhanced Doctor Research** with 95% confidence scoring
@@ -429,7 +430,7 @@ const status = await fetch(`${BACKEND_URL}/api/research/${jobId}/status`);
 ### Common Issues
 
 1. **"Supabase connection failed"**
-   - Check SUPABASE_URL and SUPABASE_KEY
+   - Check SUPABASE_URL and SUPABASE_KEY (not SUPABASE_SERVICE_KEY)
    - Service continues without Supabase features
 
 2. **"Rate limit exceeded"**
@@ -439,6 +440,15 @@ const status = await fetch(`${BACKEND_URL}/api/research/${jobId}/status`);
 3. **"Research timeout"**
    - Normal research takes 30-45 seconds
    - Check API key validity
+
+4. **"Cannot find module" or ES module errors**
+   - Ensure all files use ES module syntax (import/export)
+   - Check that all required directories are committed to git
+   - Verify package.json has `"type": "module"`
+
+5. **CORS errors in development**
+   - Localhost ports 3000-3001 and 5173-5176 are whitelisted
+   - No proxy needed for local development
 
 ### Debug Mode
 ```bash
@@ -455,6 +465,11 @@ DEBUG=* npm start
 
 ## 🔄 Version History
 
+- **v2.2.0** - Fixed ES module compatibility, added comprehensive localhost CORS support
+  - Converted all CommonJS modules to ES modules
+  - Added usage tracking routes and authentication middleware
+  - Fixed environment variable consistency (SUPABASE_KEY)
+  - Added localhost ports 3000-3001, 5173-5176 for development
 - **v2.1.0** - Removed Perplexity dependency, all AI features now use OpenRouter
 - **v2.0.0** - Added Canvas research routes with enhanced AI
 - **v1.5.0** - Pricing tiers and usage tracking
