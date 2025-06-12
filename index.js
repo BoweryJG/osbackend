@@ -214,8 +214,16 @@ app.use(cors({
       'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
       'https://canvas.repspheres.com', // Canvas sales intelligence
       'https://marketdata.repspheres.com', // Added MarketData frontend URL
+      'http://localhost:5173', // Common Vite dev port
+      'http://localhost:5174', // Alternative Vite port
+      'http://localhost:5175', // Alternative Vite port
       'http://localhost:5176',
-      'https://localhost:5176'
+      'https://localhost:5173',
+      'https://localhost:5174',
+      'https://localhost:5175',
+      'https://localhost:5176',
+      'http://localhost:3000', // Common React dev port
+      'http://localhost:3001'  // Alternative port
     );
     
     // Check if origin matches any allowed pattern
@@ -1719,6 +1727,10 @@ app.post('/api/polls/:id/vote', (req, res) => {
 
 // Add Canvas research routes
 app.use('/api', researchRoutes);
+
+// Add usage tracking routes
+const usageRoutes = require('./routes/usage.js');
+app.use('/api/usage', usageRoutes);
 
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);

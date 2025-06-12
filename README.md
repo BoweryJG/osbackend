@@ -378,13 +378,13 @@ const status = await fetch(`${BACKEND_URL}/api/research/${jobId}/status`);
 ```
 
 ### CORS Allowed Origins
-- https://canvas.repspheres.com
+- https://canvas.repspheres.com ✅
 - https://workspace.repspheres.com
 - https://linguistics.repspheres.com
 - https://crm.repspheres.com
 - https://marketdata.repspheres.com
-- http://localhost:5173
-- http://localhost:5176
+- http://localhost:3000-3001 (React dev)
+- http://localhost:5173-5176 (Vite dev)
 
 ## 📊 API Response Examples
 
