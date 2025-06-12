@@ -20,9 +20,10 @@ A comprehensive Node.js backend service powering multiple RepSpheres application
 - **Website Discovery & Analysis** using Brave Search and Firecrawl
 - **Review Aggregation** from multiple sources
 - **Competitive Analysis** of local market
-- **AI-Powered Synthesis** generating actionable sales briefs
+- **AI-Powered Synthesis** using OpenRouter (Claude Opus 4)
 - **Batch Processing** for multiple doctors
 - **Real-time Progress** via SSE streaming
+- **No Perplexity API Required** - uses OpenRouter for all AI features
 
 ## 📱 Applications Supported
 - **Canvas** - Sales Intelligence Platform
@@ -114,6 +115,9 @@ STRIPE_ENTERPRISE_PRICE_ID=price_enterprise
 
 # Firecrawl (Optional - for Canvas website analysis)
 FIRECRAWL_API_KEY=fc-your-firecrawl-key
+
+# Perplexity (No longer required - using OpenRouter instead)
+# PERPLEXITY_API_KEY=pplx-your-key
 
 # Frontend URLs (for CORS)
 FRONTEND_URL=https://your-frontend.com
@@ -256,8 +260,10 @@ POST /api/polls/:id/vote
 3. **Website Analysis** → Firecrawl scraping
 4. **Review Aggregation** → Multiple sources
 5. **Competitor Analysis** → Local market search
-6. **AI Synthesis** → OpenRouter LLM
+6. **AI Synthesis** → OpenRouter (Claude Opus 4)
 7. **Confidence Scoring** → Multi-factor algorithm
+
+Note: The `/api/perplexity-research` endpoint now uses OpenRouter with Brave Search context instead of requiring a separate Perplexity API key.
 
 ### Confidence Scoring Algorithm
 
@@ -449,6 +455,7 @@ DEBUG=* npm start
 
 ## 🔄 Version History
 
+- **v2.1.0** - Removed Perplexity dependency, all AI features now use OpenRouter
 - **v2.0.0** - Added Canvas research routes with enhanced AI
 - **v1.5.0** - Pricing tiers and usage tracking
 - **v1.4.0** - Twilio voice/SMS integration  
