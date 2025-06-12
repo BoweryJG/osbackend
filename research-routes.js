@@ -972,7 +972,7 @@ router.post('/apify-actor', async (req, res) => {
   }
 });
 
-// Perplexity Research proxy
+// Research Intelligence proxy - Uses OpenRouter instead of Perplexity
 router.post('/perplexity-research', async (req, res) => {
   const { query, model = 'sonar' } = req.body;
   
@@ -980,42 +980,78 @@ router.post('/perplexity-research', async (req, res) => {
     return res.status(400).json({ error: 'Query required' });
   }
   
-  const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
-  if (!PERPLEXITY_API_KEY) {
-    console.error('PERPLEXITY_API_KEY not configured');
-    return res.status(500).json({ error: 'Perplexity not configured' });
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  if (!OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY not configured');
+    return res.status(500).json({ error: 'OpenRouter not configured' });
   }
   
   try {
-    const response = await axios.post('https://api.perplexity.ai/chat/completions', {
-      model: model === 'sonar-pro' ? 'sonar-medium-online' : 'sonar-small-online',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a medical market research expert. Provide detailed, factual information with specific examples and data points.'
-        },
-        {
-          role: 'user',
-          content: query
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 1000
-    }, {
-      headers: {
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
-        'Content-Type': 'application/json'
+    // First do a Brave search to get real-time context
+    let searchContext = '';
+    if (process.env.BRAVE_API_KEY) {
+      try {
+        const searchResponse = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+          params: { q: query, count: 5 },
+          headers: {
+            'X-Subscription-Token': process.env.BRAVE_API_KEY,
+            'Accept': 'application/json'
+          }
+        });
+        
+        const results = searchResponse.data.results || [];
+        searchContext = results.slice(0, 3).map(r => 
+          `${r.title}: ${r.description}`
+        ).join('\n\n');
+      } catch (searchError) {
+        console.error('Brave search error:', searchError.message);
       }
-    });
+    }
+    
+    // Use OpenRouter with search context for research
+    const enhancedPrompt = `You are a medical market research expert. Provide detailed, factual information with specific examples and data points.
+
+${searchContext ? `Recent search results for context:\n${searchContext}\n\n` : ''}
+
+User Query: ${query}
+
+Provide a comprehensive answer that includes:
+1. Key insights and findings
+2. Specific examples or case studies
+3. Relevant statistics or data points
+4. Actionable recommendations
+
+Format your response to be clear and well-structured.`;
+
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: 'anthropic/claude-3-opus-20240229',
+        messages: [{
+          role: 'user',
+          content: enhancedPrompt
+        }],
+        temperature: 0.3,
+        max_tokens: 1500
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://canvas.repspheres.com',
+          'X-Title': 'Canvas Sales Intelligence',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     
     res.json({
       answer: response.data.choices[0].message.content,
-      sources: response.data.citations || [],
-      model: response.data.model
+      sources: searchContext ? ['Brave Search Results'] : [],
+      model: 'claude-3-opus (via OpenRouter)'
     });
   } catch (error) {
-    console.error('Perplexity error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Perplexity API failed', message: error.message });
+    console.error('Research error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Research API failed', message: error.message });
   }
 });
 
