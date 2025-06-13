@@ -218,6 +218,7 @@ app.use(cors({
       'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
       'https://canvas.repspheres.com', // Canvas sales intelligence
       'https://marketdata.repspheres.com', // Added MarketData frontend URL
+      'https://auth.repspheres.com', // Auth subdomain if needed
       'http://localhost:5173', // Common Vite dev port
       'http://localhost:5174', // Alternative Vite port
       'http://localhost:5175', // Alternative Vite port
