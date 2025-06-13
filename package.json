@@ -1,7 +1,7 @@
 {
-  "name": "mcp-ai-server",
+  "name": "osbackend",
   "version": "1.0.0",
-  "description": "MCP-style backend server to orchestrate LLM calls, execute tasks, and log activities to Supabase.",
+  "description": "RepSpheres OS Backend - API server for RepSpheres ecosystem including podcast feeds, AI services, and Supabase integration.",
   "main": "index.js",
   "type": "module",
   "scripts": {

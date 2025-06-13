@@ -2,6 +2,10 @@
 
 A comprehensive Node.js backend service powering multiple RepSpheres applications with AI capabilities, transcription services, and sales intelligence.
 
+**Production URL**: `https://osbackend-zl1h.onrender.com`  
+**Local Folder**: `mcpolliebackend` (historical name)  
+**GitHub Repo**: `osbackend`
+
 ## 🚀 Features
 
 ### Core Services
@@ -16,7 +20,14 @@ A comprehensive Node.js backend service powering multiple RepSpheres application
 - **Usage Tracking** with tier-based limits and billing management
 - **Authentication Middleware** with JWT token verification
 
-### Canvas Sales Intelligence (NEW)
+### Podcast Platform Features (NEW)
+- **RSS Feed Parser** - Parse and process podcast RSS feeds
+- **Apple Podcasts Search** - Search iTunes podcast directory
+- **Trending Podcasts** - Curated trending medical/dental content
+- **Live Episode Detection** - Identifies episodes published within 24 hours
+- **Smart Caching** - Reduces API calls with intelligent caching
+
+### Canvas Sales Intelligence
 - **Enhanced Doctor Research** with 95% confidence scoring
 - **Website Discovery & Analysis** using Brave Search and Firecrawl
 - **Review Aggregation** from multiple sources
@@ -288,7 +299,47 @@ Total: Up to 95% confidence
 
 - Research results: 3-day TTL
 - News results: 1-hour TTL
+- Podcast feeds: 30-minute TTL
+- Apple podcasts: 1-hour TTL
+- Trending content: 2-hour TTL
 - In-memory cache with LRU eviction
+
+### Podcast Feed Endpoints 🎙️
+
+#### Parse RSS Feed
+```http
+POST /api/feeds/rss
+Content-Type: application/json
+
+{
+  "feedUrl": "https://example.com/podcast.rss",
+  "feedName": "Podcast Name",
+  "category": "medical",
+  "maxEpisodes": 3
+}
+```
+
+#### Search Apple Podcasts
+```http
+POST /api/feeds/apple
+Content-Type: application/json
+
+{
+  "searchTerm": "medical dental healthcare podcast",
+  "limit": 15
+}
+```
+
+#### Get Trending Podcasts
+```http
+POST /api/feeds/trending
+Content-Type: application/json
+
+{
+  "categories": ["medical", "dental", "healthcare", "ai"],
+  "limit": 10
+}
+```
 
 ## 🚀 Deployment
 
