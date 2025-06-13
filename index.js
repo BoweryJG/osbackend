@@ -33,6 +33,7 @@ import {
 import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
 import usageRoutes from './routes/usage.js';
+import { authenticateUser, optionalAuth } from './auth.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -209,7 +210,9 @@ app.use(cors({
     }
     allowedOrigins.push(
       'https://repspheres.netlify.app',
+      'https://globalrepspheres.netlify.app', // Main app on Netlify
       'https://repspheres.com',
+      'https://www.repspheres.com', // www version
       'https://workspace.repspheres.com', 
       'https://linguistics.repspheres.com', 
       'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
@@ -1288,6 +1291,149 @@ app.post('/api/create-checkout-session', async (req, res) => {
     });
   } catch (err) {
     console.error('Error creating checkout session:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Authenticated subscription status endpoint
+app.get('/api/subscription-status', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const userEmail = req.userEmail;
+
+    // Get subscription info
+    const { data: subscription, error } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    const planId = subscription?.plan_id || 'free';
+    const status = subscription?.subscription_status || 'active';
+    
+    res.json({
+      tier: planId,
+      status: status,
+      isDemo: false,
+      user_id: userId,
+      email: userEmail,
+      features: pricingPlans[planId]?.features || pricingPlans.free.features
+    });
+  } catch (err) {
+    console.error('Error fetching subscription status:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Authenticated usage endpoint
+app.get('/api/usage', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Get current month usage
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { data: usage, error } = await supabase
+      .from('usage_logs')
+      .select('product_type, quantity')
+      .eq('user_id', userId)
+      .gte('timestamp', startOfMonth.toISOString());
+
+    if (error) {
+      console.error('Error fetching usage:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Aggregate usage by type
+    const usageMap = {};
+    for (const log of usage || []) {
+      usageMap[log.product_type] = (usageMap[log.product_type] || 0) + log.quantity;
+    }
+
+    // Return usage in expected format
+    res.json({
+      canvas_briefs: usageMap.canvas_briefs || 0,
+      ai_prompts: usageMap.aiQueries || 0,
+      call_analyses: usageMap.call_analyses || 0,
+      market_procedures: usageMap.market_procedures || 0,
+      contacts: usageMap.contacts || 0,
+      ripples: usageMap.ripples || 0
+    });
+  } catch (err) {
+    console.error('Error fetching usage:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Authenticated usage increment endpoint
+app.post('/api/usage/increment', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { feature } = req.body;
+
+    if (!feature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Feature parameter is required'
+      });
+    }
+
+    // Map frontend feature names to backend product types
+    const featureMap = {
+      canvas_briefs: 'canvas_briefs',
+      ai_prompts: 'aiQueries',
+      call_analyses: 'call_analyses',
+      market_procedures: 'market_procedures',
+      contacts: 'contacts',
+      ripples: 'ripples'
+    };
+
+    const productType = featureMap[feature] || feature;
+
+    // Check usage limits
+    const usageCheck = await checkUsageLimit(userId, productType, 1);
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: 'Usage limit exceeded',
+        error: 'QUOTA_EXCEEDED',
+        remaining: usageCheck.remaining
+      });
+    }
+
+    // Log usage
+    await logUsage(userId, productType, 1, {
+      feature: feature,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: 'Usage incremented successfully'
+    });
+  } catch (err) {
+    console.error('Error incrementing usage:', err);
     res.status(500).json({
       success: false,
       error: err.message
