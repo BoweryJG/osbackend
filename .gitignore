@@ -11,3 +11,5 @@ server.log
 *.temp
 tmp/
 temp/
+*.env*
+.env.complete
