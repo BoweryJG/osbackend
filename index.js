@@ -34,6 +34,7 @@ import {
 import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
 import usageRoutes from './routes/usage.js';
+import emailRoutes from './routes/email.js';
 import { authenticateUser, optionalAuth } from './auth.js';
 
 // Get the directory name of the current module
@@ -2110,6 +2111,9 @@ app.use('/api', researchRoutes);
 
 // Add usage tracking routes
 app.use('/api/usage', usageRoutes);
+
+// Add email routes
+app.use('/api/emails', emailRoutes);
 
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);

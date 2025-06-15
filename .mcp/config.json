@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "email": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-server-email"
+      ],
+      "env": {
+        "SMTP_HOST": "smtp.gmail.com",
+        "SMTP_PORT": "587",
+        "SMTP_SECURE": "false",
+        "EMAIL_FROM": "RepSpheres Platform <noreply@repspheres.com>"
+      }
+    }
+  }
+}

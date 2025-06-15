@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postal:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: postal
+    ports:
+      - "25:25"      # SMTP
+      - "5000:5000"  # Web UI
+    environment:
+      - POSTAL_FNAME=RepSpheres
+      - POSTAL_EMAIL=admin@repspheres.com
+      - POSTAL_PASSWORD=RepSpheres2024!
+      - POSTAL_DB_HOST=postal-mariadb
+      - POSTAL_DB_NAME=postal
+      - POSTAL_DB_USER=postal
+      - POSTAL_DB_PASS=p0stalpassw0rd
+      - POSTAL_RABBITMQ_HOST=postal-rabbitmq
+    depends_on:
+      - postal-mariadb
+      - postal-rabbitmq
+    volumes:
+      - postal-data:/opt/postal/app/public/assets
+      - ./postal/config:/opt/postal/config
+    restart: unless-stopped
+
+  postal-mariadb:
+    image: mariadb:10
+    container_name: postal-mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=postal
+      - MYSQL_USER=postal
+      - MYSQL_PASSWORD=p0stalpassw0rd
+    volumes:
+      - postal-mariadb-data:/var/lib/mysql
+    restart: unless-stopped
+
+  postal-rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: postal-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=postal
+      - RABBITMQ_DEFAULT_PASS=p0stalpassw0rd
+      - RABBITMQ_DEFAULT_VHOST=postal
+    volumes:
+      - postal-rabbitmq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+volumes:
+  postal-data:
+  postal-mariadb-data:
+  postal-rabbitmq-data:

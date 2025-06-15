@@ -13,7 +13,8 @@
     "check:env": "node check_environment.js",
     "test:twilio": "node test_twilio.js",
     "test:stripe": "node test_stripe_checkout.js && node test_stripe_webhook.js",
-    "test:brave": "node test_brave_search.js"
+    "test:brave": "node test_brave_search.js",
+    "test:email": "node test_email_service.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -25,6 +26,8 @@
     "express-session": "^1.18.1",
     "multer": "^2.0.1",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.1.0",
+    "nodemailer": "^7.0.3",
     "openai": "^5.1.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
