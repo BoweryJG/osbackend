@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Sync</title>
+  <script>
+    // Cross-domain auth sync handler
+    window.addEventListener('message', async (event) => {
+      // Validate origin is from RepSpheres domains
+      const validOrigins = [
+        'https://repspheres.com',
+        'https://marketdata.repspheres.com',
+        'https://canvas.repspheres.com',
+        'https://crm.repspheres.com',
+        'https://podcast.repspheres.com',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3004'
+      ];
+      
+      if (!validOrigins.includes(event.origin)) {
+        console.warn('Invalid origin:', event.origin);
+        return;
+      }
+      
+      // Handle auth state sync
+      if (event.data.type === 'AUTH_STATE_SYNC') {
+        console.log('Received auth sync from:', event.origin);
+        
+        // Store the session data
+        if (event.data.session) {
+          localStorage.setItem('repspheres-auth', JSON.stringify({
+            currentSession: event.data.session,
+            expiresAt: event.data.session.expires_at
+          }));
+        } else {
+          localStorage.removeItem('repspheres-auth');
+        }
+        
+        // Notify parent window
+        if (window.parent !== window) {
+          window.parent.postMessage({ 
+            type: 'AUTH_SYNC_COMPLETE',
+            success: true 
+          }, event.origin);
+        }
+      }
+    });
+    
+    // Notify parent that iframe is ready
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'AUTH_SYNC_READY' }, '*');
+    }
+  </script>
+</head>
+<body>
+  <!-- This page handles cross-domain auth synchronization -->
+</body>
+</html>
