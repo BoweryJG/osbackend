@@ -108,7 +108,35 @@ export class AgentCore {
     
     // Add procedure knowledge
     let procedureContext = '';
-    if (agent.specialty && agent.specialty.length > 0) {
+    
+    // Check if we have specific procedure context from the conversation
+    if (context.metadata?.procedureContext) {
+      const pc = context.metadata.procedureContext;
+      procedureContext = `
+You are currently specialized in ${pc.name} (${pc.category} - ${pc.subcategory}).
+
+## Product Knowledge
+- Manufacturer: ${pc.manufacturer || 'Various'}
+- Price Range: ${pc.price_range}
+- Treatment Duration: ${pc.treatment_duration || 'Varies'}
+- Target Demographics: ${pc.target_demographics}
+
+## Key Selling Points
+${pc.key_features.map(point => `- ${point}`).join('\n')}
+
+## Competitive Advantages  
+${pc.competitive_advantages.map(adv => `- ${adv}`).join('\n')}
+
+## Sales Strategy
+${pc.sales_strategy}
+
+## ROI Timeline
+${pc.roi_timeline}
+
+Use this specialized knowledge to provide expert guidance on selling ${pc.name}.
+`;
+    } else if (agent.specialty && agent.specialty.length > 0) {
+      // Fallback to general specialties
       procedureContext = `
 You are specialized in the following medical procedures:
 ${agent.specialty.join(', ')}

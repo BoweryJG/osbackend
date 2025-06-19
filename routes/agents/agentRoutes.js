@@ -1,6 +1,7 @@
 import express from 'express';
 import { AgentCore } from '../../agents/core/agentCore.js';
 import { ConversationManager } from '../../agents/core/conversationManager.js';
+import { ProcedureService } from '../../agents/services/procedureService.js';
 import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
@@ -9,6 +10,7 @@ const router = express.Router();
 let supabase = null;
 let agentCore = null;
 let conversationManager = null;
+let procedureService = null;
 
 // Only initialize if environment variables are available
 if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
@@ -18,6 +20,7 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
   );
   agentCore = new AgentCore();
   conversationManager = new ConversationManager(supabase);
+  procedureService = new ProcedureService();
 } else {
   console.warn('Canvas Agents: Missing Supabase credentials, agent features will be disabled');
 }
@@ -286,6 +289,90 @@ router.post('/agents/suggest', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error suggesting agents:', error);
     res.status(500).json({ error: 'Failed to suggest agents' });
+  }
+});
+
+// Get featured procedures
+router.get('/procedures/featured', checkServicesInitialized, requireAuth, async (req, res) => {
+  try {
+    const procedures = await procedureService.getFeaturedProcedures();
+    res.json({ procedures });
+  } catch (error) {
+    console.error('Error fetching featured procedures:', error);
+    res.status(500).json({ error: 'Failed to fetch featured procedures' });
+  }
+});
+
+// Search procedures
+router.get('/procedures/search', checkServicesInitialized, requireAuth, async (req, res) => {
+  try {
+    const { q, type } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+    
+    const results = await procedureService.searchProcedures(q, type);
+    res.json({ procedures: results });
+  } catch (error) {
+    console.error('Error searching procedures:', error);
+    res.status(500).json({ error: 'Failed to search procedures' });
+  }
+});
+
+// Get specific procedure details
+router.get('/procedures/:procedureId', checkServicesInitialized, requireAuth, async (req, res) => {
+  try {
+    const { procedureId } = req.params;
+    const { type } = req.query;
+    
+    if (!type || !['dental', 'aesthetic'].includes(type)) {
+      return res.status(400).json({ error: 'Valid procedure type required (dental or aesthetic)' });
+    }
+    
+    const procedure = await procedureService.getProcedure(procedureId, type);
+    res.json({ procedure });
+  } catch (error) {
+    console.error('Error fetching procedure:', error);
+    res.status(500).json({ error: 'Failed to fetch procedure' });
+  }
+});
+
+// Create conversation with procedure context
+router.post('/conversations/with-procedure', checkServicesInitialized, requireAuth, async (req, res) => {
+  try {
+    const { agentId, procedureId, procedureType, title } = req.body;
+    
+    // Create conversation
+    const conversation = await conversationManager.createConversation(
+      req.user.id,
+      agentId,
+      title
+    );
+    
+    // Add procedure context to conversation metadata
+    if (procedureId && procedureType) {
+      const procedure = await procedureService.getProcedure(procedureId, procedureType);
+      
+      // Update conversation metadata with procedure info
+      await supabase
+        .from('agent_conversations')
+        .update({
+          metadata: {
+            ...conversation.metadata,
+            procedureId,
+            procedureType,
+            procedureName: procedure.name,
+            procedureContext: procedureService.generateProcedureContext(procedure)
+          }
+        })
+        .eq('id', conversation.id);
+    }
+    
+    res.json({ conversation });
+  } catch (error) {
+    console.error('Error creating conversation with procedure:', error);
+    res.status(500).json({ error: 'Failed to create conversation' });
   }
 });
 
