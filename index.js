@@ -11,6 +11,9 @@ import Stripe from 'stripe';
 import NodeCache from 'node-cache';
 import { v4 as uuidv4 } from 'uuid';
 import Parser from 'rss-parser';
+import { createServer } from 'http';
+import AgentWebSocketServer from './agents/websocket/server.js';
+import agentRoutes from './routes/agents/agentRoutes.js';
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -2118,13 +2121,23 @@ app.use('/api/emails', emailRoutes);
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);
 
+// Add Canvas Agent routes
+app.use('/api/canvas', agentRoutes);
+
+// Create HTTP server for both Express and WebSocket
+const httpServer = createServer(app);
+
+// Initialize WebSocket server for agents
+const agentWSServer = new AgentWebSocketServer(httpServer);
+
 // Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!process.env.SUPABASE_KEY}`);
   console.log(`OpenRouter configured: ${!!process.env.OPENROUTER_API_KEY}`);
   console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
+  console.log(`Canvas Agents WebSocket: Active on /agents-ws`);
 });
