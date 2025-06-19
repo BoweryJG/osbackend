@@ -13,10 +13,16 @@ class AgentWebSocketServer {
       path: '/agents-ws'
     });
 
-    this.supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_KEY
-    );
+    // Only initialize Supabase if credentials are available
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+      this.supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_KEY
+      );
+    } else {
+      console.warn('WebSocket Server: Supabase credentials not found');
+      this.supabase = null;
+    }
 
     this.agentCore = new AgentCore();
     this.conversationManager = new ConversationManager(this.supabase);
@@ -29,6 +35,14 @@ class AgentWebSocketServer {
     // Authentication middleware
     this.io.use(async (socket, next) => {
       try {
+        // Skip auth if Supabase is not configured
+        if (!this.supabase) {
+          console.warn('WebSocket: Authentication skipped - Supabase not configured');
+          socket.userId = 'demo-user';
+          socket.userEmail = 'demo@example.com';
+          return next();
+        }
+
         const token = socket.handshake.auth.token;
         if (!token) {
           return next(new Error('Authentication required'));

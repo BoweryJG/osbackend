@@ -3,19 +3,35 @@ import { createClient } from '@supabase/supabase-js';
 
 export class AgentCore {
   constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY
-    });
+    // Initialize Anthropic if API key is available
+    if (process.env.ANTHROPIC_API_KEY) {
+      this.anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY
+      });
+    } else {
+      console.warn('AgentCore: Anthropic API key not found');
+      this.anthropic = null;
+    }
 
-    this.supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_KEY
-    );
+    // Initialize Supabase if credentials are available
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+      this.supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_KEY
+      );
+    } else {
+      console.warn('AgentCore: Supabase credentials not found');
+      this.supabase = null;
+    }
 
     this.agentCache = new Map();
   }
 
   async getAgent(agentId) {
+    if (!this.supabase) {
+      throw new Error('Database connection not available');
+    }
+
     // Check cache first
     if (this.agentCache.has(agentId)) {
       return this.agentCache.get(agentId);
@@ -38,6 +54,10 @@ export class AgentCore {
   }
 
   async listAgents() {
+    if (!this.supabase) {
+      throw new Error('Database connection not available');
+    }
+
     const { data: agents, error } = await this.supabase
       .from('canvas_ai_agents')
       .select('*')

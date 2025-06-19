@@ -112,54 +112,74 @@ CREATE POLICY "Users can view own interaction logs"
   TO authenticated 
   USING (user_id = auth.uid());
 
--- Insert default agents
-INSERT INTO canvas_ai_agents (name, avatar_url, specialty, personality, system_prompt) VALUES
-(
-  'Hunter', 
-  '/avatars/hunter-agent.png',
-  ARRAY['dental_implants', 'orthodontics', 'cosmetic_dentistry'],
-  '{
-    "tone": "energetic",
-    "verbosity": "concise",
-    "approach": "direct",
-    "temperature": 0.8
-  }'::jsonb,
-  'You are Hunter, a high-energy sales agent focused on finding new opportunities and prospects. You excel at identifying untapped markets and qualifying leads quickly.'
-),
-(
-  'Closer',
-  '/avatars/closer-agent.png', 
-  ARRAY['aesthetic_procedures', 'lasers', 'injectables'],
-  '{
-    "tone": "confident",
-    "verbosity": "detailed",
-    "approach": "consultative",
-    "temperature": 0.7
-  }'::jsonb,
-  'You are Closer, a deal-making specialist who excels at negotiations and overcoming objections. You provide strategic guidance for closing complex medical device sales.'
-),
-(
-  'Educator',
-  '/avatars/educator-agent.png',
-  ARRAY['all_procedures'],
-  '{
-    "tone": "patient",
-    "verbosity": "detailed",
-    "approach": "educational",
-    "temperature": 0.6
-  }'::jsonb,
-  'You are Educator, a teaching-focused agent who helps sales reps understand complex medical procedures and technologies. You break down technical concepts into clear, actionable insights.'
-),
-(
-  'Strategist',
-  '/avatars/strategist-agent.png',
-  ARRAY['practice_management', 'market_analysis'],
-  '{
-    "tone": "analytical",
-    "verbosity": "comprehensive",
-    "approach": "data-driven",
-    "temperature": 0.5
-  }'::jsonb,
-  'You are Strategist, a market intelligence expert who analyzes competitive landscapes and develops territory strategies. You provide data-driven recommendations for market penetration.'
-)
-ON CONFLICT (name) DO NOTHING; -- Prevent duplicate inserts if run multiple times
+-- Insert default agents only if they don't exist
+DO $$
+BEGIN
+  -- Hunter Agent
+  IF NOT EXISTS (SELECT 1 FROM canvas_ai_agents WHERE name = 'Hunter') THEN
+    INSERT INTO canvas_ai_agents (name, avatar_url, specialty, personality, system_prompt) VALUES
+    (
+      'Hunter', 
+      '/avatars/hunter-agent.png',
+      ARRAY['dental_implants', 'orthodontics', 'cosmetic_dentistry'],
+      '{
+        "tone": "energetic",
+        "verbosity": "concise",
+        "approach": "direct",
+        "temperature": 0.8
+      }'::jsonb,
+      'You are Hunter, a high-energy sales agent focused on finding new opportunities and prospects. You excel at identifying untapped markets and qualifying leads quickly.'
+    );
+  END IF;
+
+  -- Closer Agent
+  IF NOT EXISTS (SELECT 1 FROM canvas_ai_agents WHERE name = 'Closer') THEN
+    INSERT INTO canvas_ai_agents (name, avatar_url, specialty, personality, system_prompt) VALUES
+    (
+      'Closer',
+      '/avatars/closer-agent.png', 
+      ARRAY['aesthetic_procedures', 'lasers', 'injectables'],
+      '{
+        "tone": "confident",
+        "verbosity": "detailed",
+        "approach": "consultative",
+        "temperature": 0.7
+      }'::jsonb,
+      'You are Closer, a deal-making specialist who excels at negotiations and overcoming objections. You provide strategic guidance for closing complex medical device sales.'
+    );
+  END IF;
+
+  -- Educator Agent
+  IF NOT EXISTS (SELECT 1 FROM canvas_ai_agents WHERE name = 'Educator') THEN
+    INSERT INTO canvas_ai_agents (name, avatar_url, specialty, personality, system_prompt) VALUES
+    (
+      'Educator',
+      '/avatars/educator-agent.png',
+      ARRAY['all_procedures'],
+      '{
+        "tone": "patient",
+        "verbosity": "detailed",
+        "approach": "educational",
+        "temperature": 0.6
+      }'::jsonb,
+      'You are Educator, a teaching-focused agent who helps sales reps understand complex medical procedures and technologies. You break down technical concepts into clear, actionable insights.'
+    );
+  END IF;
+
+  -- Strategist Agent
+  IF NOT EXISTS (SELECT 1 FROM canvas_ai_agents WHERE name = 'Strategist') THEN
+    INSERT INTO canvas_ai_agents (name, avatar_url, specialty, personality, system_prompt) VALUES
+    (
+      'Strategist',
+      '/avatars/strategist-agent.png',
+      ARRAY['practice_management', 'market_analysis'],
+      '{
+        "tone": "analytical",
+        "verbosity": "comprehensive",
+        "approach": "data-driven",
+        "temperature": 0.5
+      }'::jsonb,
+      'You are Strategist, a market intelligence expert who analyzes competitive landscapes and develops territory strategies. You provide data-driven recommendations for market penetration.'
+    );
+  END IF;
+END $$;

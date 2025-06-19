@@ -5,17 +5,40 @@ import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
 
-// Initialize services
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Initialize services with error handling
+let supabase = null;
+let agentCore = null;
+let conversationManager = null;
 
-const agentCore = new AgentCore();
-const conversationManager = new ConversationManager(supabase);
+// Only initialize if environment variables are available
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
+  );
+  agentCore = new AgentCore();
+  conversationManager = new ConversationManager(supabase);
+} else {
+  console.warn('Canvas Agents: Missing Supabase credentials, agent features will be disabled');
+}
+
+// Middleware to check if services are initialized
+const checkServicesInitialized = (req, res, next) => {
+  if (!supabase || !agentCore || !conversationManager) {
+    return res.status(503).json({ 
+      error: 'Agent services not available',
+      message: 'The server is missing required configuration for agent features'
+    });
+  }
+  next();
+};
 
 // Middleware to verify authentication
 const requireAuth = async (req, res, next) => {
+  if (!supabase) {
+    return res.status(503).json({ error: 'Authentication service not available' });
+  }
+
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
@@ -38,7 +61,7 @@ const requireAuth = async (req, res, next) => {
 };
 
 // List all available agents
-router.get('/agents', requireAuth, async (req, res) => {
+router.get('/agents', checkServicesInitialized, requireAuth, async (req, res) => {
   try {
     const agents = await agentCore.listAgents();
     res.json({ agents });
