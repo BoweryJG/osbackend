@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
+import fs from 'fs';
+import { audioProcessor } from './audioProcessor.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -97,7 +99,8 @@ class CallTranscriptionService {
     let callSid = null;
     let audioBuffer = Buffer.alloc(0);
     let lastProcessTime = Date.now();
-    const PROCESS_INTERVAL = 5000; // Process audio every 5 seconds
+    const PROCESS_INTERVAL = 3000; // Process audio every 3 seconds for better real-time feel
+    const MIN_BUFFER_SIZE = 8000 * 2; // At least 2 seconds of audio at 8kHz
     
     ws.on('message', async (message) => {
       try {
@@ -131,12 +134,18 @@ class CallTranscriptionService {
               const chunk = Buffer.from(msg.media.payload, 'base64');
               audioBuffer = Buffer.concat([audioBuffer, chunk]);
               
-              // Process audio periodically
+              // Process audio periodically with minimum buffer size
               const now = Date.now();
-              if (now - lastProcessTime >= PROCESS_INTERVAL && audioBuffer.length > 0) {
-                await this.processAudioChunk(callSid, audioBuffer);
-                audioBuffer = Buffer.alloc(0); // Reset buffer
+              if (now - lastProcessTime >= PROCESS_INTERVAL && audioBuffer.length >= MIN_BUFFER_SIZE) {
+                // Process the audio chunk asynchronously
+                const bufferToProcess = audioBuffer;
+                audioBuffer = Buffer.alloc(0); // Reset buffer immediately
                 lastProcessTime = now;
+                
+                // Process in background to not block incoming audio
+                this.processAudioChunk(callSid, bufferToProcess).catch(error => {
+                  console.error('Error processing audio chunk:', error);
+                });
               }
             }
             break;
@@ -248,6 +257,9 @@ class CallTranscriptionService {
           .map(p => p.text)
           .join(' ');
         
+        // Analyze sentiment
+        const sentiment = await this.analyzeSentiment(transcriptionResult.text);
+        
         // Update database
         if (supabase && session.dbId) {
           await supabase
@@ -265,6 +277,8 @@ class CallTranscriptionService {
           callSid,
           transcription: session.transcription,
           latest: transcriptionResult.text,
+          isFinal: true,
+          sentiment: sentiment,
           timestamp: new Date()
         });
       }
@@ -283,10 +297,7 @@ class CallTranscriptionService {
 
   async transcribeAudioBuffer(audioBuffer) {
     try {
-      // Convert buffer to a format OpenAI can process
-      // This is a simplified version - in production, you'd need proper audio processing
-      
-      // For now, return a mock result if OpenAI is not configured
+      // Check if OpenAI is configured
       if (!openai) {
         return {
           text: '[Transcription unavailable - OpenAI not configured]',
@@ -294,20 +305,50 @@ class CallTranscriptionService {
         };
       }
       
-      // In a real implementation, you would:
-      // 1. Convert the audio buffer to a file format Whisper accepts (mp3, wav, etc.)
-      // 2. Send it to the Whisper API
-      // 3. Return the transcription
+      // Generate a unique session ID for this audio chunk
+      const sessionId = `chunk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Mock implementation for now
-      return {
-        text: `[Audio chunk transcribed at ${new Date().toISOString()}]`,
-        duration: 5
-      };
+      // Convert μ-law to WAV format
+      console.log('[Transcription] Converting audio buffer to WAV...');
+      const wavPath = await audioProcessor.convertMulawToWav(audioBuffer, sessionId);
+      
+      try {
+        // Read the WAV file
+        const audioFile = fs.createReadStream(wavPath);
+        
+        // Send to OpenAI Whisper
+        console.log('[Transcription] Sending to OpenAI Whisper...');
+        const transcription = await openai.audio.transcriptions.create({
+          file: audioFile,
+          model: 'whisper-1',
+          language: 'en', // You can make this configurable
+          response_format: 'json'
+        });
+        
+        console.log('[Transcription] Received transcription:', transcription.text);
+        
+        // Clean up the temporary file
+        await audioProcessor.cleanup(wavPath);
+        
+        return {
+          text: transcription.text,
+          duration: audioBuffer.length / 8000 // Approximate duration based on 8kHz sample rate
+        };
+        
+      } catch (error) {
+        // Clean up on error
+        await audioProcessor.cleanup(wavPath);
+        throw error;
+      }
       
     } catch (error) {
       console.error('Error transcribing audio buffer:', error);
-      throw error;
+      
+      // Return a fallback message
+      return {
+        text: `[Transcription error: ${error.message}]`,
+        duration: 5
+      };
     }
   }
 
@@ -385,6 +426,84 @@ class CallTranscriptionService {
       startTime: session.startTime,
       transcriptionLength: session.transcription.length
     }));
+  }
+
+  // Analyze sentiment of transcribed text
+  async analyzeSentiment(text) {
+    try {
+      if (!text || text.trim().length === 0) {
+        return 'neutral';
+      }
+
+      // Simple keyword-based sentiment analysis
+      const positiveWords = [
+        'great', 'excellent', 'good', 'happy', 'pleased', 'satisfied',
+        'thank', 'appreciate', 'wonderful', 'perfect', 'love', 'awesome',
+        'fantastic', 'amazing', 'best', 'helpful', 'excited'
+      ];
+      
+      const negativeWords = [
+        'bad', 'poor', 'unhappy', 'disappointed', 'frustrated', 'angry',
+        'problem', 'issue', 'terrible', 'awful', 'worst', 'hate', 'annoyed',
+        'unacceptable', 'difficult', 'confused', 'upset'
+      ];
+      
+      const lowerText = text.toLowerCase();
+      const words = lowerText.split(/\s+/);
+      
+      let positiveScore = 0;
+      let negativeScore = 0;
+      
+      words.forEach(word => {
+        if (positiveWords.some(pw => word.includes(pw))) {
+          positiveScore++;
+        }
+        if (negativeWords.some(nw => word.includes(nw))) {
+          negativeScore++;
+        }
+      });
+      
+      // You could also use OpenAI for more sophisticated sentiment analysis
+      if (openai && process.env.USE_AI_SENTIMENT === 'true') {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a sentiment analyzer. Respond with only one word: positive, negative, or neutral.'
+              },
+              {
+                role: 'user',
+                content: `Analyze the sentiment of this text: "${text}"`
+              }
+            ],
+            max_tokens: 10,
+            temperature: 0
+          });
+          
+          const aiSentiment = completion.choices[0].message.content.toLowerCase().trim();
+          if (['positive', 'negative', 'neutral'].includes(aiSentiment)) {
+            return aiSentiment;
+          }
+        } catch (error) {
+          console.error('AI sentiment analysis failed:', error);
+        }
+      }
+      
+      // Determine sentiment based on scores
+      if (positiveScore > negativeScore * 1.5) {
+        return 'positive';
+      } else if (negativeScore > positiveScore * 1.5) {
+        return 'negative';
+      } else {
+        return 'neutral';
+      }
+      
+    } catch (error) {
+      console.error('Error analyzing sentiment:', error);
+      return 'neutral';
+    }
   }
 }
 
