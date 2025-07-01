@@ -120,17 +120,25 @@ export async function makeCall(to, message, options = {}) {
   }
   
   try {
-    const call = await twilioClient.calls.create({
+    const callOptions = {
       to,
       from: process.env.TWILIO_PHONE_NUMBER,
       twiml: generateVoiceResponse(message, options),
-      statusCallback: `${getWebhookBaseUrl()}/api/twilio/status`,
-      statusCallbackMethod: 'POST',
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-      record: options.record || false,
-      recordingStatusCallback: options.record ? `${getWebhookBaseUrl()}/api/twilio/recording-status` : undefined,
-      recordingStatusCallbackMethod: 'POST'
-    });
+      record: options.record || false
+    };
+    
+    // Only add callbacks in production
+    if (process.env.NODE_ENV === 'production') {
+      callOptions.statusCallback = `${getWebhookBaseUrl()}/api/twilio/status`;
+      callOptions.statusCallbackMethod = 'POST';
+      callOptions.statusCallbackEvent = ['initiated', 'ringing', 'answered', 'completed'];
+      if (options.record) {
+        callOptions.recordingStatusCallback = `${getWebhookBaseUrl()}/api/twilio/recording-status`;
+        callOptions.recordingStatusCallbackMethod = 'POST';
+      }
+    }
+    
+    const call = await twilioClient.calls.create(callOptions);
     
     // Save call record to database
     await saveCallRecord({
@@ -163,13 +171,19 @@ export async function sendSms(to, body, options = {}) {
   }
   
   try {
-    const message = await twilioClient.messages.create({
+    const messageOptions = {
       to,
       from: process.env.TWILIO_PHONE_NUMBER,
-      body,
-      statusCallback: `${getWebhookBaseUrl()}/api/twilio/sms-status`,
-      statusCallbackMethod: 'POST'
-    });
+      body
+    };
+    
+    // Only add statusCallback in production
+    if (process.env.NODE_ENV === 'production') {
+      messageOptions.statusCallback = `${getWebhookBaseUrl()}/api/twilio/sms-status`;
+      messageOptions.statusCallbackMethod = 'POST';
+    }
+    
+    const message = await twilioClient.messages.create(messageOptions);
     
     // Save SMS record to database
     await saveSmsRecord({
@@ -378,7 +392,7 @@ export async function getCallHistory(phoneNumber, options = {}) {
   try {
     let query = supabase
       .from('twilio_calls')
-      .select('*, transcriptions(transcription, analysis)')
+      .select('*')
       .or(`from_number.eq.${phoneNumber},to_number.eq.${phoneNumber}`)
       .order('created_at', { ascending: false });
     

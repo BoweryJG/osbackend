@@ -11,10 +11,10 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 // Backend URL - use either localhost or your deployed URL
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
-// Test phone number (replace with your test number)
-const TEST_PHONE_NUMBER = '+1234567890'; // Replace with your phone number
+// Test phone number - IMPORTANT: Replace with a valid phone number to test calls/SMS
+const TEST_PHONE_NUMBER = process.env.TEST_PHONE_NUMBER || '+12015231306';
 
 async function testMakeCall() {
   console.log(`\n📞 Testing outbound call endpoint...`);
@@ -97,8 +97,11 @@ async function testGetCallHistory() {
     if (error.response) {
       console.error(`Status: ${error.response.status}`);
       console.error('Response:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received from server');
+      console.error('Request URL:', error.config?.url);
     } else {
-      console.error(error.message);
+      console.error('Error:', error.message);
     }
     return false;
   }
@@ -126,8 +129,11 @@ async function testGetSmsHistory() {
     if (error.response) {
       console.error(`Status: ${error.response.status}`);
       console.error('Response:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received from server');
+      console.error('Request URL:', error.config?.url);
     } else {
-      console.error(error.message);
+      console.error('Error:', error.message);
     }
     return false;
   }
@@ -174,9 +180,9 @@ async function runTests() {
   console.log('// results.makeCall = await testMakeCall();');
   console.log('// results.sendSms = await testSendSms();');
   
-  // Uncomment these lines to test making actual calls/SMS
-  // results.makeCall = await testMakeCall();
-  // results.sendSms = await testSendSms();
+  // Test making actual calls/SMS
+  results.makeCall = await testMakeCall();
+  results.sendSms = await testSendSms();
   
   // Summary
   console.log('\n📊 Test Summary:');

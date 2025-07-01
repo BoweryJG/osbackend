@@ -1543,16 +1543,30 @@ app.post('/task', async (req, res) => {
 // Twilio webhook endpoints
 app.post('/twilio/voice', express.urlencoded({ extended: false }), async (req, res) => {
   try {
-    // Validate the request is from Twilio
-    if (!validateTwilioSignature(req, process.env.TWILIO_AUTH_TOKEN)) {
-      return res.status(403).send('Forbidden');
+    // Validate the request is from Twilio (skip in development)
+    if (process.env.NODE_ENV === 'production') {
+      const signature = req.headers['x-twilio-signature'];
+      const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      if (!validateTwilioSignature(signature, url, req.body)) {
+        return res.status(403).send('Forbidden');
+      }
     }
 
     // Save call record
-    await saveCallRecord(req.body);
+    const callData = {
+      call_sid: req.body.CallSid,
+      phone_number_sid: req.body.To,
+      from_number: req.body.From,
+      to_number: req.body.To,
+      direction: req.body.Direction,
+      status: req.body.CallStatus,
+      metadata: {}
+    };
+    await saveCallRecord(callData);
 
-    // Generate TwiML response
-    const twiml = generateVoiceResponse(req.body);
+    // Generate TwiML response with recording
+    const message = "Hello! Thank you for calling. Your call will be recorded after the beep.";
+    const twiml = generateVoiceResponse(message, { record: true });
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
@@ -1563,16 +1577,31 @@ app.post('/twilio/voice', express.urlencoded({ extended: false }), async (req, r
 
 app.post('/twilio/sms', express.urlencoded({ extended: false }), async (req, res) => {
   try {
-    // Validate the request is from Twilio
-    if (!validateTwilioSignature(req, process.env.TWILIO_AUTH_TOKEN)) {
-      return res.status(403).send('Forbidden');
+    // Validate the request is from Twilio (skip in development)
+    if (process.env.NODE_ENV === 'production') {
+      const signature = req.headers['x-twilio-signature'];
+      const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      if (!validateTwilioSignature(signature, url, req.body)) {
+        return res.status(403).send('Forbidden');
+      }
     }
 
     // Save SMS record
-    await saveSmsRecord(req.body);
+    const smsData = {
+      message_sid: req.body.MessageSid,
+      from_number: req.body.From,
+      to_number: req.body.To,
+      body: req.body.Body,
+      direction: 'inbound',
+      status: req.body.SmsStatus || 'received',
+      num_segments: req.body.NumSegments || 1,
+      metadata: {}
+    };
+    await saveSmsRecord(smsData);
 
     // Generate TwiML response
-    const twiml = generateSmsResponse(req.body);
+    const responseMessage = "Thank you for your message. We'll get back to you soon!";
+    const twiml = generateSmsResponse(responseMessage);
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
@@ -1604,22 +1633,24 @@ app.post('/twilio/recording', express.urlencoded({ extended: false }), async (re
 });
 
 // Twilio API endpoints
-app.post('/api/twilio/call', async (req, res) => {
+app.post('/api/twilio/make-call', async (req, res) => {
   try {
-    const { to, from, url } = req.body;
-    const result = await makeCall(to, from, url);
-    res.json({ success: true, callSid: result.sid });
+    const { to, message, record, userId, metadata } = req.body;
+    const options = { record, metadata };
+    const result = await makeCall(to, message, options);
+    res.json({ success: true, call: result });
   } catch (err) {
     console.error('Error making call:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/twilio/sms', async (req, res) => {
+app.post('/api/twilio/send-sms', async (req, res) => {
   try {
-    const { to, from, body } = req.body;
-    const result = await sendSms(to, from, body);
-    res.json({ success: true, messageSid: result.sid });
+    const { to, body, userId, metadata } = req.body;
+    const options = { metadata };
+    const result = await sendSms(to, body, options);
+    res.json({ success: true, message: result });
   } catch (err) {
     console.error('Error sending SMS:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -1628,8 +1659,9 @@ app.post('/api/twilio/sms', async (req, res) => {
 
 app.get('/api/twilio/calls', async (req, res) => {
   try {
-    const { userId, limit, offset } = req.query;
-    const calls = await getCallHistory(userId, limit, offset);
+    const { phoneNumber, limit } = req.query;
+    const options = { limit: limit ? parseInt(limit) : undefined };
+    const calls = await getCallHistory(phoneNumber, options);
     res.json({ success: true, calls });
   } catch (err) {
     console.error('Error getting call history:', err);
@@ -1637,10 +1669,11 @@ app.get('/api/twilio/calls', async (req, res) => {
   }
 });
 
-app.get('/api/twilio/messages', async (req, res) => {
+app.get('/api/twilio/sms', async (req, res) => {
   try {
-    const { userId, limit, offset } = req.query;
-    const messages = await getSmsHistory(userId, limit, offset);
+    const { phoneNumber, limit } = req.query;
+    const options = { limit: limit ? parseInt(limit) : undefined };
+    const messages = await getSmsHistory(phoneNumber, options);
     res.json({ success: true, messages });
   } catch (err) {
     console.error('Error getting SMS history:', err);
