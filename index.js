@@ -25,6 +25,7 @@ import {
   validateTwilioSignature,
   generateVoiceResponse,
   generateSmsResponse,
+  generateStreamingVoiceResponse,
   makeCall,
   sendSms,
   saveCallRecord,
@@ -39,6 +40,9 @@ import zapierRoutes from './zapier_webhook.js';
 import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
 import { authenticateUser, optionalAuth } from './auth.js';
+import { WebSocketServer } from 'ws';
+import CallTranscriptionService from './services/callTranscriptionService.js';
+import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -1560,13 +1564,32 @@ app.post('/twilio/voice', express.urlencoded({ extended: false }), async (req, r
       to_number: req.body.To,
       direction: req.body.Direction,
       status: req.body.CallStatus,
-      metadata: {}
+      metadata: {
+        hasStream: true
+      }
     };
     await saveCallRecord(callData);
 
-    // Generate TwiML response with recording
-    const message = "Hello! Thank you for calling. Your call will be recorded after the beep.";
-    const twiml = generateVoiceResponse(message, { record: true });
+    // Generate TwiML response with recording and Media Stream
+    const message = "Hello! Thank you for calling. Your call is being transcribed in real-time.";
+    
+    // Get the WebSocket URL for Media Streams
+    const wsUrl = process.env.NODE_ENV === 'production' 
+      ? `wss://${req.get('host')}/api/media-stream`
+      : `wss://localhost:${process.env.PORT || 3000}/api/media-stream`;
+    
+    const twiml = generateVoiceResponse(message, { 
+      record: true,
+      stream: true,
+      streamUrl: wsUrl,
+      streamName: `call-${req.body.CallSid}`,
+      streamParameters: {
+        callSid: req.body.CallSid,
+        from: req.body.From,
+        to: req.body.To
+      }
+    });
+    
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
@@ -1632,11 +1655,81 @@ app.post('/twilio/recording', express.urlencoded({ extended: false }), async (re
   }
 });
 
+// New endpoint for Twilio stream status callbacks
+app.post('/api/twilio/stream-status', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    // Validate the request is from Twilio (skip in development)
+    if (process.env.NODE_ENV === 'production') {
+      const signature = req.headers['x-twilio-signature'];
+      const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      if (!validateTwilioSignature(signature, url, req.body)) {
+        return res.status(403).send('Forbidden');
+      }
+    }
+
+    const {
+      StreamSid,
+      CallSid,
+      StreamStatus,
+      StreamTrack,
+      StreamName,
+      StreamEvent
+    } = req.body;
+
+    console.log('Stream status update:', {
+      streamSid: StreamSid,
+      callSid: CallSid,
+      status: StreamStatus,
+      track: StreamTrack,
+      name: StreamName,
+      event: StreamEvent
+    });
+
+    // Update call record with stream information
+    if (CallSid) {
+      await saveCallRecord({
+        call_sid: CallSid,
+        metadata: {
+          streamSid: StreamSid,
+          streamStatus: StreamStatus,
+          streamEvent: StreamEvent,
+          lastStreamUpdate: new Date().toISOString()
+        }
+      });
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Error handling stream status webhook:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 // Twilio API endpoints
 app.post('/api/twilio/make-call', async (req, res) => {
   try {
-    const { to, message, record, userId, metadata } = req.body;
-    const options = { record, metadata };
+    const { 
+      to, 
+      message, 
+      record, 
+      userId, 
+      metadata,
+      enableStream,
+      streamUrl,
+      streamName,
+      streamParameters
+    } = req.body;
+    
+    // Build options including Media Stream configuration
+    const options = { 
+      record, 
+      metadata,
+      enableStream: enableStream || false,
+      streamUrl: streamUrl || `wss://${req.get('host')}/api/media-stream`,
+      streamName: streamName,
+      streamParameters: streamParameters || {}
+    };
+    
     const result = await makeCall(to, message, options);
     res.json({ success: true, call: result });
   } catch (err) {
@@ -2157,11 +2250,28 @@ app.use('/', zapierRoutes);
 // Add Canvas Agent routes
 app.use('/api/canvas', agentRoutes);
 
+// Add Call Transcription routes
+app.use('/api', callTranscriptionRoutes);
+
 // Create HTTP server for both Express and WebSocket
 const httpServer = createServer(app);
 
 // Initialize WebSocket server for agents
 const agentWSServer = new AgentWebSocketServer(httpServer);
+
+// Initialize Call Transcription Service
+const callTranscriptionService = new CallTranscriptionService(agentWSServer.io);
+setCallTranscriptionService(callTranscriptionService);
+
+// Set up WebSocket server for Twilio Media Streams
+const wsServer = new WebSocketServer({ 
+  server: httpServer,
+  path: '/api/media-stream'
+});
+
+wsServer.on('connection', (ws, request) => {
+  callTranscriptionService.handleTwilioMediaStream(ws, request);
+});
 
 // Start the server
 const PORT = process.env.PORT || 3000;
@@ -2173,4 +2283,6 @@ httpServer.listen(PORT, () => {
   console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
   console.log(`Canvas Agents WebSocket: Active on /agents-ws`);
+  console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
+  console.log(`Twilio Media Stream WebSocket: Active on /api/media-stream`);
 });

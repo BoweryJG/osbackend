@@ -67,6 +67,23 @@ export function validateTwilioSignature(signature, url, params) {
 export function generateVoiceResponse(message, options = {}) {
   const response = new twilio.twiml.VoiceResponse();
   
+  // Add Media Stream for real-time transcription if enabled
+  if (options.stream) {
+    const start = response.start();
+    const stream = start.stream({
+      name: options.streamName || 'transcription-stream',
+      url: options.streamUrl || `wss://${getWebhookBaseUrl().replace(/^https?:\/\//, '')}/api/media-stream`,
+      track: 'both_tracks'
+    });
+    
+    // Add stream parameters if provided
+    if (options.streamParameters) {
+      Object.entries(options.streamParameters).forEach(([key, value]) => {
+        stream.parameter({ name: key, value: String(value) });
+      });
+    }
+  }
+  
   if (options.record) {
     response.say({
       voice: options.voice || 'alice',
@@ -120,10 +137,19 @@ export async function makeCall(to, message, options = {}) {
   }
   
   try {
+    // Include stream options if real-time transcription is enabled
+    const twimlOptions = {
+      ...options,
+      stream: options.enableStream || options.stream || false,
+      streamUrl: options.streamUrl,
+      streamName: options.streamName,
+      streamParameters: options.streamParameters
+    };
+    
     const callOptions = {
       to,
       from: process.env.TWILIO_PHONE_NUMBER,
-      twiml: generateVoiceResponse(message, options),
+      twiml: generateVoiceResponse(message, twimlOptions),
       record: options.record || false
     };
     
@@ -140,7 +166,7 @@ export async function makeCall(to, message, options = {}) {
     
     const call = await twilioClient.calls.create(callOptions);
     
-    // Save call record to database
+    // Save call record to database with stream info
     await saveCallRecord({
       call_sid: call.sid,
       phone_number_sid: process.env.TWILIO_PHONE_NUMBER_SID,
@@ -148,7 +174,11 @@ export async function makeCall(to, message, options = {}) {
       to_number: call.to,
       direction: 'outbound',
       status: call.status,
-      metadata: options.metadata || {}
+      metadata: {
+        ...options.metadata,
+        hasStream: options.enableStream || options.stream || false,
+        streamName: options.streamName
+      }
     });
     
     return call;
@@ -446,10 +476,34 @@ export async function getSmsHistory(phoneNumber, options = {}) {
   }
 }
 
+/**
+ * Generate TwiML response with Media Stream for incoming calls
+ * @param {string} message - The initial message to speak
+ * @param {object} options - Additional options for the response
+ * @returns {string} - TwiML XML response
+ */
+export function generateStreamingVoiceResponse(message, options = {}) {
+  const defaultStreamUrl = process.env.NODE_ENV === 'production'
+    ? `wss://${process.env.WEBHOOK_BASE_URL?.replace(/^https?:\/\//, '') || 'osbackend-zl1h.onrender.com'}/api/media-stream`
+    : `wss://localhost:${process.env.PORT || 3000}/api/media-stream`;
+
+  return generateVoiceResponse(message, {
+    ...options,
+    stream: true,
+    streamUrl: options.streamUrl || defaultStreamUrl,
+    streamName: options.streamName || `stream-${Date.now()}`,
+    streamParameters: {
+      ...options.streamParameters,
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+
 export default {
   validateTwilioSignature,
   generateVoiceResponse,
   generateSmsResponse,
+  generateStreamingVoiceResponse,
   makeCall,
   sendSms,
   saveCallRecord,
