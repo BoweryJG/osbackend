@@ -40,10 +40,12 @@ import zapierRoutes from './zapier_webhook.js';
 import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
 import phoneRoutes from './routes/phone.js';
+import harveyRoutes from './routes/harvey.js';
 import { authenticateUser, optionalAuth } from './auth.js';
 import { WebSocketServer } from 'ws';
 import CallTranscriptionService from './services/callTranscriptionService.js';
 import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
+import HarveyWebSocketService from './services/harveyWebSocketService.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -2249,6 +2251,9 @@ app.use('/api/emails', emailRoutes);
 // Add phone system routes
 app.use('/api/phone', phoneRoutes);
 
+// Add Harvey AI routes
+app.use('/api/harvey', harveyRoutes);
+
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);
 
@@ -2267,6 +2272,10 @@ const agentWSServer = new AgentWebSocketServer(httpServer);
 // Initialize Call Transcription Service
 const callTranscriptionService = new CallTranscriptionService(agentWSServer.io);
 setCallTranscriptionService(callTranscriptionService);
+
+// Initialize Harvey WebSocket Service
+const harveyWSService = new HarveyWebSocketService();
+harveyWSService.initialize(httpServer);
 
 // Set up WebSocket server for Twilio Media Streams
 const wsServer = new WebSocketServer({ 
@@ -2289,5 +2298,6 @@ httpServer.listen(PORT, () => {
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
   console.log(`Canvas Agents WebSocket: Active on /agents-ws`);
   console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
+  console.log(`Harvey AI WebSocket: Active on /harvey-ws`);
   console.log(`Twilio Media Stream WebSocket: Active on /api/media-stream`);
 });
