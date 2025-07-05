@@ -1,8 +1,13 @@
 import express from 'express';
 import { authenticateUser } from '../auth.js';
 import { createClient } from '@supabase/supabase-js';
+import julieAI from '../services/julieAI.js';
+import WebRTCVoiceService from '../services/webrtcVoiceService.js';
 
 const router = express.Router();
+
+// Initialize WebRTC Voice Service
+const webrtcService = new WebRTCVoiceService();
 
 // Initialize Supabase client - lazy loading to avoid initialization errors
 let supabase = null;
@@ -26,10 +31,12 @@ router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     phone_system: 'available',
+    default_method: 'webrtc',
     providers: {
       supabase: hasSupabase,
       twilio: hasTwilio,
-      voipms: hasVoipms
+      voipms: hasVoipms,
+      webrtc: true
     }
   });
 });
@@ -271,6 +278,138 @@ router.post('/webhooks/voipms/sms', async (req, res) => {
   } catch (error) {
     console.error('VoIP.ms webhook error:', error);
     res.sendStatus(500);
+  }
+});
+
+// Julie AI Voice Assistant Routes
+router.post('/julie/start-session', async (req, res) => {
+  try {
+    const { callSid, phoneNumber } = req.body;
+    const connection = await julieAI.startSession(callSid, phoneNumber);
+    res.json({ 
+      success: true, 
+      sessionId: callSid,
+      status: 'started' 
+    });
+  } catch (error) {
+    console.error('Error starting Julie AI session:', error);
+    res.status(500).json({ error: 'Failed to start AI session' });
+  }
+});
+
+router.post('/julie/end-session', async (req, res) => {
+  try {
+    const { callSid } = req.body;
+    await julieAI.endSession(callSid);
+    res.json({ success: true, status: 'ended' });
+  } catch (error) {
+    console.error('Error ending Julie AI session:', error);
+    res.status(500).json({ error: 'Failed to end AI session' });
+  }
+});
+
+router.post('/julie/audio', async (req, res) => {
+  try {
+    const { callSid, audioData } = req.body;
+    await julieAI.handleIncomingAudio(callSid, audioData);
+    res.json({ success: true, status: 'processed' });
+  } catch (error) {
+    console.error('Error processing audio:', error);
+    res.status(500).json({ error: 'Failed to process audio' });
+  }
+});
+
+router.get('/julie/sessions', authenticateUser, async (req, res) => {
+  try {
+    const sessions = julieAI.getActiveSessions();
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Error getting active sessions:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+router.get('/julie/session/:callSid', authenticateUser, async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    const session = julieAI.getSession(callSid);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json({ 
+      callSid,
+      phoneNumber: session.phoneNumber,
+      duration: Math.floor((new Date() - session.startTime) / 1000),
+      stage: session.connection.context.conversationStage,
+      patientInfo: session.connection.context.patientInfo
+    });
+  } catch (error) {
+    console.error('Error getting session details:', error);
+    res.status(500).json({ error: 'Failed to get session details' });
+  }
+});
+
+// Twilio webhook for Julie AI integration
+router.post('/webhooks/julie/incoming-call', async (req, res) => {
+  try {
+    const { CallSid, From, To } = req.body;
+    
+    // Start Julie AI session for incoming call
+    await julieAI.startSession(CallSid, From);
+    
+    // Generate TwiML response that starts Julie AI
+    const response = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Thank you for calling Dr. Pedro's office. This is Julie. How can I help you today?</Say>
+    <Start>
+        <Stream url="wss://${req.get('host')}/api/julie/stream/${CallSid}" />
+    </Start>
+    <Pause length="30"/>
+</Response>`;
+    
+    res.type('text/xml').send(response);
+  } catch (error) {
+    console.error('Julie incoming call webhook error:', error);
+    res.status(500).send('Error');
+  }
+});
+
+// WebRTC Voice Call Routes
+router.post('/webrtc/start-session', async (req, res) => {
+  try {
+    const { sessionId, clientInfo } = req.body;
+    const session = await webrtcService.createSession(sessionId, clientInfo);
+    res.json({ 
+      success: true, 
+      sessionId: session.sessionId,
+      status: 'ready' 
+    });
+  } catch (error) {
+    console.error('Error starting WebRTC session:', error);
+    res.status(500).json({ error: 'Failed to start WebRTC session' });
+  }
+});
+
+router.post('/webrtc/end-session', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    await webrtcService.endSession(sessionId);
+    res.json({ success: true, status: 'ended' });
+  } catch (error) {
+    console.error('Error ending WebRTC session:', error);
+    res.status(500).json({ error: 'Failed to end WebRTC session' });
+  }
+});
+
+router.get('/webrtc/sessions', authenticateUser, async (req, res) => {
+  try {
+    const sessions = webrtcService.getActiveSessions();
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Error getting WebRTC sessions:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
   }
 });
 
