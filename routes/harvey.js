@@ -9,6 +9,38 @@ const harveyVoice = new HarveyVoiceService();
 const userMetrics = new Map();
 const dailyVerdicts = new Map();
 
+// Helper function to get leaderboard data
+async function getLeaderboardData() {
+  const leaderboard = Array.from(userMetrics.entries())
+    .map(([userId, metrics]) => ({
+      userId,
+      name: userId === 'demo-user' ? 'Demo User' : `User ${userId.slice(-4)}`,
+      reputationPoints: metrics.reputationPoints,
+      closingRate: metrics.closingRate,
+      currentStreak: metrics.currentStreak,
+      status: metrics.status,
+      totalCalls: metrics.totalCalls
+    }))
+    .sort((a, b) => b.reputationPoints - a.reputationPoints)
+    .slice(0, 10);
+  
+  // Add fake competitors if not enough real users
+  if (leaderboard.length < 5) {
+    const fakeCompetitors = [
+      { userId: 'harvey-1', name: 'Mike Ross', reputationPoints: 4500, closingRate: 82, currentStreak: 12, status: 'partner', totalCalls: 342 },
+      { userId: 'harvey-2', name: 'Rachel Zane', reputationPoints: 3800, closingRate: 78, currentStreak: 8, status: 'closer', totalCalls: 256 },
+      { userId: 'harvey-3', name: 'Donna Paulsen', reputationPoints: 5200, closingRate: 89, currentStreak: 18, status: 'legend', totalCalls: 489 },
+      { userId: 'harvey-4', name: 'Louis Litt', reputationPoints: 3200, closingRate: 71, currentStreak: 5, status: 'closer', totalCalls: 198 },
+      { userId: 'harvey-5', name: 'Jessica Pearson', reputationPoints: 6000, closingRate: 92, currentStreak: 25, status: 'legend', totalCalls: 612 }
+    ];
+    
+    leaderboard.push(...fakeCompetitors.slice(0, 5 - leaderboard.length));
+    leaderboard.sort((a, b) => b.reputationPoints - a.reputationPoints);
+  }
+  
+  return leaderboard;
+}
+
 // Harvey metrics endpoint
 router.get('/metrics', async (req, res) => {
   try {
@@ -37,7 +69,17 @@ router.get('/metrics', async (req, res) => {
       userMetrics.set(userId, metrics);
     }
     
-    res.json(metrics);
+    // Get leaderboard data
+    const leaderboard = await getLeaderboardData();
+    
+    res.json({
+      metrics: {
+        ...metrics,
+        harveyStatus: metrics.status, // Ensure harveyStatus is set
+        dailyVerdict: null // Will be fetched separately
+      },
+      leaderboard
+    });
   } catch (error) {
     console.error('Error fetching Harvey metrics:', error);
     res.status(500).json({ error: 'Failed to fetch metrics' });
@@ -165,33 +207,7 @@ router.post('/metrics', async (req, res) => {
 // Get leaderboard
 router.get('/leaderboard', async (req, res) => {
   try {
-    const leaderboard = Array.from(userMetrics.entries())
-      .map(([userId, metrics]) => ({
-        userId,
-        name: userId === 'demo-user' ? 'Demo User' : `User ${userId.slice(-4)}`,
-        reputationPoints: metrics.reputationPoints,
-        closingRate: metrics.closingRate,
-        currentStreak: metrics.currentStreak,
-        status: metrics.status,
-        totalCalls: metrics.totalCalls
-      }))
-      .sort((a, b) => b.reputationPoints - a.reputationPoints)
-      .slice(0, 10);
-    
-    // Add some fake competitors if not enough real users
-    if (leaderboard.length < 5) {
-      const fakeCompetitors = [
-        { userId: 'harvey-1', name: 'Mike Ross', reputationPoints: 4500, closingRate: 82, currentStreak: 12, status: 'partner', totalCalls: 342 },
-        { userId: 'harvey-2', name: 'Rachel Zane', reputationPoints: 3800, closingRate: 78, currentStreak: 8, status: 'closer', totalCalls: 256 },
-        { userId: 'harvey-3', name: 'Donna Paulsen', reputationPoints: 5200, closingRate: 89, currentStreak: 18, status: 'legend', totalCalls: 489 },
-        { userId: 'harvey-4', name: 'Louis Litt', reputationPoints: 3200, closingRate: 71, currentStreak: 5, status: 'closer', totalCalls: 198 },
-        { userId: 'harvey-5', name: 'Jessica Pearson', reputationPoints: 6000, closingRate: 92, currentStreak: 25, status: 'legend', totalCalls: 612 }
-      ];
-      
-      leaderboard.push(...fakeCompetitors.slice(0, 5 - leaderboard.length));
-      leaderboard.sort((a, b) => b.reputationPoints - a.reputationPoints);
-    }
-    
+    const leaderboard = await getLeaderboardData();
     res.json(leaderboard);
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
