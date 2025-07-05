@@ -219,6 +219,7 @@ app.use(cors({
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
     allowedOrigins.push(
+      'https://repconnect1.netlify.app', // RepConnect1 frontend
       'https://repspheres.netlify.app',
       'https://globalrepspheres.netlify.app', // Main app on Netlify
       'https://repspheres.com',
