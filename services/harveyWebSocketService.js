@@ -1,9 +1,12 @@
 import { WebSocketServer } from 'ws';
+import HarveyVoiceService from './harveyVoiceService.js';
 
 class HarveyWebSocketService {
   constructor() {
     this.connections = new Map(); // Map of userId to WebSocket connection
     this.battleRooms = new Map(); // Map of roomId to battle participants
+    this.activeCalls = new Map(); // Map of callId to call session
+    this.harveyVoice = new HarveyVoiceService();
   }
 
   initialize(server) {
@@ -111,9 +114,16 @@ class HarveyWebSocketService {
     });
   }
 
-  handleVoiceAnalysis(analysis, userId) {
+  async handleVoiceAnalysis(analysis, userId) {
     // Process voice analysis and provide coaching feedback
     const feedback = this.generateCoachingFeedback(analysis);
+    
+    // Generate audio coaching if urgency is high
+    if (feedback.urgent) {
+      const coachingAudio = await this.harveyVoice.generateCoachingAudio(analysis);
+      feedback.audio = coachingAudio.audio;
+      feedback.audioText = coachingAudio.text;
+    }
     
     const ws = this.connections.get(userId);
     if (ws && ws.readyState === ws.OPEN) {

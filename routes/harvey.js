@@ -1,7 +1,9 @@
 import express from 'express';
 import { authenticateUser } from '../auth.js';
+import HarveyVoiceService from '../services/harveyVoiceService.js';
 
 const router = express.Router();
+const harveyVoice = new HarveyVoiceService();
 
 // In-memory storage for Harvey metrics (in production, use database)
 const userMetrics = new Map();
@@ -42,7 +44,7 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
-// Harvey daily verdict endpoint
+// Harvey daily verdict endpoint with voice
 router.get('/verdict', async (req, res) => {
   try {
     const userId = req.query.userId || 'demo-user';
@@ -52,38 +54,30 @@ router.get('/verdict', async (req, res) => {
     // Check if verdict already exists for today
     let verdict = dailyVerdicts.get(key);
     if (!verdict) {
-      // Generate new verdict
-      const verdictOptions = [
-        {
-          verdict: "You're showing promise, but promise doesn't close deals. Step up your game or step aside.",
-          tone: 'challenging',
-          advice: "Focus on objection handling. Winners don't accept 'maybe' as an answer."
-        },
-        {
-          verdict: "Not bad for someone who thinks 'good enough' is acceptable. I don't do mediocre.",
-          tone: 'critical',
-          advice: "Your follow-up game is weak. Fortune favors the persistent."
-        },
-        {
-          verdict: "You're playing checkers while your competition plays chess. Time to level up.",
-          tone: 'motivational',
-          advice: "Master the art of the assumptive close. Confidence closes deals."
-        },
-        {
-          verdict: "I've seen better performances from first-year associates. But I've also seen worse.",
-          tone: 'balanced',
-          advice: "Your opening needs work. First impressions are everything in this game."
-        },
-        {
-          verdict: "You're closer to being a closer. Keep pushing, or I'll find someone who will.",
-          tone: 'encouraging',
-          advice: "Good momentum today. Now triple it. Success compounds."
-        }
-      ];
+      // Get user metrics to generate contextual verdict
+      const metrics = userMetrics.get(userId) || {
+        closingRate: 50,
+        currentStreak: 0,
+        totalCalls: 0,
+        userName: 'Rookie'
+      };
       
-      verdict = verdictOptions[Math.floor(Math.random() * verdictOptions.length)];
+      // Generate verdict with voice
+      verdict = await harveyVoice.generateVerdict(metrics);
       verdict.date = new Date().toISOString();
       verdict.userId = userId;
+      
+      // Add advice based on performance
+      if (metrics.closingRate < 60) {
+        verdict.advice = "Focus on objection handling. Winners don't accept 'maybe' as an answer.";
+        verdict.tone = 'critical';
+      } else if (metrics.closingRate < 80) {
+        verdict.advice = "Your follow-up game needs work. Persistence separates closers from order-takers.";
+        verdict.tone = 'challenging';
+      } else {
+        verdict.advice = "You're performing well. Now raise your targets. Complacency kills careers.";
+        verdict.tone = 'motivational';
+      }
       
       dailyVerdicts.set(key, verdict);
     }
@@ -205,28 +199,56 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-// Submit voice command
+// Submit voice command with audio response
 router.post('/voice-command', async (req, res) => {
   try {
     const { command, userId } = req.body;
+    const userIdKey = userId || 'demo-user';
     
-    // Simple command processing
-    const responses = {
-      'status': 'Your current status is displayed on the main dashboard. Keep pushing to reach the next level.',
-      'help': 'Available commands: status, metrics, leaderboard, battle mode, coaching on, coaching off',
-      'metrics': 'Check the metrics panel for your detailed performance data.',
-      'leaderboard': 'You can see your ranking on the leaderboard. Time to climb higher.',
-      'battle mode': 'Battle mode activated. Find an opponent and show them what closing really means.',
-      'coaching on': 'Real-time coaching enabled. I\'ll be in your ear during calls.',
-      'coaching off': 'Flying solo now. Don\'t disappoint me.'
-    };
+    // Process command and generate audio response
+    let responseType = 'custom';
+    let responseText = '';
+    let action = null;
     
-    const response = responses[command.toLowerCase()] || 
-      "I don't have time for unclear commands. Speak with purpose or don't speak at all.";
+    const lowerCommand = command.toLowerCase();
+    
+    if (lowerCommand.includes('status') || lowerCommand.includes('metrics')) {
+      responseType = 'custom';
+      responseText = 'Your metrics are displayed on the dashboard. Numbers don\'t lie, even when you do.';
+      action = 'show-metrics';
+    } else if (lowerCommand.includes('help')) {
+      responseType = 'custom';
+      responseText = 'Help? Winners figure it out. But fine - say status, battle mode, or coaching.';
+      action = 'show-help';
+    } else if (lowerCommand.includes('battle')) {
+      responseType = 'battle';
+      action = 'enter-battle';
+    } else if (lowerCommand.includes('coaching on')) {
+      responseType = 'custom';
+      responseText = 'Coaching activated. I\'ll make sure you don\'t embarrass yourself.';
+      action = 'enable-coaching';
+    } else if (lowerCommand.includes('coaching off')) {
+      responseType = 'custom';
+      responseText = 'Going solo? Your funeral. Don\'t come crying when you fail.';
+      action = 'disable-coaching';
+    } else {
+      responseText = "Speak clearly or don't speak at all. I don't have time for mumbling.";
+    }
+    
+    // Generate audio response
+    const audioResponse = await harveyVoice.generateHarveyResponse(
+      responseType,
+      { text: responseText }
+    );
+    
+    // Synthesize voice
+    const voice = await harveyVoice.synthesizeVoice(audioResponse.text);
     
     res.json({ 
-      response,
+      response: audioResponse.text,
+      audio: voice.audio,
       command,
+      action,
       processed: true,
       timestamp: new Date().toISOString()
     });
@@ -269,6 +291,74 @@ router.post('/coaching-settings', async (req, res) => {
   } catch (error) {
     console.error('Error updating coaching settings:', error);
     res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// Real-time coaching audio endpoint
+router.post('/coaching-audio', async (req, res) => {
+  try {
+    const { voiceAnalysis, userId } = req.body;
+    
+    // Generate coaching based on voice analysis
+    const coachingAudio = await harveyVoice.generateCoachingAudio(voiceAnalysis);
+    
+    res.json(coachingAudio);
+  } catch (error) {
+    console.error('Error generating coaching audio:', error);
+    res.status(500).json({ error: 'Failed to generate coaching' });
+  }
+});
+
+// Call analysis endpoint
+router.post('/analyze-call', async (req, res) => {
+  try {
+    const { transcript, phase, userId } = req.body;
+    
+    // Analyze call segment and generate feedback
+    const analysis = await harveyVoice.analyzeCallSegment(transcript, phase);
+    
+    res.json(analysis);
+  } catch (error) {
+    console.error('Error analyzing call:', error);
+    res.status(500).json({ error: 'Failed to analyze call' });
+  }
+});
+
+// Battle mode audio endpoint
+router.post('/battle-audio', async (req, res) => {
+  try {
+    const { event, participants } = req.body;
+    
+    // Generate battle mode audio
+    const battleAudio = await harveyVoice.generateBattleModeAudio(event, participants);
+    
+    res.json(battleAudio);
+  } catch (error) {
+    console.error('Error generating battle audio:', error);
+    res.status(500).json({ error: 'Failed to generate battle audio' });
+  }
+});
+
+// Get Harvey greeting audio
+router.get('/greeting', async (req, res) => {
+  try {
+    const userId = req.query.userId || 'demo-user';
+    
+    // Generate greeting
+    const greeting = await harveyVoice.generateHarveyResponse('greeting', {
+      userName: userId === 'demo-user' ? 'Rookie' : null
+    });
+    
+    // Synthesize audio
+    const audio = await harveyVoice.synthesizeVoice(greeting.text);
+    
+    res.json({
+      ...greeting,
+      ...audio
+    });
+  } catch (error) {
+    console.error('Error generating greeting:', error);
+    res.status(500).json({ error: 'Failed to generate greeting' });
   }
 });
 
