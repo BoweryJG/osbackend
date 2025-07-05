@@ -4,17 +4,53 @@ import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Initialize Supabase client - lazy loading to avoid initialization errors
+let supabase = null;
+
+const getSupabase = () => {
+  if (!supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return supabase;
+};
+
+// Health check route
+router.get('/health', (req, res) => {
+  const hasSupabase = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+  const hasVoipms = !!(process.env.VOIPMS_USERNAME && process.env.VOIPMS_API_PASSWORD);
+  
+  res.json({
+    status: 'ok',
+    phone_system: 'available',
+    providers: {
+      supabase: hasSupabase,
+      twilio: hasTwilio,
+      voipms: hasVoipms
+    }
+  });
+});
+
+// Middleware to check phone system configuration
+const checkPhoneSystemConfig = (req, res, next) => {
+  const sb = getSupabase();
+  if (!sb) {
+    return res.status(503).json({ 
+      error: 'Phone system not configured', 
+      message: 'Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables' 
+    });
+  }
+  next();
+};
 
 // Import phone services (these will be properly integrated later)
 // For now, we'll implement basic functionality directly
 
 // Phone Number Management
-router.get('/phone-numbers', authenticateUser, async (req, res) => {
+router.get('/phone-numbers', authenticateUser, checkPhoneSystemConfig, async (req, res) => {
   try {
     const { clientId } = req.query;
     const numbers = await phoneNumberService.getPhoneNumbers(clientId);
@@ -25,7 +61,7 @@ router.get('/phone-numbers', authenticateUser, async (req, res) => {
   }
 });
 
-router.post('/phone-numbers/search', authenticateUser, async (req, res) => {
+router.post('/phone-numbers/search', authenticateUser, checkPhoneSystemConfig, async (req, res) => {
   try {
     const { areaCode, numberType, pattern } = req.body;
     const availableNumbers = await phoneNumberService.searchAvailableNumbers({
@@ -40,7 +76,7 @@ router.post('/phone-numbers/search', authenticateUser, async (req, res) => {
   }
 });
 
-router.post('/phone-numbers/provision', authenticateUser, async (req, res) => {
+router.post('/phone-numbers/provision', authenticateUser, checkPhoneSystemConfig, async (req, res) => {
   try {
     const { clientId, phoneNumber, capabilities } = req.body;
     const provisionedNumber = await phoneNumberService.provisionNumber(
@@ -56,13 +92,13 @@ router.post('/phone-numbers/provision', authenticateUser, async (req, res) => {
 });
 
 // Call Management
-router.post('/calls/initiate', authenticateUser, async (req, res) => {
+router.post('/calls/initiate', authenticateUser, checkPhoneSystemConfig, async (req, res) => {
   try {
     const { from, to, recordCall } = req.body;
     const call = await twilioService.makeCall(from, to, { record: recordCall });
     
     // Log in database
-    await supabase.from('call_logs').insert({
+    await getSupabase().from('call_logs').insert({
       call_sid: call.sid,
       from_number: from,
       to_number: to,
@@ -107,7 +143,7 @@ router.post('/sms/send', authenticateUser, async (req, res) => {
     const message = await twilioService.sendSMS(from, to, body);
     
     // Log in database
-    await supabase.from('sms_messages').insert({
+    await getSupabase().from('sms_messages').insert({
       message_sid: message.sid,
       from_number: from,
       to_number: to,
@@ -128,7 +164,7 @@ router.get('/sms/conversations', authenticateUser, async (req, res) => {
   try {
     const { phoneNumber } = req.query;
     
-    const { data: conversations, error } = await supabase
+    const { data: conversations, error } = await getSupabase()
       .from('sms_conversations')
       .select(`
         *,
@@ -178,7 +214,7 @@ router.post('/webhooks/twilio/voice', async (req, res) => {
     const { CallSid, From, To, CallStatus, Duration, RecordingUrl } = req.body;
     
     // Update call log
-    await supabase
+    await getSupabase()
       .from('call_logs')
       .update({
         status: CallStatus,
@@ -200,7 +236,7 @@ router.post('/webhooks/twilio/sms', async (req, res) => {
     
     // Handle incoming SMS
     if (MessageStatus === 'received') {
-      await supabase.from('sms_messages').insert({
+      await getSupabase().from('sms_messages').insert({
         message_sid: MessageSid,
         from_number: From,
         to_number: To,
@@ -222,7 +258,7 @@ router.post('/webhooks/voipms/sms', async (req, res) => {
   try {
     const { from, to, message, id } = req.body;
     
-    await supabase.from('sms_messages').insert({
+    await getSupabase().from('sms_messages').insert({
       message_sid: `voipms_${id}`,
       from_number: from,
       to_number: to,
