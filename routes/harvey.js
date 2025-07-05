@@ -38,7 +38,13 @@ async function getLeaderboardData() {
     leaderboard.sort((a, b) => b.reputationPoints - a.reputationPoints);
   }
   
-  return leaderboard;
+  // Map reputationPoints to points and add rank
+  return leaderboard.map((entry, index) => ({
+    ...entry,
+    points: entry.reputationPoints, // Add points field
+    rank: index + 1, // Add rank based on position
+    id: entry.userId // Add id field for React key
+  }));
 }
 
 // Harvey metrics endpoint
