@@ -39,6 +39,7 @@ import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
 import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
+import phoneRoutes from './routes/phone.js';
 import { authenticateUser, optionalAuth } from './auth.js';
 import { WebSocketServer } from 'ws';
 import CallTranscriptionService from './services/callTranscriptionService.js';
@@ -2243,6 +2244,9 @@ app.use('/api/usage', usageRoutes);
 
 // Add email routes
 app.use('/api/emails', emailRoutes);
+
+// Add phone system routes
+app.use('/api/phone', phoneRoutes);
 
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);
