@@ -1,6 +1,7 @@
 import express from 'express';
 import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
+import { getHarveyPreCallMessage } from './harveyPreCallMessages.js';
 
 const router = express.Router();
 
@@ -57,10 +58,34 @@ router.post('/api/twilio/incoming-call', validateTwilioRequest, async (req, res)
     // Create TwiML response to forward the call
     const twiml = new twilio.twiml.VoiceResponse();
     
-    // Optional greeting before forwarding
+    // Harvey's pre-call motivation (only you hear this)
+    if (process.env.HARVEY_PRECALL_ENABLED === 'true') {
+      // Get contextual Harvey message
+      const harveyMessage = getHarveyPreCallMessage({
+        timeOfDay: new Date().getHours(),
+        dayOfWeek: new Date().getDay(),
+        // Could add caller value detection based on phone number or caller ID
+        messageType: process.env.HARVEY_MESSAGE_TYPE || 'default'
+      });
+      
+      twiml.say({
+        voice: 'man',
+        language: 'en-US'
+      }, harveyMessage);
+      
+      // Short pause before connecting
+      twiml.pause({ length: 1 });
+      
+      // Optional: Play a sound effect
+      if (process.env.HARVEY_SOUND_EFFECT === 'true') {
+        twiml.play('https://example.com/harvey-bell.mp3'); // Add your sound effect URL
+      }
+    }
+    
+    // Customer hears this
     twiml.say({
       voice: 'alice'
-    }, 'Thank you for calling RepConnect. Connecting you now. This call may be recorded for quality purposes.');
+    }, 'Thank you for calling. Connecting you now.');
     
     // Forward the call with recording
     twiml.dial({
