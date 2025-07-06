@@ -2,6 +2,15 @@
 // These play ONLY to the sales rep before connecting the customer
 
 export const harveyPreCallMessages = {
+  // Quick and direct - Jason special
+  quick: [
+    "Jason. Sales mode on. Let's go!",
+    "Jason. Time to close. Go!",
+    "Jason. Show time. Close it!",
+    "Jason. Money time. Let's go!",
+    "Jason. Beast mode. Now!"
+  ],
+  
   // Default Harvey - Aggressive closer
   default: [
     "Listen up! This is Harvey. Time to close this deal. Remember - you're not just selling, you're winning. When you hear the beep, own this call. Let's fucking go!",
