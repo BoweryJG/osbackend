@@ -46,6 +46,8 @@ import { WebSocketServer } from 'ws';
 import CallTranscriptionService from './services/callTranscriptionService.js';
 import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
 import HarveyWebSocketService from './services/harveyWebSocketService.js';
+import callSummaryRoutes from './routes/callSummaryRoutes.js';
+import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -2262,6 +2264,10 @@ app.use('/api/canvas', agentRoutes);
 
 // Add Call Transcription routes
 app.use('/api', callTranscriptionRoutes);
+
+// Add Call Summary routes (from Netlify migration)
+app.use(callSummaryRoutes);
+app.use(twilioWebhookRoutes);
 
 // Create HTTP server for both Express and WebSocket
 const httpServer = createServer(app);
