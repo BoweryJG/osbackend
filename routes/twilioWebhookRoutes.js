@@ -30,12 +30,30 @@ const validateTwilioRequest = (req, res, next) => {
   next();
 };
 
+// Rep configuration - map Twilio numbers to reps
+const repConfig = {
+  '+18454090692': {
+    name: 'Jason',
+    forwardTo: '+12015231306',
+    harveyStyle: 'quick'
+  }
+  // Add more reps here as you buy Twilio numbers
+};
+
 // POST /api/twilio/incoming-call
 router.post('/api/twilio/incoming-call', validateTwilioRequest, async (req, res) => {
   console.log('Incoming call webhook:', req.body);
   
   const { CallSid, From, To, CallStatus } = req.body;
-  const forwardTo = process.env.FORWARD_TO_PHONE;
+  
+  // Get rep config based on which Twilio number was called
+  const rep = repConfig[To] || {
+    name: 'Rep',
+    forwardTo: process.env.FORWARD_TO_PHONE,
+    harveyStyle: process.env.HARVEY_MESSAGE_TYPE || 'default'
+  };
+  
+  const forwardTo = rep.forwardTo;
   
   if (!forwardTo) {
     console.error('FORWARD_TO_PHONE not configured');
@@ -74,7 +92,8 @@ router.post('/api/twilio/incoming-call', validateTwilioRequest, async (req, res)
     if (process.env.HARVEY_PRECALL_ENABLED === 'true') {
       // The whisper URL will play Harvey's message only to you
       dial.number({
-        url: `${process.env.BACKEND_URL}/api/twilio/whisper`
+        url: `${process.env.BACKEND_URL}/api/twilio/whisper`,
+        method: 'POST'
       }, forwardTo);
     } else {
       // No whisper, just forward normally
@@ -131,11 +150,19 @@ router.post('/api/twilio/call-status', validateTwilioRequest, async (req, res) =
 router.post('/api/twilio/whisper', validateTwilioRequest, async (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
   
-  // Get contextual Harvey message
+  // Get which number was called to identify the rep
+  const { To } = req.body;
+  const rep = repConfig[To] || { 
+    name: 'Rep', 
+    harveyStyle: 'default' 
+  };
+  
+  // Get contextual Harvey message for this rep
   const harveyMessage = getHarveyPreCallMessage({
     timeOfDay: new Date().getHours(),
     dayOfWeek: new Date().getDay(),
-    messageType: process.env.HARVEY_MESSAGE_TYPE || 'default'
+    messageType: rep.harveyStyle,
+    repName: rep.name
   });
   
   // Harvey speaks only to you
