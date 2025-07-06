@@ -58,41 +58,28 @@ router.post('/api/twilio/incoming-call', validateTwilioRequest, async (req, res)
     // Create TwiML response to forward the call
     const twiml = new twilio.twiml.VoiceResponse();
     
-    // Harvey's pre-call motivation (only you hear this)
-    if (process.env.HARVEY_PRECALL_ENABLED === 'true') {
-      // Get contextual Harvey message
-      const harveyMessage = getHarveyPreCallMessage({
-        timeOfDay: new Date().getHours(),
-        dayOfWeek: new Date().getDay(),
-        // Could add caller value detection based on phone number or caller ID
-        messageType: process.env.HARVEY_MESSAGE_TYPE || 'default'
-      });
-      
-      twiml.say({
-        voice: 'man',
-        language: 'en-US'
-      }, harveyMessage);
-      
-      // Short pause before connecting
-      twiml.pause({ length: 1 });
-      
-      // Optional: Play a sound effect
-      if (process.env.HARVEY_SOUND_EFFECT === 'true') {
-        twiml.play('https://example.com/harvey-bell.mp3'); // Add your sound effect URL
-      }
-    }
-    
-    // Customer hears this
+    // Customer hears this greeting while waiting
     twiml.say({
       voice: 'alice'
     }, 'Thank you for calling. Connecting you now.');
     
-    // Forward the call with recording
-    twiml.dial({
+    // Create dial with whisper URL for Harvey
+    const dial = twiml.dial({
       record: 'record-from-answer-dual',
       recordingStatusCallback: `${process.env.BACKEND_URL}/api/twilio/recording-status`,
       recordingStatusCallbackEvent: ['completed']
-    }, forwardTo);
+    });
+    
+    // Forward to your number with whisper
+    if (process.env.HARVEY_PRECALL_ENABLED === 'true') {
+      // The whisper URL will play Harvey's message only to you
+      dial.number({
+        url: `${process.env.BACKEND_URL}/api/twilio/whisper`
+      }, forwardTo);
+    } else {
+      // No whisper, just forward normally
+      dial.number(forwardTo);
+    }
     
     res.type('text/xml');
     res.send(twiml.toString());
@@ -138,6 +125,32 @@ router.post('/api/twilio/call-status', validateTwilioRequest, async (req, res) =
     console.error('Error updating call status:', error);
     res.status(500).send('Error processing status update');
   }
+});
+
+// POST /api/twilio/whisper - Harvey's message only to the person answering
+router.post('/api/twilio/whisper', validateTwilioRequest, async (req, res) => {
+  const twiml = new twilio.twiml.VoiceResponse();
+  
+  // Get contextual Harvey message
+  const harveyMessage = getHarveyPreCallMessage({
+    timeOfDay: new Date().getHours(),
+    dayOfWeek: new Date().getDay(),
+    messageType: process.env.HARVEY_MESSAGE_TYPE || 'default'
+  });
+  
+  // Harvey speaks only to you
+  twiml.say({
+    voice: 'man',
+    language: 'en-US'
+  }, harveyMessage);
+  
+  // Optional sound effect
+  if (process.env.HARVEY_SOUND_EFFECT === 'true') {
+    twiml.play('https://example.com/harvey-bell.mp3');
+  }
+  
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
 
 // POST /api/twilio/recording-status
