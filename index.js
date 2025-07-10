@@ -18,8 +18,8 @@ import AgentWebSocketServer from './agents/websocket/server.js';
 import agentRoutes from './routes/agents/agentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
-import { rateLimiter } from './middleware/rateLimiter.js';
-import { responseTime } from './middleware/responseTime.js';
+import rateLimiterMiddleware from './middleware/rateLimiter.js';
+import responseTimeMiddleware from './middleware/responseTime.js';
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -207,7 +207,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
 // JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
 app.use(cookieParser()); // Parse cookies
-app.use(responseTime); // Track response times
+app.use(responseTimeMiddleware.responseTimeMiddleware); // Track response times
 
 // Ensure the upload directory exists for multer
 const uploadDir = path.join(__dirname, 'uploads');
@@ -2302,7 +2302,7 @@ app.use('/api/auth', authRoutes);
 app.use('/', healthRoutes);
 
 // Apply rate limiting to API routes
-app.use('/api/', rateLimiter.api);
+app.use('/api/', rateLimiterMiddleware.apiRateLimiter);
 
 // Create HTTP server for both Express and WebSocket
 const httpServer = createServer(app);
