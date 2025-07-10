@@ -200,8 +200,7 @@ npm start
 
 ### Required
 - `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_KEY` - Supabase service key
-- `SUPABASE_SERVICE_KEY` - Supabase service role key (for admin operations)
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (for backend operations)
 - `STRIPE_SECRET_KEY` - Stripe API key
 - `STRIPE_WEBHOOK_SECRET` - Stripe webhook secret
 - `SESSION_SECRET` - Express session secret

@@ -300,12 +300,12 @@ const RETRY_DELAY = 2000; // 2 seconds
 
 async function connectToSupabase(retryCount = 0) {
   try {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.log(`Connecting to Supabase at: ${process.env.SUPABASE_URL} (Attempt ${retryCount + 1})`);
       
       try {
         // Create a new Supabase client
-        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
         
         // Test the connection by making a simple query
         const { data, error } = await supabase.from('user_subscriptions').select('*').limit(1);
@@ -2344,7 +2344,7 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!process.env.SUPABASE_KEY}`);
+  console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
   console.log(`OpenRouter configured: ${!!process.env.OPENROUTER_API_KEY}`);
   console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
