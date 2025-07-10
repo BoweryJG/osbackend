@@ -307,6 +307,11 @@ async function connectToSupabase(retryCount = 0) {
       console.log('SUPABASE_KEY:', process.env.SUPABASE_KEY ? 'Set ✓' : 'Not set ✗');
       console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? 'Set ✓' : 'Not set ✗');
       console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set ✓' : 'Not set ✗');
+      // Show key preview to verify it's correct
+      if (process.env.SUPABASE_KEY) {
+        console.log('SUPABASE_KEY preview:', process.env.SUPABASE_KEY.substring(0, 30) + '...');
+        console.log('SUPABASE_KEY length:', process.env.SUPABASE_KEY.length);
+      }
     }
     
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
