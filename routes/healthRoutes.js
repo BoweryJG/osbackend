@@ -7,10 +7,12 @@ const router = express.Router();
 
 // Initialize Supabase client for health checks only if credentials exist
 let supabase = null;
-if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    supabaseKey
   );
 }
 

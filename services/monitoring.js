@@ -360,7 +360,9 @@ export class MonitoringService {
   registerDefaultHealthChecks() {
     // Database health check
     this.healthCheckManager.register('database', async () => {
-      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+      
+      if (!process.env.SUPABASE_URL || !supabaseKey) {
         return {
           responseTime: 0,
           message: 'Database not configured',
@@ -371,7 +373,7 @@ export class MonitoringService {
       const { createClient } = await import('@supabase/supabase-js');
       const supabase = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
+        supabaseKey
       );
       
       const start = Date.now();

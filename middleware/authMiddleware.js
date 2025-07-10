@@ -4,7 +4,7 @@ import logger from '../utils/logger.js';
 
 // Initialize Supabase client for server-side use
 const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.REACT_APP_SUPABASE_SERVICE_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.REACT_APP_SUPABASE_SERVICE_KEY || '';
 
 if (!supabaseUrl || !supabaseKey) {
   logger.warn('Supabase credentials not found in environment variables. Auth features will be disabled.');
