@@ -245,6 +245,7 @@ app.use(cors({
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
     allowedOrigins.push(
+      'https://repconnect.repspheres.com', // RepConnect production domain
       'https://repconnect1.netlify.app', // RepConnect1 app
       'https://repspheres.netlify.app',
       'https://globalrepspheres.netlify.app', // Main app on Netlify
