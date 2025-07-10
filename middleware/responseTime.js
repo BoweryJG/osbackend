@@ -1,6 +1,11 @@
 import responseTime from 'response-time';
 import logger from '../utils/logger.js';
-import { captureMetric } from '../config/sentry.js';
+
+// Stub function for captureMetric until Sentry is properly configured
+const captureMetric = (name, value, unit, tags) => {
+  // Log metrics for now
+  logger.debug('Metric captured:', { name, value, unit, tags });
+};
 
 /**
  * Response time tracking middleware

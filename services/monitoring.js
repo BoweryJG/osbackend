@@ -3,6 +3,12 @@ import { performanceMonitor } from '../middleware/responseTime.js';
 import * as Sentry from '@sentry/node';
 import os from 'os';
 
+// Stub function for captureMetric until Sentry is properly configured
+const captureMetric = (name, value, unit, tags) => {
+  // Log metrics for now
+  logger.debug('Metric captured:', { name, value, unit, tags });
+};
+
 /**
  * Monitoring configuration and utilities
  */
