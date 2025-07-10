@@ -3,10 +3,14 @@ import crypto from 'crypto';
 import logger from '../utils/logger.js';
 
 // Initialize Supabase client for server-side use
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_SERVICE_KEY // Use service key for server-side
-);
+const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || process.env.REACT_APP_SUPABASE_SERVICE_KEY || '';
+
+if (!supabaseUrl || !supabaseKey) {
+  logger.warn('Supabase credentials not found in environment variables. Auth features will be disabled.');
+}
+
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 // CSRF token storage (in production, use Redis or similar)
 const csrfTokens = new Map();
@@ -62,6 +66,12 @@ const cleanupExpiredTokens = () => {
 // Authentication middleware
 export const authMiddleware = async (req, res, next) => {
   try {
+    // Check if Supabase is configured
+    if (!supabase) {
+      logger.warn('Auth middleware called but Supabase is not configured');
+      return res.status(503).json({ error: 'Authentication service unavailable' });
+    }
+    
     const sessionToken = req.cookies?.session_token;
     
     if (!sessionToken) {
