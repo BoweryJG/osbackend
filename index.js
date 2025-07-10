@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -12,8 +13,13 @@ import NodeCache from 'node-cache';
 import { v4 as uuidv4 } from 'uuid';
 import Parser from 'rss-parser';
 import { createServer } from 'http';
+import cookieParser from 'cookie-parser';
 import AgentWebSocketServer from './agents/websocket/server.js';
 import agentRoutes from './routes/agents/agentRoutes.js';
+import authRoutes from './routes/authRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
+import { rateLimiter } from './middleware/rateLimiter.js';
+import { responseTime } from './middleware/responseTime.js';
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -59,6 +65,19 @@ const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+// Initialize Sentry
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    integrations: [
+      Sentry.httpIntegration(),
+      Sentry.expressIntegration({ app: express() }),
+    ],
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  });
+}
 
 // Initialize Stripe if configured
 let stripe = null;
@@ -187,6 +206,8 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
 
 // JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
+app.use(cookieParser()); // Parse cookies
+app.use(responseTime); // Track response times
 
 // Ensure the upload directory exists for multer
 const uploadDir = path.join(__dirname, 'uploads');
@@ -224,7 +245,7 @@ app.use(cors({
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
     allowedOrigins.push(
-      'https://repconnect1.netlify.app', // RepConnect1 frontend
+      'https://repconnect1.netlify.app', // RepConnect1 app
       'https://repspheres.netlify.app',
       'https://globalrepspheres.netlify.app', // Main app on Netlify
       'https://repspheres.com',
@@ -2273,6 +2294,15 @@ app.use('/api', callTranscriptionRoutes);
 app.use(callSummaryRoutes);
 app.use(twilioWebhookRoutes);
 
+// Add Auth routes
+app.use('/api/auth', authRoutes);
+
+// Add Health monitoring routes
+app.use('/', healthRoutes);
+
+// Apply rate limiting to API routes
+app.use('/api/', rateLimiter.api);
+
 // Create HTTP server for both Express and WebSocket
 const httpServer = createServer(app);
 
@@ -2295,6 +2325,17 @@ const wsServer = new WebSocketServer({
 
 wsServer.on('connection', (ws, request) => {
   callTranscriptionService.handleTwilioMediaStream(ws, request);
+});
+
+// Sentry error handler (must be after all routes)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler());
+}
+
+// Global error handler
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Start the server

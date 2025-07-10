@@ -15,25 +15,21 @@ const __dirname = path.dirname(__filename);
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Initialize OpenAI client
-const openAiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+// Initialize OpenAI client for Whisper (OpenRouter doesn't support Whisper)
+const openAiApiKey = process.env.OPENAI_API_KEY;
 let openai = null;
 
 if (!openAiApiKey) {
-  console.warn('No OpenAI or OpenRouter API key configured. Call transcription will be disabled.');
+  console.warn('No OpenAI API key configured. Call transcription will be disabled.');
+  console.warn('Note: OpenRouter does not support Whisper API. You need a direct OpenAI API key.');
 } else {
-  const openAiOptions = { apiKey: openAiApiKey };
-  
-  // If using OpenRouter for Whisper, set the base URL and required headers
-  if (!process.env.OPENAI_API_KEY && process.env.OPENROUTER_API_KEY) {
-    openAiOptions.baseURL = 'https://openrouter.ai/api/v1';
-    openAiOptions.defaultHeaders = {
-      'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
-      'X-Title': 'Call Transcription Service'
-    };
-  }
-  
-  openai = new OpenAI(openAiOptions);
+  console.log('[CallTranscriptionService] Initializing OpenAI client for Whisper...');
+  openai = new OpenAI({ 
+    apiKey: openAiApiKey,
+    // Ensure we're using OpenAI directly, not OpenRouter
+    baseURL: 'https://api.openai.com/v1'
+  });
+  console.log('[CallTranscriptionService] OpenAI client initialized successfully');
 }
 
 // Initialize Supabase client
