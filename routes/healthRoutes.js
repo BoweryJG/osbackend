@@ -1,7 +1,7 @@
 import express from 'express';
-import { monitoringService } from '../config/monitoring.js';
+import { monitoringService } from '../services/monitoring.js';
 import { createClient } from '@supabase/supabase-js';
-import logger from '../../utils/logger.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
