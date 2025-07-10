@@ -2,10 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 export class ProcedureService {
   constructor() {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+    if (process.env.SUPABASE_URL && supabaseKey) {
       this.supabase = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_KEY
+        supabaseKey
       );
     } else {
       this.supabase = null;

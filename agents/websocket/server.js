@@ -19,10 +19,11 @@ class AgentWebSocketServer {
     });
 
     // Only initialize Supabase if credentials are available
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+    if (process.env.SUPABASE_URL && supabaseKey) {
       this.supabase = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_KEY
+        supabaseKey
       );
     } else {
       console.warn('WebSocket Server: Supabase credentials not found');

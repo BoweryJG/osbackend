@@ -13,10 +13,11 @@ let conversationManager = null;
 let procedureService = null;
 
 // Only initialize if environment variables are available
-if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
+    supabaseKey
   );
   agentCore = new AgentCore();
   conversationManager = new ConversationManager(supabase);
