@@ -300,6 +300,15 @@ const RETRY_DELAY = 2000; // 2 seconds
 
 async function connectToSupabase(retryCount = 0) {
   try {
+    // Debug: Check which env vars are available
+    if (retryCount === 0) {
+      console.log('=== Supabase Environment Variables ===');
+      console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set ✓' : 'Not set ✗');
+      console.log('SUPABASE_KEY:', process.env.SUPABASE_KEY ? 'Set ✓' : 'Not set ✗');
+      console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? 'Set ✓' : 'Not set ✗');
+      console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set ✓' : 'Not set ✗');
+    }
+    
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
     
     if (process.env.SUPABASE_URL && supabaseKey) {
