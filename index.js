@@ -47,14 +47,14 @@ import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
 import phoneRoutes from './routes/phone.js';
 import harveyRoutes from './routes/harvey.js';
-// import coachingSessionRoutes from './routes/coachingSessionRoutes.js'; // Removed - duplicate route
+import coachingSessionRoutes from './routes/coachingSessionRoutes.js';
 import { authenticateUser, optionalAuth } from './auth.js';
 import { WebSocketServer } from 'ws';
 import CallTranscriptionService from './services/callTranscriptionService.js';
 import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
 import HarveyWebSocketService from './services/harveyWebSocketService.js';
-// import callSummaryRoutes from './routes/callSummaryRoutes.js'; // Removed - duplicate route
-// import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js'; // Removed - duplicate route
+import callSummaryRoutes from './routes/callSummaryRoutes.js';
+import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -2279,7 +2279,7 @@ app.use('/api/phone', phoneRoutes);
 app.use('/api/harvey', harveyRoutes);
 
 // Add Coaching Session routes
-// app.use('/api/coaching', coachingSessionRoutes); // Removed - duplicate route
+app.use('/api/coaching', coachingSessionRoutes);
 
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);
@@ -2291,8 +2291,8 @@ app.use('/api/canvas', agentRoutes);
 app.use('/api', callTranscriptionRoutes);
 
 // Add Call Summary routes (from Netlify migration)
-// app.use(callSummaryRoutes); // Removed - duplicate route
-// app.use(twilioWebhookRoutes); // Removed - duplicate route
+app.use(callSummaryRoutes);
+app.use(twilioWebhookRoutes);
 
 // Add Auth routes
 app.use('/api/auth', authRoutes);
