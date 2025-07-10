@@ -5,11 +5,14 @@ import logger from '../utils/logger.js';
 
 const router = express.Router();
 
-// Initialize Supabase client for health checks
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+// Initialize Supabase client for health checks only if credentials exist
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 /**
  * Basic health check endpoint
@@ -73,8 +76,12 @@ router.get('/health/ready', async (req, res) => {
   
   try {
     // Check database connection
-    const { error } = await supabase.from('users').select('count').limit(1);
-    checks.database = !error;
+    if (supabase) {
+      const { error } = await supabase.from('users').select('count').limit(1);
+      checks.database = !error;
+    } else {
+      checks.database = false;
+    }
     
     // Check memory usage
     const memUsage = process.memoryUsage();
@@ -141,6 +148,14 @@ router.get('/health/metrics', async (req, res) => {
  */
 router.get('/health/database', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({
+        status: 'unavailable',
+        error: 'Database connection not configured',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     const start = Date.now();
     const { data, error } = await supabase.from('users').select('count').limit(1);
     const responseTime = Date.now() - start;
@@ -176,18 +191,25 @@ router.get('/health/dependencies', async (req, res) => {
   };
   
   // Check Supabase
-  try {
-    const start = Date.now();
-    const { error } = await supabase.from('users').select('count').limit(1);
+  if (supabase) {
+    try {
+      const start = Date.now();
+      const { error } = await supabase.from('users').select('count').limit(1);
+      dependencies.supabase = {
+        status: error ? 'unhealthy' : 'healthy',
+        responseTime: `${Date.now() - start}ms`,
+        error: error?.message
+      };
+    } catch (error) {
+      dependencies.supabase = {
+        status: 'unhealthy',
+        error: error.message
+      };
+    }
+  } else {
     dependencies.supabase = {
-      status: error ? 'unhealthy' : 'healthy',
-      responseTime: `${Date.now() - start}ms`,
-      error: error?.message
-    };
-  } catch (error) {
-    dependencies.supabase = {
-      status: 'unhealthy',
-      error: error.message
+      status: 'not_configured',
+      error: 'Supabase credentials not provided'
     };
   }
   

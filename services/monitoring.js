@@ -360,10 +360,18 @@ export class MonitoringService {
   registerDefaultHealthChecks() {
     // Database health check
     this.healthCheckManager.register('database', async () => {
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return {
+          responseTime: 0,
+          message: 'Database not configured',
+          status: 'not_configured'
+        };
+      }
+      
       const { createClient } = await import('@supabase/supabase-js');
       const supabase = createClient(
-        process.env.SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
       );
       
       const start = Date.now();
@@ -375,7 +383,7 @@ export class MonitoringService {
         responseTime: Date.now() - start,
         message: 'Database connection successful'
       };
-    }, { critical: true, timeout: 5000 });
+    }, { critical: false, timeout: 5000 });
 
     // Memory health check
     this.healthCheckManager.register('memory', async () => {
