@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import axios from 'axios';
 import FormData from 'form-data';
 import { Buffer } from 'buffer';
+import { ElevenLabsTTS } from './elevenLabsTTS.js';
 
 // Audio conversion utilities
 const mulawToLinear16 = (mulaw) => {
@@ -208,6 +209,23 @@ class VoiceService {
     this.connections = new Map();
     this.huggingfaceToken = process.env.HUGGINGFACE_TOKEN;
     this.openRouterKey = process.env.OPENROUTER_API_KEY;
+    this.ttsService = null;
+    
+    // Initialize ElevenLabs TTS
+    try {
+      this.ttsService = new ElevenLabsTTS({
+        voiceId: 'nicole', // Friendly female voice
+        modelId: 'eleven_turbo_v2', // Low-latency model
+        stability: 0.5,
+        similarityBoost: 0.75,
+        style: 0.0,
+        outputFormat: 'pcm_16000'
+      });
+      console.log('ElevenLabs TTS initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize ElevenLabs TTS:', error);
+      console.warn('Falling back to Coqui TTS');
+    }
     
     if (!this.huggingfaceToken || !this.openRouterKey) {
       console.warn('Voice service: Missing API keys. Please set HUGGINGFACE_TOKEN and OPENROUTER_API_KEY environment variables.');
@@ -285,9 +303,40 @@ class VoiceService {
     }
   }
 
-  // Text to Speech using Coqui TTS via Huggingface
+  // Text to Speech using ElevenLabs (with Coqui fallback)
   async textToSpeech(text) {
     try {
+      // Try ElevenLabs first for best quality
+      if (this.ttsService) {
+        try {
+          // Use streaming for low latency
+          const audioStream = await this.ttsService.textToSpeechStream(text, {
+            optimizeLatency: 4 // Maximum latency optimization
+          });
+          
+          // Collect audio chunks
+          const chunks = [];
+          for await (const chunk of audioStream) {
+            chunks.push(chunk);
+          }
+          
+          // Combine chunks
+          const audioBuffer = Buffer.concat(chunks);
+          
+          // Convert from PCM 16kHz to mulaw 8kHz for Twilio
+          const mulawData = await this.ttsService.convertAudioFormat(
+            audioBuffer,
+            'pcm_16000',
+            'mulaw_8000'
+          );
+          
+          return mulawData;
+        } catch (elevenLabsError) {
+          console.error('ElevenLabs TTS failed, falling back to Coqui:', elevenLabsError);
+        }
+      }
+      
+      // Fallback to Coqui TTS
       const response = await axios.post(
         'https://api-inference.huggingface.co/models/coqui/XTTS-v2',
         {
@@ -364,6 +413,35 @@ class VoiceService {
     }
     
     return output;
+  }
+
+  // Update voice configuration for dynamic voice switching
+  updateVoiceConfig(config) {
+    if (config.voiceId && this.ttsService) {
+      // Update ElevenLabs voice
+      this.ttsService.voiceId = this.ttsService.voices[config.voiceId] || config.voiceId;
+      
+      // Update voice settings if provided
+      if (config.stability !== undefined) {
+        this.ttsService.voiceSettings.stability = config.stability;
+      }
+      if (config.similarityBoost !== undefined) {
+        this.ttsService.voiceSettings.similarity_boost = config.similarityBoost;
+      }
+      if (config.style !== undefined) {
+        this.ttsService.voiceSettings.style = config.style;
+      }
+      
+      console.log(`Voice config updated to: ${config.voiceId}`);
+    }
+  }
+
+  // Get available voices
+  async getAvailableVoices() {
+    if (this.ttsService) {
+      return await this.ttsService.getVoices();
+    }
+    return [];
   }
 
   // Handle WebSocket connection
