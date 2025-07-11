@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { Readable } from 'stream';
+import { ElevenLabsTTS } from './elevenLabsTTS.js';
 
 // Get directory name
 const __filename = fileURLToPath(import.meta.url);
@@ -15,6 +16,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 class HarveyVoiceService {
   constructor() {
     this.openai = null;
+    this.elevenLabsTTS = null;
     this.voiceSettings = {
       model: 'tts-1',
       voice: 'onyx', // Deep, authoritative voice for Harvey
@@ -22,6 +24,7 @@ class HarveyVoiceService {
     };
 
     this.initializeOpenAI();
+    this.initializeElevenLabs();
     this.harveyPhrases = this.loadHarveyPhrases();
   }
 
@@ -33,6 +36,22 @@ class HarveyVoiceService {
     }
 
     this.openai = new OpenAI({ apiKey });
+  }
+
+  initializeElevenLabs() {
+    try {
+      this.elevenLabsTTS = new ElevenLabsTTS({
+        voiceId: 'antoni', // Professional male voice for Harvey
+        modelId: 'eleven_turbo_v2',
+        stability: 0.6, // More stable for authoritative voice
+        similarityBoost: 0.8,
+        style: 0.2, // Slight style for personality
+        outputFormat: 'mp3_44100_128' // High quality for Harvey
+      });
+      console.log('Harvey Voice: ElevenLabs TTS initialized with Antoni voice');
+    } catch (error) {
+      console.error('Harvey Voice: Failed to initialize ElevenLabs:', error);
+    }
   }
 
   loadHarveyPhrases() {
@@ -179,8 +198,33 @@ class HarveyVoiceService {
   }
 
   async synthesizeVoice(text) {
+    // Try ElevenLabs first for best quality
+    if (this.elevenLabsTTS) {
+      try {
+        // Generate speech using ElevenLabs
+        const audioBuffer = await this.elevenLabsTTS.textToSpeech(text, {
+          optimizeLatency: 2 // Balance quality and latency for Harvey
+        });
+        
+        // Convert to base64 for easy transmission
+        const base64Audio = audioBuffer.toString('base64');
+        const audioDataUri = `data:audio/mp3;base64,${base64Audio}`;
+
+        return {
+          audio: audioDataUri,
+          text,
+          duration: this.estimateDuration(text),
+          format: 'mp3',
+          voice: 'antoni'
+        };
+      } catch (elevenLabsError) {
+        console.error('ElevenLabs TTS failed, falling back to OpenAI:', elevenLabsError);
+      }
+    }
+
+    // Fallback to OpenAI if ElevenLabs fails
     if (!this.openai) {
-      // Return a placeholder if OpenAI not configured
+      // Return a placeholder if neither service is configured
       return {
         audio: null,
         text,

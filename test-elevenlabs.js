@@ -89,9 +89,14 @@ app.get('/', (req, res) => {
         <button class="voice-button" onclick="playVoice('rachel')">Rachel (Professional Female)</button>
         <button class="voice-button" onclick="playVoice('domi')">Domi (Warm Female)</button>
         <button class="voice-button" onclick="playVoice('bella')">Bella (Natural Female)</button>
-        <button class="voice-button" onclick="playVoice('antoni')">Antoni (Professional Male)</button>
+        <button class="voice-button" onclick="playVoice('antoni')" style="background: #ff6b6b; color: white;">Antoni (Harvey - Professional Male)</button>
         <button class="voice-button" onclick="playVoice('elli')">Elli (Clear Female)</button>
         <button class="voice-button" onclick="playVoice('nicole')">Nicole (Friendly Female)</button>
+      </div>
+      
+      <div style="margin-top: 20px;">
+        <h3>Test Harvey-style phrases:</h3>
+        <button class="voice-button" onclick="playHarveyPhrase()">Play Random Harvey Quote</button>
       </div>
       
       <div>
@@ -104,6 +109,17 @@ app.get('/', (req, res) => {
       <audio id="audio-player" controls style="width: 100%; margin-top: 20px;"></audio>
       
       <script>
+        const harveyQuotes = [
+          "I don't have time for pleasantries. Show me results.",
+          "Winners focus on winning. Losers focus on winners. Which are you?",
+          "You want to be a shark? Stop swimming with the minnows.",
+          "That was painful to watch. And I don't feel pain easily.",
+          "Now that's what I call closing. You almost impressed me.",
+          "Your voice is shaking. Winners don't shake, they make others shake.",
+          "Never accept the first 'no'. It's just a test.",
+          "ABC - Always Be Closing. Did you forget the basics?"
+        ];
+        
         async function playVoice(voiceId) {
           const status = document.getElementById('status');
           const audio = document.getElementById('audio-player');
@@ -124,6 +140,12 @@ app.get('/', (req, res) => {
           } catch (error) {
             status.textContent = \`Error: \${error.message}\`;
           }
+        }
+        
+        async function playHarveyPhrase() {
+          const randomQuote = harveyQuotes[Math.floor(Math.random() * harveyQuotes.length)];
+          document.getElementById('custom-text').value = randomQuote;
+          await playVoice('antoni');
         }
       </script>
     </body>
