@@ -1,11 +1,17 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name and load environment variables first
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import axios from 'axios';
-import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
 import Stripe from 'stripe';
@@ -56,15 +62,8 @@ import HarveyWebSocketService from './services/harveyWebSocketService.js';
 import callSummaryRoutes from './routes/callSummaryRoutes.js';
 import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 
-// Get the directory name of the current module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Initialize cache for API responses
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
-
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 // Initialize Sentry
 if (process.env.SENTRY_DSN) {
