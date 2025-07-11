@@ -159,7 +159,7 @@ router.get('/health/database', async (req, res) => {
     }
     
     const start = Date.now();
-    const { data, error } = await supabase.from('users').select('count').limit(1);
+    const { data, error } = await supabase.from('user_subscriptions').select('count').limit(1);
     const responseTime = Date.now() - start;
     
     if (error) {
