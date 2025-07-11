@@ -13,3 +13,6 @@ tmp/
 temp/
 *.env*
 .env.complete
+
+# Local Netlify folder
+.netlify

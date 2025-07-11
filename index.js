@@ -26,6 +26,8 @@ import authRoutes from './routes/authRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import rateLimiterMiddleware from './middleware/rateLimiter.js';
 import responseTimeMiddleware from './middleware/responseTime.js';
+import websocketManager, { startWebSocketServer } from './services/websocketManager.js';
+import websocketRoute, { websocketProxy } from './routes/websocketRoute.js';
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -61,6 +63,9 @@ import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/c
 import HarveyWebSocketService from './services/harveyWebSocketService.js';
 import callSummaryRoutes from './routes/callSummaryRoutes.js';
 import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
+import voiceCloningRoutes from './routes/voiceCloning.js';
+import dashboardRoutes from './routes/dashboard.js';
+import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
 
 // Initialize cache for API responses
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
@@ -150,6 +155,9 @@ const app = express();
 
 // Configure middleware
 app.set('trust proxy', 1); // Trust first proxy - important for Render
+
+// Make supabase client available to routes
+app.locals.supabase = null; // Will be set after connection
 
 // Stripe webhook needs raw body
 app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -256,6 +264,7 @@ app.use(cors({
       'https://canvas.repspheres.com', // Canvas sales intelligence
       'https://marketdata.repspheres.com', // Added MarketData frontend URL
       'https://auth.repspheres.com', // Auth subdomain if needed
+      'https://agent-command-center.netlify.app', // Agent Command Center
       'http://localhost:5173', // Common Vite dev port
       'http://localhost:5174', // Alternative Vite port
       'http://localhost:5175', // Alternative Vite port
@@ -331,6 +340,10 @@ async function connectToSupabase(retryCount = 0) {
         
         console.log('Successfully connected to Supabase!');
         supabaseConnected = true;
+        
+        // Make supabase available to routes
+        app.locals.supabase = supabase;
+        
         return true;
       } catch (err) {
         console.warn('Error connecting to Supabase:', err.message);
@@ -2306,6 +2319,15 @@ app.use('/api/canvas', agentRoutes);
 // Add Call Transcription routes
 app.use('/api', callTranscriptionRoutes);
 
+// Add Voice Cloning routes
+app.use('/api/voice-cloning', voiceCloningRoutes);
+
+// Add Dashboard routes
+app.use('/api/dashboard', dashboardRoutes);
+
+// Add Knowledge Bank routes (Agent Academy)
+app.use('/api/knowledge', knowledgeBankRoutes);
+
 // Add Call Summary routes (from Netlify migration)
 app.use(callSummaryRoutes);
 app.use(twilioWebhookRoutes);
@@ -2316,8 +2338,14 @@ app.use('/api/auth', authRoutes);
 // Add Health monitoring routes
 app.use('/', healthRoutes);
 
+// Add WebSocket management routes
+app.use('/api', websocketRoute);
+
 // Apply rate limiting to API routes
 app.use('/api/', rateLimiterMiddleware.apiRateLimiter);
+
+// Add WebSocket proxy (must be before creating HTTP server)
+app.use(websocketProxy);
 
 // Create HTTP server for both Express and WebSocket
 const httpServer = createServer(app);
@@ -2332,6 +2360,10 @@ setCallTranscriptionService(callTranscriptionService);
 // Initialize Harvey WebSocket Service
 const harveyWSService = new HarveyWebSocketService();
 harveyWSService.initialize(httpServer);
+
+// Metrics Aggregator uses the centralized WebSocket manager
+import metricsAggregator from './services/metricsAggregator.js';
+// WebSocket server is started by websocketManager
 
 // Set up WebSocket server for Twilio Media Streams
 const wsServer = new WebSocketServer({ 
@@ -2367,4 +2399,10 @@ httpServer.listen(PORT, () => {
   console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
   console.log(`Harvey AI WebSocket: Active on /harvey-ws`);
   console.log(`Twilio Media Stream WebSocket: Active on /api/media-stream`);
+  console.log(`Metrics Aggregator WebSocket: Active on port ${process.env.METRICS_WS_PORT || 8081}`);
+  console.log(`Dashboard API: Active on /api/dashboard/*`);
+  
+  // Start the centralized WebSocket manager
+  startWebSocketServer();
+  console.log(`Centralized WebSocket Manager: Active on port ${process.env.WS_PORT || 8082}`);
 });
