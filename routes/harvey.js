@@ -2,9 +2,11 @@ import express from 'express';
 import { authenticateUser } from '../auth.js';
 import HarveyVoiceService from '../services/harveyVoiceService.js';
 import OpenAI from 'openai';
+import { ProcedureService } from '../agents/services/procedureService.js';
 
 const router = express.Router();
 const harveyVoice = new HarveyVoiceService();
+const procedureService = new ProcedureService();
 
 // Initialize OpenAI for chat functionality
 const openai = new OpenAI({
@@ -631,9 +633,59 @@ router.post('/chat', async (req, res) => {
 
     const agentConfig = agentConfigs[agentId] || agentConfigs.harvey;
 
+    // Search for relevant procedures based on the message content
+    let enhancedSystemPrompt = agentConfig.systemPrompt;
+    
+    try {
+      // Extract keywords from the message to search for procedures
+      const keywords = message.toLowerCase().split(' ').filter(word => word.length > 3);
+      const relevantProcedures = [];
+      
+      // Search for procedures matching the conversation
+      for (const keyword of keywords) {
+        const searchResults = await procedureService.searchProcedures(keyword);
+        relevantProcedures.push(...searchResults);
+      }
+      
+      // Remove duplicates and limit to top 3 most relevant procedures
+      const uniqueProcedures = Array.from(new Map(relevantProcedures.map(p => [p.id, p])).values()).slice(0, 3);
+      
+      // If we found relevant procedures, enhance the system prompt with procedure knowledge
+      if (uniqueProcedures.length > 0) {
+        enhancedSystemPrompt += '\n\n## Available Procedures in Our Database:\n';
+        
+        for (const procedure of uniqueProcedures) {
+          const context = procedureService.generateProcedureContext(procedure);
+          enhancedSystemPrompt += `\n### ${context.name} (${context.category})\n`;
+          enhancedSystemPrompt += `- Price Range: ${context.price_range}\n`;
+          enhancedSystemPrompt += `- Duration: ${context.treatment_duration}\n`;
+          enhancedSystemPrompt += `- Key Features: ${context.key_features.slice(0, 3).join(', ')}\n`;
+          if (context.competitive_advantages.length > 0) {
+            enhancedSystemPrompt += `- Advantages: ${context.competitive_advantages[0]}\n`;
+          }
+        }
+        
+        enhancedSystemPrompt += '\nUse this specific procedure information when relevant to provide accurate, detailed responses about treatments we offer.';
+      }
+      
+      // Also get featured procedures for this agent type
+      const featuredProcedures = await procedureService.getFeaturedProcedures();
+      const agentProcedures = agentId.includes('dental') || ['implants', 'orthodontics', 'cosmetic'].includes(agentId) 
+        ? featuredProcedures.dental 
+        : featuredProcedures.aesthetic;
+        
+      if (agentProcedures.length > 0 && uniqueProcedures.length === 0) {
+        enhancedSystemPrompt += '\n\n## Our Featured Procedures:\n';
+        enhancedSystemPrompt += agentProcedures.slice(0, 5).map(p => `- ${p.name}: ${p.short_description || p.category}`).join('\n');
+      }
+    } catch (error) {
+      console.error('Error fetching procedure data:', error);
+      // Continue with original prompt if procedure lookup fails
+    }
+
     // Create messages array for OpenAI
     const messages = [
-      { role: 'system', content: agentConfig.systemPrompt },
+      { role: 'system', content: enhancedSystemPrompt },
       ...context,
       { role: 'user', content: message }
     ];
