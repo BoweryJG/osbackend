@@ -8,14 +8,21 @@ dotenv.config();
 
 const router = express.Router();
 
-// Initialize Supabase client - use same fallback pattern as index.js
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 
-                   process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                   process.env.SUPABASE_KEY;
+// Initialize Supabase client lazily
+let supabase = null;
 
-const supabase = supabaseKey && process.env.SUPABASE_URL ? 
-  createClient(process.env.SUPABASE_URL, supabaseKey) : 
-  null;
+function getSupabase() {
+  if (!supabase) {
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 
+                       process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                       process.env.SUPABASE_KEY;
+    
+    if (supabaseKey && process.env.SUPABASE_URL) {
+      supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
+    }
+  }
+  return supabase;
+}
 
 /**
  * Start a new coaching session
