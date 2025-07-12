@@ -8,17 +8,25 @@ dotenv.config();
 
 const router = express.Router();
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Initialize Supabase client - use same fallback pattern as index.js
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 
+                   process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                   process.env.SUPABASE_KEY;
+
+const supabase = supabaseKey && process.env.SUPABASE_URL ? 
+  createClient(process.env.SUPABASE_URL, supabaseKey) : 
+  null;
 
 /**
  * Start a new coaching session
  */
 router.post('/start-session', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
     const { repId, coachId, procedureCategory, sessionType = 'practice_pitch' } = req.body;
 
     if (!repId || !coachId || !procedureCategory) {
@@ -99,6 +107,11 @@ router.post('/start-session', async (req, res) => {
  */
 router.post('/end-session/:sessionId', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
     const { sessionId } = req.params;
     const { notes, feedback } = req.body;
 
@@ -183,6 +196,11 @@ router.post('/end-session/:sessionId', async (req, res) => {
  */
 router.get('/available-coaches/:procedureCategory', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
     const { procedureCategory } = req.params;
 
     const { data, error } = await supabase
@@ -217,6 +235,11 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
  */
 router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
     const { procedureCategory } = req.params;
     const { difficulty } = req.query;
 
@@ -252,6 +275,11 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
  */
 router.get('/session-status/:sessionId', async (req, res) => {
   try {
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
     const { sessionId } = req.params;
 
     const { data, error } = await supabase
