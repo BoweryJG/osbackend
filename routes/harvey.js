@@ -1,9 +1,15 @@
 import express from 'express';
 import { authenticateUser } from '../auth.js';
 import HarveyVoiceService from '../services/harveyVoiceService.js';
+import OpenAI from 'openai';
 
 const router = express.Router();
 const harveyVoice = new HarveyVoiceService();
+
+// Initialize OpenAI for chat functionality
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // In-memory storage for Harvey metrics (in production, use database)
 const userMetrics = new Map();
@@ -553,6 +559,74 @@ router.get('/coaching/sessions', async (req, res) => {
   } catch (error) {
     console.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// Harvey chat endpoint for agent conversations
+router.post('/chat', async (req, res) => {
+  try {
+    const { message, agentId, sessionId, context = [] } = req.body;
+
+    if (!message || !agentId) {
+      return res.status(400).json({ error: 'Missing message or agentId' });
+    }
+
+    // Agent configurations based on agentId
+    const agentConfigs = {
+      harvey: {
+        name: 'Harvey Specter',
+        style: 'Aggressive, confident, results-driven',
+        expertise: 'Closing deals, negotiation, winning at all costs',
+        systemPrompt: `You are Harvey Specter, the best closer in New York. You're aggressive, confident, and always focused on winning. Provide sharp, actionable sales advice. Be direct and challenging. Push for results. No excuses, only victories.`
+      },
+      botox: {
+        name: 'Dr. Botox',
+        style: 'Clinical, precise, detail-oriented',
+        expertise: 'Botox treatments, facial aesthetics, medical procedures',
+        systemPrompt: `You are Dr. Botox, a specialist in facial aesthetics. Provide expert advice on Botox treatments, explaining benefits, procedures, and results. Be professional and informative.`
+      },
+      fillers: {
+        name: 'Dr. Fillers',
+        style: 'Warm, reassuring, educational',
+        expertise: 'Dermal fillers, facial volume, aesthetic enhancement',
+        systemPrompt: `You are Dr. Fillers, an expert in dermal filler treatments. Explain filler options, techniques, and results. Be warm and educational in your approach.`
+      },
+      skincare: {
+        name: 'Dr. Skincare',
+        style: 'Knowledgeable, holistic, caring',
+        expertise: 'Medical-grade skincare, skin health, treatment plans',
+        systemPrompt: `You are Dr. Skincare, a skin health expert. Provide comprehensive skincare advice, product recommendations, and treatment plans. Be thorough and caring.`
+      }
+    };
+
+    const agentConfig = agentConfigs[agentId] || agentConfigs.harvey;
+
+    // Create messages array for OpenAI
+    const messages = [
+      { role: 'system', content: agentConfig.systemPrompt },
+      ...context,
+      { role: 'user', content: message }
+    ];
+
+    // Get response from OpenAI
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages,
+      temperature: 0.8,
+      max_tokens: 500
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    res.json({
+      response: aiResponse,
+      agentId,
+      sessionId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Harvey chat error:', error);
+    res.status(500).json({ error: 'Failed to process chat message' });
   }
 });
 
