@@ -384,4 +384,176 @@ router.get('/greeting', async (req, res) => {
   }
 });
 
+// Coaching session management
+const coachingSessions = new Map();
+
+// Start a new coaching session
+router.post('/coaching/start-session', async (req, res) => {
+  try {
+    const { userId, sessionType, metadata } = req.body;
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const session = {
+      sessionId,
+      userId: userId || 'demo-user',
+      sessionType: sessionType || 'standard',
+      startTime: new Date().toISOString(),
+      status: 'active',
+      metrics: {
+        callsCompleted: 0,
+        successfulCalls: 0,
+        totalDuration: 0,
+        feedback: []
+      },
+      metadata: metadata || {}
+    };
+    
+    coachingSessions.set(sessionId, session);
+    
+    // Generate Harvey's session start message
+    const startMessage = await harveyVoice.generateHarveyResponse('coaching', {
+      coachingType: 'start'
+    });
+    const audio = await harveyVoice.synthesizeVoice(startMessage.text);
+    
+    res.json({
+      sessionId,
+      session,
+      harveyMessage: startMessage.text,
+      audio: audio.audio
+    });
+  } catch (error) {
+    console.error('Error starting coaching session:', error);
+    res.status(500).json({ error: 'Failed to start coaching session' });
+  }
+});
+
+// Get active coaching session
+router.get('/coaching/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = coachingSessions.get(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json(session);
+  } catch (error) {
+    console.error('Error fetching session:', error);
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
+// Update coaching session
+router.put('/coaching/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { updates } = req.body;
+    const session = coachingSessions.get(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Update session metrics
+    if (updates.callCompleted) {
+      session.metrics.callsCompleted++;
+      if (updates.successful) {
+        session.metrics.successfulCalls++;
+      }
+    }
+    
+    if (updates.duration) {
+      session.metrics.totalDuration += updates.duration;
+    }
+    
+    if (updates.feedback) {
+      session.metrics.feedback.push({
+        timestamp: new Date().toISOString(),
+        feedback: updates.feedback
+      });
+    }
+    
+    coachingSessions.set(sessionId, session);
+    
+    // Generate Harvey's feedback
+    const feedback = await harveyVoice.generateHarveyResponse('coaching', {
+      coachingType: updates.successful ? 'positive' : 'negative'
+    });
+    const audio = await harveyVoice.synthesizeVoice(feedback.text);
+    
+    res.json({
+      session,
+      harveyFeedback: feedback.text,
+      audio: audio.audio
+    });
+  } catch (error) {
+    console.error('Error updating session:', error);
+    res.status(500).json({ error: 'Failed to update session' });
+  }
+});
+
+// End coaching session
+router.post('/coaching/end-session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = coachingSessions.get(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    session.status = 'completed';
+    session.endTime = new Date().toISOString();
+    
+    // Calculate final metrics
+    const successRate = session.metrics.callsCompleted > 0 
+      ? Math.round((session.metrics.successfulCalls / session.metrics.callsCompleted) * 100)
+      : 0;
+    
+    // Generate Harvey's final verdict
+    const verdict = await harveyVoice.generateVerdict({
+      closingRate: successRate,
+      totalCalls: session.metrics.callsCompleted,
+      userName: session.userId === 'demo-user' ? 'Rookie' : null
+    });
+    
+    // Clean up session after sending response
+    setTimeout(() => coachingSessions.delete(sessionId), 300000); // Keep for 5 minutes
+    
+    res.json({
+      session,
+      finalMetrics: {
+        successRate,
+        totalCalls: session.metrics.callsCompleted,
+        totalDuration: session.metrics.totalDuration
+      },
+      harveyVerdict: verdict
+    });
+  } catch (error) {
+    console.error('Error ending session:', error);
+    res.status(500).json({ error: 'Failed to end session' });
+  }
+});
+
+// Get all active sessions for a user
+router.get('/coaching/sessions', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const userSessions = [];
+    
+    for (const [sessionId, session] of coachingSessions) {
+      if (!userId || session.userId === userId) {
+        userSessions.push(session);
+      }
+    }
+    
+    res.json({ sessions: userSessions });
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
 export default router;
