@@ -201,21 +201,43 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
     }
     const { procedureCategory } = req.params;
 
-    const { data, error } = await supabase
+    // First get the specializations
+    const { data: specializations, error } = await supabase
       .from('coach_procedure_specializations')
       .select(`
         *,
-        coach:sales_coach_agents(*),
-        availability:coach_availability(*)
+        coach:sales_coach_agents(*)
       `)
       .eq('procedure_category', procedureCategory)
-      .eq('available_for_instant', true)
-      .eq('availability.is_available', true);
+      .eq('available_for_instant', true);
 
     if (error) {
-      logger.error('Error fetching coaches:', error);
-      return res.status(500).json({ error: 'Failed to fetch available coaches' });
+      logger.error('Error fetching specializations:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch available coaches',
+        details: error.message 
+      });
     }
+
+    // Then check availability for each coach
+    const coachesWithAvailability = [];
+    for (const spec of specializations || []) {
+      const { data: availability } = await supabase
+        .from('coach_availability')
+        .select('*')
+        .eq('coach_id', spec.coach_id)
+        .eq('is_available', true)
+        .single();
+      
+      if (availability) {
+        coachesWithAvailability.push({
+          ...spec,
+          availability
+        });
+      }
+    }
+
+    const data = coachesWithAvailability;
 
     res.json({
       success: true,
