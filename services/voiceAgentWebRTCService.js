@@ -1,6 +1,6 @@
 import { getMediasoupService } from './mediasoupService.js';
 import HarveyVoiceService from './harveyVoiceService.js';
-import { CallTranscriptionService } from './callTranscriptionService.js';
+import CallTranscriptionService from './callTranscriptionService.js';
 
 class VoiceAgentWebRTCService {
   constructor(io) {
