@@ -2357,7 +2357,33 @@ const agentWSServer = new AgentWebSocketServer(httpServer);
 const callTranscriptionService = new CallTranscriptionService(agentWSServer.io);
 setCallTranscriptionService(callTranscriptionService);
 
-// Initialize Harvey WebSocket Service
+// Initialize Harvey Socket.IO namespace
+const harveyNamespace = agentWSServer.io.of('/harvey-ws');
+harveyNamespace.on('connection', (socket) => {
+  console.log('Harvey Socket.IO connection established');
+  
+  socket.on('disconnect', () => {
+    console.log('Harvey Socket.IO disconnected');
+  });
+  
+  // Add Harvey-specific events here
+  socket.on('chat', async (data) => {
+    // Forward to Harvey chat endpoint logic
+    try {
+      const { message, agentId } = data;
+      // Use the chat logic from harvey.js route
+      socket.emit('response', {
+        message: 'Harvey response placeholder',
+        agentId,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      socket.emit('error', { message: 'Failed to process chat' });
+    }
+  });
+});
+
+// Keep the old Harvey WebSocket Service for backwards compatibility
 const harveyWSService = new HarveyWebSocketService();
 harveyWSService.initialize(httpServer);
 
