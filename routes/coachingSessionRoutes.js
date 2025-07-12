@@ -270,6 +270,57 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
 });
 
 /**
+ * Test endpoint to check if coaching tables exist
+ */
+router.get('/test-tables', async (req, res) => {
+  try {
+    const supabase = getSupabase(req);
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
+
+    const tables = [
+      'sales_coach_agents',
+      'coach_availability',
+      'coach_procedure_specializations',
+      'instant_coaching_sessions',
+      'practice_scenarios',
+      'coaching_feedback'
+    ];
+
+    const results = {};
+    
+    for (const table of tables) {
+      try {
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .limit(1);
+        
+        if (error) {
+          results[table] = { exists: false, error: error.message };
+        } else {
+          results[table] = { exists: true, hasData: data && data.length > 0 };
+        }
+      } catch (err) {
+        results[table] = { exists: false, error: err.message };
+      }
+    }
+
+    res.json({
+      success: true,
+      tables: results
+    });
+
+  } catch (error) {
+    logger.error('Error testing tables:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * Get session status
  */
 router.get('/session-status/:sessionId', async (req, res) => {
