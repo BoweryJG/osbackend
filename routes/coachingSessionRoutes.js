@@ -1,33 +1,13 @@
 import express from 'express';
-import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import logger from '../utils/logger.js';
-
-// Load environment variables
-dotenv.config();
 
 const router = express.Router();
 
-// Initialize Supabase client lazily
-let supabase = null;
-
-function getSupabase() {
+// Get Supabase instance from app locals (set by index.js)
+function getSupabase(req) {
+  const supabase = req.app.locals.supabase;
   if (!supabase) {
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 
-                       process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                       process.env.SUPABASE_KEY;
-    
-    if (supabaseKey && process.env.SUPABASE_URL) {
-      supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
-      logger.info('Supabase client initialized for coaching routes');
-    } else {
-      logger.warn('Supabase not initialized for coaching routes:', {
-        hasUrl: !!process.env.SUPABASE_URL,
-        hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
-        hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        hasKey: !!process.env.SUPABASE_KEY
-      });
-    }
+    logger.warn('Supabase not available in app.locals');
   }
   return supabase;
 }
@@ -37,6 +17,7 @@ function getSupabase() {
  */
 router.post('/start-session', async (req, res) => {
   try {
+    const supabase = getSupabase(req);
     if (!supabase) {
       return res.status(503).json({ 
         error: 'Database service unavailable. Please try again later.' 
@@ -122,6 +103,7 @@ router.post('/start-session', async (req, res) => {
  */
 router.post('/end-session/:sessionId', async (req, res) => {
   try {
+    const supabase = getSupabase(req);
     if (!supabase) {
       return res.status(503).json({ 
         error: 'Database service unavailable. Please try again later.' 
@@ -211,6 +193,7 @@ router.post('/end-session/:sessionId', async (req, res) => {
  */
 router.get('/available-coaches/:procedureCategory', async (req, res) => {
   try {
+    const supabase = getSupabase(req);
     if (!supabase) {
       return res.status(503).json({ 
         error: 'Database service unavailable. Please try again later.' 
@@ -250,6 +233,7 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
  */
 router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
   try {
+    const supabase = getSupabase(req);
     if (!supabase) {
       return res.status(503).json({ 
         error: 'Database service unavailable. Please try again later.' 
@@ -290,6 +274,7 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
  */
 router.get('/session-status/:sessionId', async (req, res) => {
   try {
+    const supabase = getSupabase(req);
     if (!supabase) {
       return res.status(503).json({ 
         error: 'Database service unavailable. Please try again later.' 
