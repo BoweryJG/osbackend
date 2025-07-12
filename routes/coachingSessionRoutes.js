@@ -272,6 +272,44 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
 /**
  * Test endpoint to check if coaching tables exist
  */
+router.get('/test-yomi-coaches', async (req, res) => {
+  try {
+    const supabase = getSupabase(req);
+    if (!supabase) {
+      return res.status(503).json({ 
+        error: 'Database service unavailable. Please try again later.' 
+      });
+    }
+
+    // First check what procedure categories exist
+    const { data: categories, error: catError } = await supabase
+      .from('coach_procedure_specializations')
+      .select('procedure_category')
+      .limit(10);
+
+    // Then check for yomi_robot specifically
+    const { data: yomiCoaches, error: yomiError } = await supabase
+      .from('coach_procedure_specializations')
+      .select('*')
+      .eq('procedure_category', 'yomi_robot')
+      .limit(10);
+
+    res.json({
+      success: true,
+      availableCategories: categories ? [...new Set(categories.map(c => c.procedure_category))] : [],
+      yomiRobotCoaches: yomiCoaches || [],
+      errors: {
+        categories: catError?.message,
+        yomi: yomiError?.message
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error testing yomi coaches:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/test-tables', async (req, res) => {
   try {
     const supabase = getSupabase(req);
