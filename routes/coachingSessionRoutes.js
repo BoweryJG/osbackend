@@ -19,6 +19,14 @@ function getSupabase() {
     
     if (supabaseKey && process.env.SUPABASE_URL) {
       supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
+      logger.info('Supabase client initialized for coaching routes');
+    } else {
+      logger.warn('Supabase not initialized for coaching routes:', {
+        hasUrl: !!process.env.SUPABASE_URL,
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
+        hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        hasKey: !!process.env.SUPABASE_KEY
+      });
     }
   }
   return supabase;
