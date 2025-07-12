@@ -130,6 +130,105 @@ router.put('/agents/:agentId', requireAuth, async (req, res) => {
   }
 });
 
+// Receive agent deployment from agent-command-center
+router.post('/agents/receive', async (req, res) => {
+  try {
+    const { agent, source } = req.body;
+    
+    // Verify source
+    if (source !== 'agent-command-center') {
+      return res.status(403).json({ error: 'Unauthorized source' });
+    }
+    
+    // Validate agent data
+    if (!agent || !agent.id || !agent.name || !agent.type) {
+      return res.status(400).json({ error: 'Invalid agent data' });
+    }
+    
+    // Check if agent already exists
+    const existingAgent = await agentCore.getAgent(agent.id);
+    
+    if (existingAgent) {
+      // Update existing agent
+      const updatedAgent = await agentCore.updateAgent(agent.id, {
+        ...agent,
+        deployedFrom: 'agent-command-center',
+        deployedAt: new Date().toISOString(),
+        platformSpecific: {
+          ...agent.platformSpecific,
+          repconnect1: {
+            enabled: true,
+            role: 'sales'
+          }
+        }
+      });
+      
+      res.json({ 
+        success: true, 
+        action: 'updated',
+        agent: updatedAgent 
+      });
+    } else {
+      // Create new agent
+      const newAgent = await agentCore.createAgent({
+        ...agent,
+        deployedFrom: 'agent-command-center',
+        deployedAt: new Date().toISOString(),
+        platformSpecific: {
+          ...agent.platformSpecific,
+          repconnect1: {
+            enabled: true,
+            role: 'sales'
+          }
+        }
+      });
+      
+      res.status(201).json({ 
+        success: true, 
+        action: 'created',
+        agent: newAgent 
+      });
+    }
+  } catch (error) {
+    console.error('Error receiving agent:', error);
+    res.status(500).json({ error: 'Failed to receive agent' });
+  }
+});
+
+// Remove deployed agent
+router.delete('/agents/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { source } = req.query;
+    
+    // Only allow deletion from agent-command-center
+    if (source !== 'agent-command-center') {
+      return res.status(403).json({ error: 'Unauthorized source' });
+    }
+    
+    // Check if agent exists and was deployed from agent-command-center
+    const agent = await agentCore.getAgent(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    if (agent.deployedFrom !== 'agent-command-center') {
+      return res.status(403).json({ error: 'Cannot delete agent not deployed from agent-command-center' });
+    }
+    
+    // Delete or deactivate the agent
+    await agentCore.deleteAgent(agentId);
+    
+    res.json({ 
+      success: true, 
+      message: `Agent ${agentId} removed from repconnect1` 
+    });
+  } catch (error) {
+    console.error('Error removing agent:', error);
+    res.status(500).json({ error: 'Failed to remove agent' });
+  }
+});
+
 // List user conversations
 router.get('/conversations', requireAuth, async (req, res) => {
   try {
