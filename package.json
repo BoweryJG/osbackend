@@ -24,6 +24,7 @@
     "@sentry/node": "^9.36.0",
     "@supabase/supabase-js": "^2.39.7",
     "axios": "^1.6.7",
+    "cheerio": "^1.0.0-rc.12",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -35,6 +36,8 @@
     "form-data": "^4.0.0",
     "http-proxy-middleware": "^2.0.6",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.6.0",
+    "mediasoup": "^3.16.6",
     "multer": "^2.0.1",
     "node-cache": "^5.1.2",
     "node-cron": "^4.1.0",
@@ -43,6 +46,7 @@
     "openai": "^5.1.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pdf-parse": "^1.1.1",
     "pinecone-client": "^2.0.0",
     "response-time": "^2.3.3",
     "rss-parser": "^3.13.0",
@@ -52,9 +56,6 @@
     "twilio": "^5.7.2",
     "uuid": "^11.1.0",
     "wav": "^1.0.2",
-    "ws": "^8.18.2",
-    "pdf-parse": "^1.1.1",
-    "mammoth": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12"
+    "ws": "^8.18.2"
   }
 }

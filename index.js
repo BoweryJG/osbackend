@@ -2357,6 +2357,17 @@ const agentWSServer = new AgentWebSocketServer(httpServer);
 const callTranscriptionService = new CallTranscriptionService(agentWSServer.io);
 setCallTranscriptionService(callTranscriptionService);
 
+// Initialize Mediasoup WebRTC service
+import { getMediasoupService } from './services/mediasoupService.js';
+import VoiceAgentWebRTCService from './services/voiceAgentWebRTCService.js';
+
+const mediasoupService = getMediasoupService();
+await mediasoupService.initialize(2); // 2 workers for redundancy
+
+// Initialize Voice Agent WebRTC service
+const voiceAgentWebRTC = new VoiceAgentWebRTCService(agentWSServer.io);
+voiceAgentWebRTC.setTranscriptionService(callTranscriptionService);
+
 // Initialize Harvey Socket.IO namespace
 const harveyNamespace = agentWSServer.io.of('/harvey-ws');
 harveyNamespace.on('connection', (socket) => {
@@ -2424,6 +2435,7 @@ httpServer.listen(PORT, () => {
   console.log(`Canvas Agents WebSocket: Active on /agents-ws`);
   console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
   console.log(`Harvey AI WebSocket: Active on /harvey-ws`);
+  console.log(`Voice Agents WebRTC: Active on /voice-agents`);
   console.log(`Twilio Media Stream WebSocket: Active on /api/media-stream`);
   console.log(`Metrics Aggregator WebSocket: Active on port ${process.env.METRICS_WS_PORT || 8081}`);
   console.log(`Dashboard API: Active on /api/dashboard/*`);
