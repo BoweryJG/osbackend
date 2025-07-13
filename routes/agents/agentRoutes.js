@@ -1,4 +1,5 @@
 import express from 'express';
+import fetch from 'node-fetch';
 import { AgentCore } from '../../agents/core/agentCore.js';
 import { ConversationManager } from '../../agents/core/conversationManager.js';
 import { ProcedureService } from '../../agents/services/procedureService.js';
@@ -475,5 +476,320 @@ router.post('/conversations/with-procedure', checkServicesInitialized, requireAu
     res.status(500).json({ error: 'Failed to create conversation' });
   }
 });
+
+// ========================================
+// EXTERNAL AGENT INTEGRATION (AGENTBACKEND)
+// ========================================
+
+// Fetch agents from external agentbackend for sales purposes
+router.get('/agents/external', requireAuth, async (req, res) => {
+  try {
+    const { role, purpose, category } = req.query;
+    
+    // Check if agentbackend integration is enabled
+    if (!process.env.AGENTBACKEND_URL) {
+      return res.status(503).json({ 
+        error: 'External agents not configured',
+        message: 'Agentbackend integration is not enabled'
+      });
+    }
+    
+    // Build query parameters for sales agents
+    const params = new URLSearchParams();
+    if (category) params.append('category', category);
+    if (role) params.append('role', role);
+    if (purpose) params.append('purpose', purpose);
+    
+    // Default to sales category if none specified
+    if (!category) {
+      params.append('category', 'sales');
+    }
+    
+    const response = await fetch(`${process.env.AGENTBACKEND_URL}/api/agents?${params}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.AGENTBACKEND_API_KEY && {
+          'Authorization': `Bearer ${process.env.AGENTBACKEND_API_KEY}`
+        })
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Agentbackend API failed: ${response.status}`);
+    }
+    
+    const externalData = await response.json();
+    
+    // Filter agents suitable for sales reps
+    const salesAgents = externalData.agents?.filter(agent => {
+      // Include sales, aesthetic, and coaching agents
+      const suitableCategories = ['sales', 'aesthetic', 'coaching'];
+      return suitableCategories.includes(agent.category?.toLowerCase());
+    }) || [];
+    
+    res.json({ 
+      agents: salesAgents.map(agent => ({
+        ...agent,
+        source: 'agentbackend',
+        external: true
+      })),
+      count: salesAgents.length,
+      source: 'agentbackend'
+    });
+  } catch (error) {
+    console.error('Error fetching external agents:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch external agents',
+      details: error.message
+    });
+  }
+});
+
+// Get combined agents (local Canvas + external agentbackend)
+router.get('/agents/combined', requireAuth, async (req, res) => {
+  try {
+    const { role, purpose, category } = req.query;
+    
+    // Fetch local Canvas agents
+    const localAgents = await agentCore.listAgents();
+    
+    // Fetch external agents from agentbackend
+    let externalAgents = [];
+    if (process.env.AGENTBACKEND_URL) {
+      try {
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (role) params.append('role', role);
+        if (purpose) params.append('purpose', purpose);
+        
+        // Default to sales category for external agents
+        if (!category) {
+          params.append('category', 'sales');
+        }
+        
+        const response = await fetch(`${process.env.AGENTBACKEND_URL}/api/agents?${params}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(process.env.AGENTBACKEND_API_KEY && {
+              'Authorization': `Bearer ${process.env.AGENTBACKEND_API_KEY}`
+            })
+          }
+        });
+        
+        if (response.ok) {
+          const externalData = await response.json();
+          externalAgents = externalData.agents?.filter(agent => {
+            const suitableCategories = ['sales', 'aesthetic', 'coaching'];
+            return suitableCategories.includes(agent.category?.toLowerCase());
+          }) || [];
+        }
+      } catch (error) {
+        console.warn('Failed to fetch external agents, continuing with local only:', error.message);
+      }
+    }
+    
+    // Combine agents with source identification
+    const combinedAgents = [
+      ...localAgents.map(agent => ({ ...agent, source: 'canvas', external: false })),
+      ...externalAgents.map(agent => ({ ...agent, source: 'agentbackend', external: true }))
+    ];
+    
+    res.json({ 
+      agents: combinedAgents,
+      count: combinedAgents.length,
+      sources: {
+        canvas: localAgents.length,
+        agentbackend: externalAgents.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching combined agents:', error);
+    res.status(500).json({ error: 'Failed to fetch combined agents' });
+  }
+});
+
+// Get agent recommendations for sales scenarios
+router.post('/agents/sales/recommend', requireAuth, async (req, res) => {
+  try {
+    const { 
+      customer_type,      // e.g., "dental_practice", "hospital_system"
+      sales_stage,        // e.g., "prospecting", "demo", "closing"
+      product_category,   // e.g., "dental_implants", "aesthetic_devices"
+      urgency = 'medium'  // e.g., "high", "medium", "low"
+    } = req.body;
+    
+    // Fetch combined agents
+    const { agents } = await new Promise((resolve, reject) => {
+      const mockReq = { user: req.user, query: { category: 'sales' } };
+      const mockRes = {
+        json: (data) => resolve(data),
+        status: (code) => ({ json: (error) => reject(new Error(error.error)) })
+      };
+      
+      // Use the combined agents endpoint internally
+      router.stack.find(layer => 
+        layer.route?.path === '/agents/combined'
+      ).route.stack[0].handle(mockReq, mockRes, () => {});
+    });
+    
+    // Smart agent recommendation algorithm
+    const recommendations = agents
+      .map(agent => ({
+        agent,
+        score: calculateAgentScore(agent, {
+          customer_type,
+          sales_stage,
+          product_category,
+          urgency
+        })
+      }))
+      .filter(rec => rec.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5) // Top 5 recommendations
+      .map(rec => ({
+        ...rec.agent,
+        recommendation_score: rec.score,
+        recommendation_reason: getRecommendationReason(rec.agent, {
+          customer_type,
+          sales_stage,
+          product_category,
+          urgency
+        })
+      }));
+    
+    res.json({ 
+      recommendations,
+      count: recommendations.length,
+      context: {
+        customer_type,
+        sales_stage,
+        product_category,
+        urgency
+      }
+    });
+  } catch (error) {
+    console.error('Error getting agent recommendations:', error);
+    res.status(500).json({ error: 'Failed to get agent recommendations' });
+  }
+});
+
+// Create conversation with external agent
+router.post('/conversations/external', requireAuth, async (req, res) => {
+  try {
+    const { externalAgentId, title, agentSource = 'agentbackend', context } = req.body;
+    
+    if (!externalAgentId) {
+      return res.status(400).json({ error: 'External agent ID is required' });
+    }
+    
+    // Create conversation with external agent reference
+    const conversation = await conversationManager.createConversation(
+      req.user.id,
+      null, // No local agent ID
+      title || `Chat with ${externalAgentId}`,
+      {
+        type: 'external',
+        externalAgentId,
+        agentSource,
+        agentbackend_url: process.env.AGENTBACKEND_URL,
+        context: context || {},
+        created_via: 'osbackend'
+      }
+    );
+    
+    res.json({ conversation });
+  } catch (error) {
+    console.error('Error creating external conversation:', error);
+    res.status(500).json({ error: 'Failed to create conversation with external agent' });
+  }
+});
+
+// Helper function to calculate agent score for recommendations
+function calculateAgentScore(agent, context) {
+  let score = 0;
+  
+  // Base score for external vs internal agents
+  score += agent.external ? 5 : 3;
+  
+  // Score based on customer type
+  if (context.customer_type && agent.targetAudience) {
+    const audienceMatch = agent.targetAudience.some(audience => 
+      audience.toLowerCase().includes(context.customer_type.toLowerCase()) ||
+      context.customer_type.toLowerCase().includes(audience.toLowerCase())
+    );
+    if (audienceMatch) score += 10;
+  }
+  
+  // Score based on sales stage
+  if (context.sales_stage && agent.specialties) {
+    const stageKeywords = {
+      prospecting: ['lead', 'prospect', 'initial', 'discovery'],
+      demo: ['demo', 'presentation', 'showcase', 'explanation'],
+      closing: ['close', 'deal', 'negotiation', 'final'],
+      followup: ['follow', 'relationship', 'maintenance', 'support']
+    };
+    
+    const keywords = stageKeywords[context.sales_stage] || [];
+    const specialtyMatch = keywords.some(keyword => 
+      agent.specialties.some(specialty => 
+        specialty.toLowerCase().includes(keyword)
+      )
+    );
+    if (specialtyMatch) score += 8;
+  }
+  
+  // Score based on product category
+  if (context.product_category && agent.category) {
+    const categoryMatch = agent.category.toLowerCase().includes(context.product_category.toLowerCase()) ||
+                         context.product_category.toLowerCase().includes(agent.category.toLowerCase());
+    if (categoryMatch) score += 7;
+  }
+  
+  // Urgency modifier
+  const urgencyMultiplier = {
+    high: 1.2,
+    medium: 1.0,
+    low: 0.8
+  };
+  score *= urgencyMultiplier[context.urgency] || 1.0;
+  
+  return Math.round(score);
+}
+
+// Helper function to generate recommendation reason
+function getRecommendationReason(agent, context) {
+  const reasons = [];
+  
+  if (agent.external) {
+    reasons.push('Specialized external agent');
+  }
+  
+  if (context.customer_type && agent.targetAudience) {
+    const audienceMatch = agent.targetAudience.some(audience => 
+      audience.toLowerCase().includes(context.customer_type.toLowerCase())
+    );
+    if (audienceMatch) {
+      reasons.push(`Expert in ${context.customer_type} market`);
+    }
+  }
+  
+  if (context.sales_stage && agent.specialties) {
+    const stageMatch = agent.specialties.some(specialty => 
+      specialty.toLowerCase().includes(context.sales_stage)
+    );
+    if (stageMatch) {
+      reasons.push(`Specialized in ${context.sales_stage} stage`);
+    }
+  }
+  
+  if (context.product_category && agent.category) {
+    const categoryMatch = agent.category.toLowerCase().includes(context.product_category.toLowerCase());
+    if (categoryMatch) {
+      reasons.push(`${agent.category} category expert`);
+    }
+  }
+  
+  return reasons.join(', ') || 'Good general match for your requirements';
+}
 
 export default router;
