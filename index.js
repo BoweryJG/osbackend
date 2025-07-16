@@ -2300,6 +2300,7 @@ app.use('/api/usage', usageRoutes);
 
 // Add email routes
 app.use('/api/emails', emailRoutes);
+app.use('/api/email', emailRoutes);  // Also mount at /api/email for frontend compatibility
 
 // Add phone system routes
 app.use('/api/phone', phoneRoutes);
