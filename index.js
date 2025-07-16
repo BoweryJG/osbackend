@@ -265,6 +265,7 @@ app.use(cors({
       'https://marketdata.repspheres.com', // Added MarketData frontend URL
       'https://auth.repspheres.com', // Auth subdomain if needed
       'https://agent-command-center.netlify.app', // Agent Command Center
+      'https://feature-lightning-strike-homepage--repspheres22.netlify.app', // Lightning Strike Homepage feature branch
       'http://localhost:5173', // Common Vite dev port
       'http://localhost:5174', // Alternative Vite port
       'http://localhost:5175', // Alternative Vite port
