@@ -207,4 +207,35 @@ router.post('/test', requireAuth, async (req, res) => {
   }
 });
 
+// Gmail sync endpoint
+router.post('/sync', async (req, res) => {
+  try {
+    const { userId, accountEmail } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'userId is required' 
+      });
+    }
+
+    // Import Gmail sync service
+    const { syncGmailEmails } = await import('../services/gmailSyncService.js');
+    
+    const result = await syncGmailEmails(userId, accountEmail);
+    
+    res.json({
+      success: true,
+      syncedCount: result.syncedCount || 0,
+      message: `Successfully synced ${result.syncedCount || 0} emails`
+    });
+  } catch (error) {
+    console.error('Gmail sync error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      syncedCount: 0
+    });
+  }
+});
+
 export default router;
