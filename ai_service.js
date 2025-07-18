@@ -23,9 +23,9 @@ const openai = process.env.OPENAI_API_KEY ?
   new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : 
   null;
 
-// OpenRouter configuration for Gemini and other models
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+// OpenRouter functionality disabled
+const OPENROUTER_API_KEY = null;
+const OPENROUTER_BASE_URL = null;
 
 /**
  * Transcribe audio using either OpenAI Whisper or Gemini via OpenRouter

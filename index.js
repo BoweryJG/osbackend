@@ -382,36 +382,36 @@ connectToSupabase().then(connected => {
   }
 });
 
-// Call LLM endpoint using OpenRouter
+// OpenAI LLM functionality 
 async function callLLM(prompt, llm_model) {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error('OpenRouter API key not configured');
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not configured');
   }
   
-  // Use OpenRouter API for all LLM calls
-  const modelToUse = llm_model || process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
+  const OpenAI = require('openai');
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
+  // Use gpt-4 as default model
+  const modelToUse = llm_model || 'gpt-4';
   
   try {
-    const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: modelToUse,
-        messages: [{ role: 'user', content: prompt }],
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    return response.data;
+    const response = await openai.chat.completions.create({
+      model: modelToUse,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+    
+    return {
+      choices: [{
+        message: {
+          content: response.choices[0].message.content
+        }
+      }],
+      model: modelToUse
+    };
   } catch (error) {
-    console.error('Error calling OpenRouter API:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
+    console.error('Error calling OpenAI API:', error.message);
     throw error;
   }
 }
@@ -676,46 +676,48 @@ async function canAccessModel(email, modelId) {
 }
 
 
-// API endpoint to fetch models from OpenRouter
+// Models endpoint - Return available OpenAI models
 app.get('/api/models', async (req, res) => {
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.error('OpenRouter API key not configured');
-    return res.status(500).json({ message: 'OpenRouter API key not configured' });
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('OpenAI API key not configured');
+    return res.status(500).json({ message: 'OpenAI API key not configured' });
   }
 
   try {
-    const response = await axios.get('https://openrouter.ai/api/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        // Optional: Add HTTP-Referer and X-Title if OpenRouter requires/recommends for backend calls
-        // 'HTTP-Referer': process.env.SITE_URL || 'https://repspheres.com',
-        // 'X-Title': process.env.APP_NAME || 'RepSpheres Backend'
+    // Return hardcoded list of OpenAI models
+    const models = [
+      {
+        id: 'gpt-4',
+        name: 'GPT-4',
+        description: 'Most capable GPT-4 model, great for complex tasks',
+        pricing: 'paid',
+        context_length: 8192,
+        architecture: 'text-to-text'
+      },
+      {
+        id: 'gpt-4-turbo',
+        name: 'GPT-4 Turbo',
+        description: 'Faster and cheaper GPT-4 model',
+        pricing: 'paid',
+        context_length: 128000,
+        architecture: 'text-to-text'
+      },
+      {
+        id: 'gpt-3.5-turbo',
+        name: 'GPT-3.5 Turbo',
+        description: 'Fast and efficient model for most tasks',
+        pricing: 'paid',
+        context_length: 4096,
+        architecture: 'text-to-text'
       }
-    });
-
-    if (response.data && response.data.data) {
-      const formattedModels = response.data.data.map(model => ({
-        id: model.id,
-        name: model.name || model.id, // Fallback to id if name is not present
-        description: model.description || 'No description available.',
-        // Determine pricing status based on actual costs from OpenRouter
-        // The frontend ModelPicker.jsx expects a 'pricing' field with 'paid' or 'free'
-        pricing: (parseFloat(model.pricing?.prompt) > 0 || parseFloat(model.pricing?.completion) > 0) ? 'paid' : 'free',
-        context_length: model.context_length,
-        architecture: model.architecture?.modality, // e.g., 'text-to-text'
-        // You can include more details if needed by the frontend in the future
-        // e.g., model.provider, model.pricing (for detailed costs)
-      }));
-      res.json(formattedModels);
-    } else {
-      console.error('Unexpected response structure from OpenRouter:', response.data);
-      res.status(500).json({ message: 'Failed to fetch models due to unexpected response structure' });
-    }
+    ];
+    
+    res.json(models);
   } catch (error) {
-    console.error('Error fetching models from OpenRouter:', error.response ? error.response.data : error.message);
-    res.status(error.response?.status || 500).json({ 
-      message: 'Failed to fetch models from OpenRouter',
-      details: error.response?.data?.error?.message || error.message
+    console.error('Error fetching models:', error.message);
+    res.status(500).json({ 
+      message: 'Failed to fetch models',
+      details: error.message
     });
   }
 });
@@ -1509,7 +1511,7 @@ app.post('/api/usage/increment', authenticateUser, async (req, res) => {
   }
 });
 
-// Task endpoint
+// Task endpoint - Now using OpenAI directly
 app.post('/task', async (req, res) => {
   try {
     // Log the incoming request for debugging
@@ -1524,35 +1526,25 @@ app.post('/task', async (req, res) => {
     // Extract data from request body
     const { prompt, llm_model, email } = req.body;
     
-    // Check if OpenRouter API key is configured
-    if (!process.env.OPENROUTER_API_KEY) {
-      console.warn('OpenRouter API key not configured. Returning dummy response.');
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('OpenAI API key not configured.');
       return res.json({
         success: true,
         llmResult: {
           choices: [{
             message: {
-              content: "OpenRouter API key not configured. Please set the OPENROUTER_API_KEY environment variable."
+              content: "OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable."
             }
           }],
-          model: llm_model || "dummy-model",
+          model: llm_model || "gpt-4",
           prompt: prompt || "No prompt provided"
         }
       });
     }
     
     try {
-      // Verify the user can access the requested model
-      const hasAccess = await canAccessModel(email, llm_model);
-      if (!hasAccess) {
-        return res.status(403).json({
-          success: false,
-          error: 'Forbidden',
-          message: 'Access to requested model is not allowed'
-        });
-      }
-
-      // Call the LLM API
+      // Call the OpenAI LLM API
       const llmResult = await callLLM(prompt, llm_model);
       
       // Try to log activity, but don't fail the request if logging fails
@@ -1568,14 +1560,14 @@ app.post('/task', async (req, res) => {
       console.error('Error calling LLM:', err);
       
       // Handle specific error codes
-      if (err.response && err.response.status === 402) {
-        // Payment Required error from OpenRouter
+      if (err.response && err.response.status === 429) {
+        // Rate limit error from OpenAI
         return res.json({ 
           success: true, 
           llmResult: {
             choices: [{ 
               message: { 
-                content: "I'm sorry, but there seems to be an issue with the API key or credits. The OpenRouter service returned a 'Payment Required' error. This is likely because the API key has expired or has insufficient credits. Please try again later or contact the administrator to update the API key." 
+                content: "I'm sorry, but we're experiencing high demand right now. Please try again in a moment." 
               } 
             }]
           }
@@ -2431,7 +2423,7 @@ httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY)}`);
-  console.log(`OpenRouter configured: ${!!process.env.OPENROUTER_API_KEY}`);
+  console.log(`OpenAI configured: ${!!process.env.OPENAI_API_KEY}`);
   console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
   console.log(`Canvas Agents WebSocket: Active on /agents-ws`);

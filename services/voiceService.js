@@ -3,6 +3,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { Buffer } from 'buffer';
 import { ElevenLabsTTS } from './elevenLabsTTS.js';
+import OpenAI from 'openai';
 
 // Audio conversion utilities
 const mulawToLinear16 = (mulaw) => {
@@ -208,8 +209,11 @@ class VoiceService {
   constructor() {
     this.connections = new Map();
     this.huggingfaceToken = process.env.HUGGINGFACE_TOKEN;
-    this.openRouterKey = process.env.OPENROUTER_API_KEY;
+    this.openaiKey = process.env.OPENAI_API_KEY;
     this.ttsService = null;
+    
+    // Initialize OpenAI client
+    this.openai = this.openaiKey ? new OpenAI({ apiKey: this.openaiKey }) : null;
     
     // Initialize ElevenLabs TTS
     try {
@@ -263,9 +267,13 @@ class VoiceService {
     }
   }
 
-  // Generate LLM response
+  // Generate LLM response using OpenAI
   async generateResponse(conversationManager, transcript) {
     try {
+      if (!this.openai) {
+        throw new Error('OpenAI API key not configured');
+      }
+      
       conversationManager.addMessage('user', transcript);
       conversationManager.determineStage(transcript);
 
@@ -274,26 +282,15 @@ class VoiceService {
         ...conversationManager.state.context
       ];
 
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: 'openai/gpt-3.5-turbo',
-          messages,
-          temperature: 0.7,
-          max_tokens: 150, // Keep responses short for phone
-          stream: false
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.openRouterKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://gregpedromd.com',
-            'X-Title': 'Dr Pedro Voice Assistant'
-          }
-        }
-      );
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages,
+        temperature: 0.7,
+        max_tokens: 150, // Keep responses short for phone
+        stream: false
+      });
 
-      const aiResponse = response.data.choices[0].message.content;
+      const aiResponse = response.choices[0].message.content;
       conversationManager.addMessage('assistant', aiResponse);
       
       return aiResponse;

@@ -14,23 +14,14 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-// Initialize OpenAI client
-const openAiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+// Initialize OpenAI client - OpenRouter disabled
+const openAiApiKey = process.env.OPENAI_API_KEY;
 let openai = null;
 
 if (!openAiApiKey) {
-  console.warn('No OpenAI or OpenRouter API key configured. Transcription features will be disabled.');
+  console.warn('No OpenAI API key configured. Transcription features will be disabled.');
 } else {
   const openAiOptions = { apiKey: openAiApiKey };
-
-  // If using OpenRouter for Whisper, set the base URL and required headers
-  if (!process.env.OPENAI_API_KEY && process.env.OPENROUTER_API_KEY) {
-    openAiOptions.baseURL = 'https://openrouter.ai/api/v1';
-    openAiOptions.defaultHeaders = {
-      'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
-      'X-Title': 'Transcription Service'
-    };
-  }
 
   openai = new OpenAI(openAiOptions);
 }
@@ -143,7 +134,7 @@ async function uploadFileToStorage(userId, file) {
 async function transcribeAudio(fileUrl) {
   try {
     if (!openai) {
-      throw new Error('OpenAI/OpenRouter API key not configured');
+      throw new Error('OpenAI API key not configured');
     }
     console.log(`Transcribing audio file: ${fileUrl}`);
     
@@ -246,16 +237,19 @@ async function transcribeAudio(fileUrl) {
 }
 
 /**
- * Analyze transcription using OpenRouter
+ * Analyze transcription - OpenRouter disabled
  * @param {string} transcription - The transcription text
  * @returns {Promise<string>} - The analysis result
  */
 async function analyzeTranscription(transcription) {
   try {
-    console.log('Analyzing transcription with OpenRouter');
+    if (!openai) {
+      throw new Error('OpenAI API key not configured');
+    }
     
-    const prompt = `
-    Analyze the following conversation transcript:
+    console.log('Analyzing transcription with OpenAI GPT-4...');
+    
+    const prompt = `Analyze the following conversation transcript:
     
     ${transcription}
     
@@ -266,37 +260,19 @@ async function analyzeTranscription(transcription) {
     4. Next steps
     5. Overall sentiment
     
-    Format your response in markdown with clear headings for each section.
-    `;
+    Format your response in markdown with clear headings for each section.`;
     
-    // Use OpenRouter API for analysis
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
-        'X-Title': 'Transcription Analysis'
-      },
-      body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo',
-        messages: [
-          { role: "system", content: "You are an expert sales conversation analyzer." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.5,
-        max_tokens: 1000
-      })
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'You are an expert sales conversation analyzer.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.5,
+      max_tokens: 1000
     });
     
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('OpenRouter API error:', data);
-      throw new Error(`OpenRouter API error: ${data.error?.message || 'Unknown error'}`);
-    }
-    
-    return data.choices[0].message.content;
+    return response.choices[0].message.content;
   } catch (err) {
     console.error('Error analyzing transcription:', err);
     throw err;
