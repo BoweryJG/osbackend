@@ -208,7 +208,6 @@ For appointment booking:
 class VoiceService {
   constructor() {
     this.connections = new Map();
-    this.huggingfaceToken = process.env.HUGGINGFACE_TOKEN;
     this.openaiKey = process.env.OPENAI_API_KEY;
     this.ttsService = null;
     
@@ -231,36 +230,36 @@ class VoiceService {
       console.warn('Falling back to Coqui TTS');
     }
     
-    if (!this.huggingfaceToken || !this.openRouterKey) {
-      console.warn('Voice service: Missing API keys. Please set HUGGINGFACE_TOKEN and OPENROUTER_API_KEY environment variables.');
+    if (!this.openaiKey) {
+      console.warn('Voice service: Missing OpenAI API key. Please set OPENAI_API_KEY environment variable.');
     }
   }
 
-  // Speech to Text using Whisper via Huggingface
+  // Speech to Text using OpenAI Whisper
   async speechToText(audioBuffer) {
     try {
+      if (!this.openai) {
+        throw new Error('OpenAI API key not configured');
+      }
+
       // Convert audio buffer to WAV format
       const wavBuffer = this.createWavBuffer(audioBuffer, 16000, 1, 16);
       
-      const formData = new FormData();
-      formData.append('audio_file', wavBuffer, {
-        filename: 'audio.wav',
-        contentType: 'audio/wav'
+      // Create a temporary file stream for OpenAI API
+      const fs = await import('fs');
+      const path = await import('path');
+      const tempFilePath = path.join('/tmp', `audio_${Date.now()}.wav`);
+      fs.writeFileSync(tempFilePath, wavBuffer);
+
+      const transcription = await this.openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: 'whisper-1'
       });
 
-      const response = await axios.post(
-        'https://api-inference.huggingface.co/models/openai/whisper-small',
-        formData,
-        {
-          headers: {
-            ...formData.getHeaders(),
-            'Authorization': `Bearer ${this.huggingfaceToken}`
-          },
-          maxBodyLength: Infinity
-        }
-      );
+      // Clean up temporary file
+      fs.unlinkSync(tempFilePath);
 
-      return response.data.text || '';
+      return transcription.text || '';
     } catch (error) {
       console.error('STT Error:', error);
       return '';
@@ -333,33 +332,27 @@ class VoiceService {
         }
       }
       
-      // Fallback to Coqui TTS
-      const response = await axios.post(
-        'https://api-inference.huggingface.co/models/coqui/XTTS-v2',
-        {
-          inputs: text,
-          parameters: {
-            language: 'en',
-            speaker_embedding: null // Use default voice
-          }
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.huggingfaceToken}`,
-            'Content-Type': 'application/json'
-          },
-          responseType: 'arraybuffer'
-        }
-      );
+      // Fallback to OpenAI TTS
+      if (this.openai) {
+        const response = await this.openai.audio.speech.create({
+          model: 'tts-1',
+          voice: 'nova',
+          input: text,
+          response_format: 'pcm'
+        });
 
-      // Convert response to PCM16
-      const audioData = new Int16Array(response.data);
+        const audioBuffer = Buffer.from(await response.arrayBuffer());
+        const audioData = new Int16Array(audioBuffer.buffer);
+        
+        // Resample from TTS sample rate to 8kHz for Twilio
+        const resampled = this.resample(audioData, 24000, 8000);
+        
+        // Convert to mulaw
+        return linear16ToMulaw(resampled);
+      }
       
-      // Resample from TTS sample rate to 8kHz for Twilio
-      const resampled = this.resample(audioData, 22050, 8000);
-      
-      // Convert to mulaw
-      return linear16ToMulaw(resampled);
+      // Final fallback - return silence
+      return new Uint8Array(160);
     } catch (error) {
       console.error('TTS Error:', error);
       // Return silence on error
