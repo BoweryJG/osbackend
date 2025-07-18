@@ -146,10 +146,10 @@ async function testSupabaseConnection() {
 async function testOpenAIConnection() {
   console.log('\n=== Testing OpenAI Connection (for Transcription) ===');
   
-  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  const openAiApiKey = process.env.OPENAI_API_KEY;
 
   if (!openAiApiKey) {
-    console.error('❌ No OpenAI or OpenRouter API key found. Cannot test transcription connection.');
+    console.error('❌ No OpenAI API key found. Cannot test transcription connection.');
     return false;
   }
   
