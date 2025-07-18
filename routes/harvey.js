@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 import { ProcedureService } from '../agents/services/procedureService.js';
 
 const router = express.Router();
-const harveyVoice = new HarveyVoiceService();
+const harveyVoice = HarveyVoiceService.getInstance();
 const procedureService = new ProcedureService();
 
 // Initialize OpenAI for chat functionality

@@ -15,6 +15,10 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 class HarveyVoiceService {
   constructor() {
+    if (HarveyVoiceService.instance) {
+      return HarveyVoiceService.instance;
+    }
+
     this.openai = null;
     this.elevenLabsTTS = null;
     this.voiceSettings = {
@@ -26,6 +30,16 @@ class HarveyVoiceService {
     this.initializeOpenAI();
     this.initializeElevenLabs();
     this.harveyPhrases = this.loadHarveyPhrases();
+
+    // Set the singleton instance
+    HarveyVoiceService.instance = this;
+  }
+
+  static getInstance() {
+    if (!HarveyVoiceService.instance) {
+      HarveyVoiceService.instance = new HarveyVoiceService();
+    }
+    return HarveyVoiceService.instance;
   }
 
   initializeOpenAI() {

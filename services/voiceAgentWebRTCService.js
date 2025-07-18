@@ -6,7 +6,7 @@ class VoiceAgentWebRTCService {
   constructor(io) {
     this.io = io;
     this.mediasoup = getMediasoupService();
-    this.harveyVoice = new HarveyVoiceService();
+    this.harveyVoice = HarveyVoiceService.getInstance();
     this.sessions = new Map(); // sessionId -> session data
     this.transcriptionService = null; // Will be set later
     

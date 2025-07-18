@@ -6,7 +6,7 @@ class HarveyWebSocketService {
     this.connections = new Map(); // Map of userId to WebSocket connection
     this.battleRooms = new Map(); // Map of roomId to battle participants
     this.activeCalls = new Map(); // Map of callId to call session
-    this.harveyVoice = new HarveyVoiceService();
+    this.harveyVoice = HarveyVoiceService.getInstance();
   }
 
   initialize(server) {
