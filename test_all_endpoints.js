@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const BASE_URL = 'http://localhost:3001';
-const API_KEY = process.env.OPENROUTER_API_KEY;
+const API_KEY = process.env.OPENAI_API_KEY;
 
 // Colors for console output
 const colors = {

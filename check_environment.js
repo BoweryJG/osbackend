@@ -30,18 +30,11 @@ function checkEnvironmentVariables() {
   ];
   
   const openAIVars = [
-    'OPENAI_API_KEY',
-    'OPENROUTER_API_KEY'
-  ];
-  
-  const openRouterVars = [
-    'OPENROUTER_API_KEY',
-    'OPENROUTER_MODEL'
+    'OPENAI_API_KEY'
   ];
   
   let allVarsPresent = true;
   let openAIPresent = false;
-  let openRouterPresent = true;
   
   console.log('Checking required variables:');
   for (const varName of requiredVars) {
