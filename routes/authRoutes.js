@@ -6,6 +6,7 @@ import {
   requireAuth 
 } from '../middleware/authMiddleware.js';
 import logger from '../utils/logger.js';
+import { successResponse, errorResponse, commonErrors } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.post('/login', async (req, res) => {
     const { access_token } = req.body;
 
     if (!access_token) {
-      return res.status(400).json({ error: 'Access token required' });
+      return res.status(400).json(errorResponse('MISSING_TOKEN', 'Access token required', null, 400));
     }
 
     // Verify the Supabase token
@@ -38,7 +39,7 @@ router.post('/login', async (req, res) => {
 
     if (error || !user) {
       logger.error('Invalid Supabase token:', error);
-      return res.status(401).json({ error: 'Invalid token' });
+      return res.status(401).json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
     }
 
     // Generate CSRF token
@@ -58,18 +59,17 @@ router.post('/login', async (req, res) => {
 
     logger.info('User logged in:', user.id);
 
-    res.json({ 
-      success: true, 
+    res.json(successResponse({
       user: { 
         id: user.id, 
         email: user.email,
         user_metadata: user.user_metadata 
       },
       csrfToken 
-    });
+    }, 'Login successful'));
   } catch (error) {
     logger.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
   }
 });
 
@@ -81,7 +81,7 @@ router.post('/logout', requireAuth, (req, res) => {
   
   logger.info('User logged out:', req.user?.id);
   
-  res.json({ success: true });
+  res.json(successResponse(null, 'Logout successful'));
 });
 
 // Refresh session
@@ -90,14 +90,14 @@ router.post('/refresh', async (req, res) => {
     const sessionToken = req.cookies?.session_token;
 
     if (!sessionToken) {
-      return res.status(401).json({ error: 'No session token' });
+      return res.status(401).json(errorResponse('NO_SESSION', 'No session token found', null, 401));
     }
 
     // Verify current token
     const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json({ error: 'Invalid session' });
+      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
 
     // Refresh cookies
@@ -107,10 +107,10 @@ router.post('/refresh', async (req, res) => {
       httpOnly: false
     });
 
-    res.json({ success: true });
+    res.json(successResponse(null, 'Session refreshed successfully'));
   } catch (error) {
     logger.error('Session refresh error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
   }
 });
 
@@ -120,25 +120,25 @@ router.get('/me', async (req, res) => {
     const sessionToken = req.cookies?.session_token;
 
     if (!sessionToken) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json({ error: 'Invalid session' });
+      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
     
-    res.json({ 
+    res.json(successResponse({
       user: { 
         id: user.id, 
         email: user.email,
         user_metadata: user.user_metadata
       } 
-    });
+    }));
   } catch (error) {
     logger.error('Get user error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
   }
 });
 
@@ -148,13 +148,13 @@ router.get('/csrf', async (req, res) => {
     const sessionToken = req.cookies?.session_token;
 
     if (!sessionToken) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json({ error: 'Invalid session' });
+      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
     
     const csrfToken = generateCSRFToken();
@@ -165,10 +165,10 @@ router.get('/csrf', async (req, res) => {
       httpOnly: false
     });
 
-    res.json({ csrfToken });
+    res.json(successResponse({ csrfToken }, 'CSRF token generated'));
   } catch (error) {
     logger.error('CSRF token error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
   }
 });
 
