@@ -50,7 +50,7 @@ function checkEnvironmentVariables() {
     }
   }
   
-  console.log('\nChecking transcription API keys (OpenAI or OpenRouter):');
+  console.log('\nChecking transcription API keys (OpenAI):');
   for (const varName of openAIVars) {
     if (process.env[varName]) {
       const value = `${process.env[varName].substring(0, 4)}...${process.env[varName].substring(process.env[varName].length - 4)}`;
@@ -61,29 +61,12 @@ function checkEnvironmentVariables() {
     }
   }
   
-  console.log('\nChecking OpenRouter variables (for analysis):');
-  for (const varName of openRouterVars) {
-    if (!process.env[varName]) {
-      console.error(`❌ Missing OpenRouter variable: ${varName}`);
-      openRouterPresent = false;
-    } else {
-      // Mask the API keys for security
-      const value = varName.includes('KEY') || varName.includes('SECRET') 
-        ? `${process.env[varName].substring(0, 4)}...${process.env[varName].substring(process.env[varName].length - 4)}`
-        : process.env[varName];
-      console.log(`✅ ${varName} is set: ${value}`);
-    }
-  }
   
   if (!openAIPresent) {
     console.warn('\n⚠️ No API key configured for Whisper transcription');
   }
   
-  if (!openRouterPresent) {
-    console.warn('\n⚠️ OpenRouter variables missing - analysis functionality will not work');
-  }
-  
-  return allVarsPresent && (openAIPresent || openRouterPresent);
+  return allVarsPresent && openAIPresent;
 }
 
 // Function to test Supabase connection
@@ -157,14 +140,13 @@ async function testOpenAIConnection() {
     console.log('Initializing OpenAI client...');
     
     // Initialize OpenAI client
-    const openAiOptions = { apiKey: openAiApiKey };
-    if (!process.env.OPENAI_API_KEY && process.env.OPENROUTER_API_KEY) {
-      openAiOptions.baseURL = 'https://openrouter.ai/api/v1';
-      openAiOptions.defaultHeaders = {
+    const openAiOptions = { 
+      apiKey: openAiApiKey,
+      defaultHeaders: {
         'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
         'X-Title': 'Transcription Service'
-      };
-    }
+      }
+    };
 
     const openai = new OpenAI(openAiOptions);
     
@@ -200,67 +182,6 @@ async function testOpenAIConnection() {
   }
 }
 
-// Function to test OpenRouter connection
-async function testOpenRouterConnection() {
-  console.log('\n=== Testing OpenRouter Connection (for Analysis) ===');
-  
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.error('❌ OpenRouter API key not found. Cannot test connection.');
-    return false;
-  }
-  
-  try {
-    console.log('Testing OpenRouter API connection...');
-    
-    // Make a simple request to the OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': process.env.FRONTEND_URL || 'https://repspheres.com',
-        'X-Title': 'Transcription Service'
-      }
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Error from OpenRouter API:', errorData);
-      return false;
-    }
-    
-    const data = await response.json();
-    
-    if (data && Array.isArray(data)) {
-      console.log(`✅ Successfully connected to OpenRouter API!`);
-      console.log(`Found ${data.length} models available.`);
-      
-      // Check if the specified model is available
-      const modelName = process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
-      const modelAvailable = data.some(model => model.id === modelName);
-      
-      if (modelAvailable) {
-        console.log(`✅ Specified model '${modelName}' is available`);
-      } else {
-        console.log(`⚠️ Specified model '${modelName}' not found in available models.`);
-        console.log('Available models:');
-        data.slice(0, 5).forEach(model => {
-          console.log(`- ${model.id}`);
-        });
-        if (data.length > 5) {
-          console.log(`... and ${data.length - 5} more`);
-        }
-      }
-      
-      return true;
-    } else {
-      console.error('❌ Unexpected response from OpenRouter API');
-      return false;
-    }
-  } catch (err) {
-    console.error('❌ Error testing OpenRouter connection:', err);
-    return false;
-  }
-}
 
 // Main function to run all checks
 async function runDiagnostics() {
@@ -275,9 +196,8 @@ async function runDiagnostics() {
   
   // Test connections
   const supabaseOk = await testSupabaseConnection();
-  const openAiConfigured = !!(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY);
+  const openAiConfigured = !!(process.env.OPENAI_API_KEY);
   const openaiOk = openAiConfigured ? await testOpenAIConnection() : false;
-  const openrouterOk = process.env.OPENROUTER_API_KEY ? await testOpenRouterConnection() : false;
   
   // Summary
   console.log('\n=== Diagnostics Summary ===');
@@ -285,10 +205,8 @@ async function runDiagnostics() {
   console.log(`Supabase Connection: ${supabaseOk ? '✅ OK' : '❌ Issues Found'}`);
   const whisperConfigured = openAiConfigured;
   console.log(`Whisper Connection: ${openaiOk ? '✅ OK' : whisperConfigured ? '❌ Issues Found' : '⚠️ Not Configured'}`);
-  console.log(`OpenRouter Connection (Analysis): ${openrouterOk ? '✅ OK' : process.env.OPENROUTER_API_KEY ? '❌ Issues Found' : '⚠️ Not Configured'}`);
   
-  // Check if at least one of OpenAI or OpenRouter is working
-  const hasWorkingAI = openaiOk || openrouterOk;
+  // Check if at least one of OpenAI is working
   
   if (envVarsOk && supabaseOk && hasWorkingAI) {
     console.log('\n✅ Environment is correctly set up for the transcription service!');
@@ -299,10 +217,6 @@ async function runDiagnostics() {
       console.log('\n⚠️ Whisper service not configured - transcription functionality will not work');
     }
     
-    if (!openrouterOk && process.env.OPENROUTER_API_KEY) {
-      console.log('\n⚠️ OpenRouter connection failed - analysis functionality may not work');
-    } else if (!openrouterOk) {
-      console.log('\n⚠️ OpenRouter not configured - analysis functionality will not work');
     }
     
     console.log('\nYou can now run the transcription service with:');
@@ -320,12 +234,8 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_or_service_key
 SUPABASE_STORAGE_BUCKET=audio_recordings
 
-# Whisper Configuration (OpenAI or OpenRouter)
-OPENAI_API_KEY=your_openai_api_key # or use OPENROUTER_API_KEY for Whisper
+# Whisper Configuration (OpenAI)
 
-# OpenRouter Configuration (for analysis and optional Whisper)
-OPENROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_MODEL=openai/gpt-3.5-turbo
       `);
     }
     
@@ -338,16 +248,10 @@ OPENROUTER_MODEL=openai/gpt-3.5-turbo
     
     if (!openaiOk && openAiConfigured) {
       console.log('\nFor Whisper API issues:');
-      console.log('1. Verify your API key is correct (OPENAI_API_KEY or OPENROUTER_API_KEY)');
       console.log('2. Ensure your account has billing enabled or sufficient credits');
       console.log('3. Confirm that Whisper access is permitted by your provider');
     }
     
-    if (!openrouterOk && process.env.OPENROUTER_API_KEY) {
-      console.log('\nFor OpenRouter issues:');
-      console.log('1. Check that your OpenRouter API key is correct and active');
-      console.log('2. Verify that your OpenRouter account has billing set up if required');
-      console.log('3. Check if the specified model is available through your OpenRouter account');
     }
   }
 }
