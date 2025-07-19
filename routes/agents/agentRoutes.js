@@ -101,14 +101,14 @@ router.post('/agents', requireAuth, async (req, res) => {
       .single();
 
     if (!profile?.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json(errorResponse('INSUFFICIENT_PERMISSIONS', 'Admin access required', null, 403));
     }
 
     const agent = await agentCore.createAgent(req.body);
-    res.json({ agent });
+    res.json(successResponse({ agent }, 'Agent created successfully'));
   } catch (error) {
     console.error('Error creating agent:', error);
-    res.status(500).json({ error: 'Failed to create agent' });
+    res.status(500).json(errorResponse('CREATION_ERROR', 'Failed to create agent', error.message, 500));
   }
 });
 
@@ -123,14 +123,14 @@ router.put('/agents/:agentId', requireAuth, async (req, res) => {
       .single();
 
     if (!profile?.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json(errorResponse('INSUFFICIENT_PERMISSIONS', 'Admin access required', null, 403));
     }
 
     const agent = await agentCore.updateAgent(req.params.agentId, req.body);
-    res.json({ agent });
+    res.json(successResponse({ agent }, 'Agent updated successfully'));
   } catch (error) {
     console.error('Error updating agent:', error);
-    res.status(500).json({ error: 'Failed to update agent' });
+    res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update agent', error.message, 500));
   }
 });
 
@@ -141,12 +141,12 @@ router.post('/agents/receive', async (req, res) => {
     
     // Verify source
     if (source !== 'agent-command-center') {
-      return res.status(403).json({ error: 'Unauthorized source' });
+      return res.status(403).json(errorResponse('UNAUTHORIZED_SOURCE', 'Unauthorized source', null, 403));
     }
     
     // Validate agent data
     if (!agent || !agent.id || !agent.name || !agent.type) {
-      return res.status(400).json({ error: 'Invalid agent data' });
+      return res.status(400).json(errorResponse('INVALID_DATA', 'Invalid agent data - missing required fields', null, 400));
     }
     
     // Check if agent already exists
@@ -167,11 +167,10 @@ router.post('/agents/receive', async (req, res) => {
         }
       });
       
-      res.json({ 
-        success: true, 
+      res.json(successResponse({
         action: 'updated',
         agent: updatedAgent 
-      });
+      }, 'Agent updated successfully'));
     } else {
       // Create new agent
       const newAgent = await agentCore.createAgent({
@@ -187,15 +186,14 @@ router.post('/agents/receive', async (req, res) => {
         }
       });
       
-      res.status(201).json({ 
-        success: true, 
+      res.status(201).json(successResponse({
         action: 'created',
         agent: newAgent 
-      });
+      }, 'Agent created successfully'));
     }
   } catch (error) {
     console.error('Error receiving agent:', error);
-    res.status(500).json({ error: 'Failed to receive agent' });
+    res.status(500).json(errorResponse('AGENT_RECEIVE_ERROR', 'Failed to receive agent', error.message, 500));
   }
 });
 
@@ -207,29 +205,26 @@ router.delete('/agents/:agentId', async (req, res) => {
     
     // Only allow deletion from agent-command-center
     if (source !== 'agent-command-center') {
-      return res.status(403).json({ error: 'Unauthorized source' });
+      return res.status(403).json(errorResponse('UNAUTHORIZED_SOURCE', 'Unauthorized source', null, 403));
     }
     
     // Check if agent exists and was deployed from agent-command-center
     const agent = await agentCore.getAgent(agentId);
     if (!agent) {
-      return res.status(404).json({ error: 'Agent not found' });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Agent not found', null, 404));
     }
     
     if (agent.deployedFrom !== 'agent-command-center') {
-      return res.status(403).json({ error: 'Cannot delete agent not deployed from agent-command-center' });
+      return res.status(403).json(errorResponse('DELETION_FORBIDDEN', 'Cannot delete agent not deployed from agent-command-center', null, 403));
     }
     
     // Delete or deactivate the agent
     await agentCore.deleteAgent(agentId);
     
-    res.json({ 
-      success: true, 
-      message: `Agent ${agentId} removed from repconnect1` 
-    });
+    res.json(successResponse({}, `Agent ${agentId} removed from repconnect1`));
   } catch (error) {
     console.error('Error removing agent:', error);
-    res.status(500).json({ error: 'Failed to remove agent' });
+    res.status(500).json(errorResponse('DELETION_ERROR', 'Failed to remove agent', error.message, 500));
   }
 });
 
@@ -237,10 +232,10 @@ router.delete('/agents/:agentId', async (req, res) => {
 router.get('/conversations', requireAuth, async (req, res) => {
   try {
     const conversations = await conversationManager.listConversations(req.user.id);
-    res.json({ conversations });
+    res.json(successResponse({ conversations }));
   } catch (error) {
     console.error('Error listing conversations:', error);
-    res.status(500).json({ error: 'Failed to list conversations' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to list conversations', error.message, 500));
   }
 });
 
@@ -251,10 +246,10 @@ router.get('/conversations/:conversationId', requireAuth, async (req, res) => {
       req.params.conversationId,
       req.user.id
     );
-    res.json({ conversation });
+    res.json(successResponse({ conversation }));
   } catch (error) {
     console.error('Error loading conversation:', error);
-    res.status(500).json({ error: 'Failed to load conversation' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to load conversation', error.message, 500));
   }
 });
 
@@ -267,10 +262,10 @@ router.post('/conversations', requireAuth, async (req, res) => {
       agentId,
       title
     );
-    res.json({ conversation });
+    res.json(successResponse({ conversation }, 'Conversation created successfully'));
   } catch (error) {
     console.error('Error creating conversation:', error);
-    res.status(500).json({ error: 'Failed to create conversation' });
+    res.status(500).json(errorResponse('CREATION_ERROR', 'Failed to create conversation', error.message, 500));
   }
 });
 
@@ -283,10 +278,10 @@ router.patch('/conversations/:conversationId', requireAuth, async (req, res) => 
       req.user.id,
       title
     );
-    res.json({ success: true });
+    res.json(successResponse({}, 'Conversation title updated successfully'));
   } catch (error) {
     console.error('Error updating conversation:', error);
-    res.status(500).json({ error: 'Failed to update conversation' });
+    res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update conversation', error.message, 500));
   }
 });
 
@@ -297,10 +292,10 @@ router.delete('/conversations/:conversationId', requireAuth, async (req, res) =>
       req.params.conversationId,
       req.user.id
     );
-    res.json({ success: true });
+    res.json(successResponse({}, 'Conversation deleted successfully'));
   } catch (error) {
     console.error('Error deleting conversation:', error);
-    res.status(500).json({ error: 'Failed to delete conversation' });
+    res.status(500).json(errorResponse('DELETION_ERROR', 'Failed to delete conversation', error.message, 500));
   }
 });
 
@@ -312,10 +307,10 @@ router.get('/conversations/search', requireAuth, async (req, res) => {
       req.user.id,
       q
     );
-    res.json({ conversations });
+    res.json(successResponse({ conversations }));
   } catch (error) {
     console.error('Error searching conversations:', error);
-    res.status(500).json({ error: 'Failed to search conversations' });
+    res.status(500).json(errorResponse('SEARCH_ERROR', 'Failed to search conversations', error.message, 500));
   }
 });
 
@@ -338,7 +333,7 @@ router.get('/conversations/:conversationId/export', requireAuth, async (req, res
     }
   } catch (error) {
     console.error('Error exporting conversation:', error);
-    res.status(500).json({ error: 'Failed to export conversation' });
+    res.status(500).json(errorResponse('EXPORT_ERROR', 'Failed to export conversation', error.message, 500));
   }
 });
 
@@ -389,10 +384,10 @@ router.post('/agents/suggest', requireAuth, async (req, res) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
     
-    res.json({ agents: topAgents });
+    res.json(successResponse({ agents: topAgents }));
   } catch (error) {
     console.error('Error suggesting agents:', error);
-    res.status(500).json({ error: 'Failed to suggest agents' });
+    res.status(500).json(errorResponse('SUGGESTION_ERROR', 'Failed to suggest agents', error.message, 500));
   }
 });
 
@@ -400,10 +395,10 @@ router.post('/agents/suggest', requireAuth, async (req, res) => {
 router.get('/procedures/featured', checkServicesInitialized, requireAuth, async (req, res) => {
   try {
     const procedures = await procedureService.getFeaturedProcedures();
-    res.json({ procedures });
+    res.json(successResponse({ procedures }));
   } catch (error) {
     console.error('Error fetching featured procedures:', error);
-    res.status(500).json({ error: 'Failed to fetch featured procedures' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch featured procedures', error.message, 500));
   }
 });
 
@@ -413,14 +408,14 @@ router.get('/procedures/search', checkServicesInitialized, requireAuth, async (r
     const { q, type } = req.query;
     
     if (!q) {
-      return res.status(400).json({ error: 'Search query required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Search query required', null, 400));
     }
     
     const results = await procedureService.searchProcedures(q, type);
-    res.json({ procedures: results });
+    res.json(successResponse({ procedures: results }));
   } catch (error) {
     console.error('Error searching procedures:', error);
-    res.status(500).json({ error: 'Failed to search procedures' });
+    res.status(500).json(errorResponse('SEARCH_ERROR', 'Failed to search procedures', error.message, 500));
   }
 });
 
@@ -431,14 +426,14 @@ router.get('/procedures/:procedureId', checkServicesInitialized, requireAuth, as
     const { type } = req.query;
     
     if (!type || !['dental', 'aesthetic'].includes(type)) {
-      return res.status(400).json({ error: 'Valid procedure type required (dental or aesthetic)' });
+      return res.status(400).json(errorResponse('INVALID_PARAMETER', 'Valid procedure type required (dental or aesthetic)', null, 400));
     }
     
     const procedure = await procedureService.getProcedure(procedureId, type);
-    res.json({ procedure });
+    res.json(successResponse({ procedure }));
   } catch (error) {
     console.error('Error fetching procedure:', error);
-    res.status(500).json({ error: 'Failed to fetch procedure' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch procedure', error.message, 500));
   }
 });
 
@@ -473,10 +468,10 @@ router.post('/conversations/with-procedure', checkServicesInitialized, requireAu
         .eq('id', conversation.id);
     }
     
-    res.json({ conversation });
+    res.json(successResponse({ conversation }, 'Conversation with procedure context created successfully'));
   } catch (error) {
     console.error('Error creating conversation with procedure:', error);
-    res.status(500).json({ error: 'Failed to create conversation' });
+    res.status(500).json(errorResponse('CREATION_ERROR', 'Failed to create conversation with procedure', error.message, 500));
   }
 });
 
@@ -491,10 +486,12 @@ router.get('/agents/external', requireAuth, async (req, res) => {
     
     // Check if agentbackend integration is enabled
     if (!process.env.AGENTBACKEND_URL) {
-      return res.status(503).json({ 
-        error: 'External agents not configured',
-        message: 'Agentbackend integration is not enabled'
-      });
+      return res.status(503).json(errorResponse(
+        'SERVICE_UNAVAILABLE', 
+        'External agents not configured - Agentbackend integration is not enabled', 
+        null, 
+        503
+      ));
     }
     
     // Build query parameters for sales agents
@@ -530,7 +527,7 @@ router.get('/agents/external', requireAuth, async (req, res) => {
       return suitableCategories.includes(agent.category?.toLowerCase());
     }) || [];
     
-    res.json({ 
+    res.json(successResponse({ 
       agents: salesAgents.map(agent => ({
         ...agent,
         source: 'agentbackend',
@@ -538,13 +535,15 @@ router.get('/agents/external', requireAuth, async (req, res) => {
       })),
       count: salesAgents.length,
       source: 'agentbackend'
-    });
+    }));
   } catch (error) {
     console.error('Error fetching external agents:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch external agents',
-      details: error.message
-    });
+    res.status(500).json(errorResponse(
+      'EXTERNAL_SERVICE_ERROR', 
+      'Failed to fetch external agents', 
+      error.message, 
+      500
+    ));
   }
 });
 
@@ -597,17 +596,17 @@ router.get('/agents/combined', requireAuth, async (req, res) => {
       ...externalAgents.map(agent => ({ ...agent, source: 'agentbackend', external: true }))
     ];
     
-    res.json({ 
+    res.json(successResponse({ 
       agents: combinedAgents,
       count: combinedAgents.length,
       sources: {
         canvas: localAgents.length,
         agentbackend: externalAgents.length
       }
-    });
+    }));
   } catch (error) {
     console.error('Error fetching combined agents:', error);
-    res.status(500).json({ error: 'Failed to fetch combined agents' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch combined agents', error.message, 500));
   }
 });
 
@@ -660,7 +659,7 @@ router.post('/agents/sales/recommend', requireAuth, async (req, res) => {
         })
       }));
     
-    res.json({ 
+    res.json(successResponse({ 
       recommendations,
       count: recommendations.length,
       context: {
@@ -669,10 +668,10 @@ router.post('/agents/sales/recommend', requireAuth, async (req, res) => {
         product_category,
         urgency
       }
-    });
+    }));
   } catch (error) {
     console.error('Error getting agent recommendations:', error);
-    res.status(500).json({ error: 'Failed to get agent recommendations' });
+    res.status(500).json(errorResponse('RECOMMENDATION_ERROR', 'Failed to get agent recommendations', error.message, 500));
   }
 });
 
@@ -682,7 +681,7 @@ router.post('/conversations/external', requireAuth, async (req, res) => {
     const { externalAgentId, title, agentSource = 'agentbackend', context } = req.body;
     
     if (!externalAgentId) {
-      return res.status(400).json({ error: 'External agent ID is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'External agent ID is required', null, 400));
     }
     
     // Create conversation with external agent reference
@@ -700,10 +699,10 @@ router.post('/conversations/external', requireAuth, async (req, res) => {
       }
     );
     
-    res.json({ conversation });
+    res.json(successResponse({ conversation }, 'External conversation created successfully'));
   } catch (error) {
     console.error('Error creating external conversation:', error);
-    res.status(500).json({ error: 'Failed to create conversation with external agent' });
+    res.status(500).json(errorResponse('CREATION_ERROR', 'Failed to create conversation with external agent', error.message, 500));
   }
 });
 

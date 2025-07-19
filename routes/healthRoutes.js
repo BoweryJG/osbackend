@@ -1,6 +1,7 @@
 import express from 'express';
 import { monitoringService } from '../services/monitoring.js';
 import { createClient } from '@supabase/supabase-js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -20,13 +21,13 @@ if (process.env.SUPABASE_URL && supabaseKey) {
  * Basic health check endpoint
  */
 router.get('/health', (req, res) => {
-  res.json({
+  res.json(successResponse({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'RepConnect Backend',
     version: process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development'
-  });
+  }));
 });
 
 /**
@@ -45,14 +46,10 @@ router.get('/api/health', async (req, res) => {
       statusCode = 200; // Still return 200 for degraded to not trigger alarms
     }
     
-    res.status(statusCode).json(healthStatus);
+    res.status(statusCode).json(successResponse(healthStatus));
   } catch (error) {
     logger.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      error: 'Failed to perform health check'
-    });
+    res.status(503).json(errorResponse('HEALTH_CHECK_FAILED', 'Failed to perform health check', error.message, 503));
   }
 });
 
@@ -60,10 +57,10 @@ router.get('/api/health', async (req, res) => {
  * Liveness probe - checks if the service is alive
  */
 router.get('/health/live', (req, res) => {
-  res.json({
+  res.json(successResponse({
     status: 'alive',
     timestamp: new Date().toISOString()
-  });
+  }));
 });
 
 /**
@@ -92,19 +89,26 @@ router.get('/health/ready', async (req, res) => {
     
     const isReady = Object.values(checks).every(check => check === true);
     
-    res.status(isReady ? 200 : 503).json({
+    const statusCode = isReady ? 200 : 503;
+    const responseData = {
       ready: isReady,
       timestamp: new Date().toISOString(),
       checks
-    });
+    };
+    
+    if (isReady) {
+      res.status(statusCode).json(successResponse(responseData));
+    } else {
+      res.status(statusCode).json(errorResponse('NOT_READY', 'Service not ready', responseData, statusCode));
+    }
   } catch (error) {
     logger.error('Readiness check failed:', error);
-    res.status(503).json({
+    res.status(503).json(errorResponse('READINESS_CHECK_FAILED', 'Readiness check failed', {
       ready: false,
       timestamp: new Date().toISOString(),
       checks,
       error: error.message
-    });
+    }, 503));
   }
 });
 
@@ -115,11 +119,18 @@ router.get('/health/startup', (req, res) => {
   const uptime = process.uptime();
   const started = uptime > 5; // Consider started after 5 seconds
   
-  res.status(started ? 200 : 503).json({
+  const statusCode = started ? 200 : 503;
+  const responseData = {
     started,
     uptime,
     timestamp: new Date().toISOString()
-  });
+  };
+  
+  if (started) {
+    res.status(statusCode).json(successResponse(responseData));
+  } else {
+    res.status(statusCode).json(errorResponse('NOT_STARTED', 'Application not started', responseData, statusCode));
+  }
 });
 
 /**
@@ -136,12 +147,10 @@ router.get('/health/metrics', async (req, res) => {
       timestamp: new Date().toISOString()
     };
     
-    res.json(metrics);
+    res.json(successResponse(metrics));
   } catch (error) {
     logger.error('Failed to get metrics:', error);
-    res.status(500).json({
-      error: 'Failed to retrieve metrics'
-    });
+    res.status(500).json(errorResponse('METRICS_ERROR', 'Failed to retrieve metrics', error.message, 500));
   }
 });
 
@@ -151,11 +160,10 @@ router.get('/health/metrics', async (req, res) => {
 router.get('/health/database', async (req, res) => {
   try {
     if (!supabase) {
-      return res.status(503).json({
+      return res.status(503).json(errorResponse('DATABASE_UNAVAILABLE', 'Database connection not configured', {
         status: 'unavailable',
-        error: 'Database connection not configured',
         timestamp: new Date().toISOString()
-      });
+      }, 503));
     }
     
     const start = Date.now();
@@ -166,18 +174,18 @@ router.get('/health/database', async (req, res) => {
       throw error;
     }
     
-    res.json({
+    res.json(successResponse({
       status: 'healthy',
       responseTime: `${responseTime}ms`,
       timestamp: new Date().toISOString()
-    });
+    }));
   } catch (error) {
     logger.error('Database health check failed:', error);
-    res.status(503).json({
+    res.status(503).json(errorResponse('DATABASE_UNHEALTHY', 'Database health check failed', {
       status: 'unhealthy',
       error: error.message,
       timestamp: new Date().toISOString()
-    });
+    }, 503));
   }
 });
 
@@ -222,11 +230,18 @@ router.get('/health/dependencies', async (req, res) => {
     dep => dep.status === 'healthy' || dep.status === 'unknown'
   );
   
-  res.status(allHealthy ? 200 : 503).json({
+  const statusCode = allHealthy ? 200 : 503;
+  const responseData = {
     status: allHealthy ? 'healthy' : 'degraded',
     dependencies,
     timestamp: new Date().toISOString()
-  });
+  };
+  
+  if (allHealthy) {
+    res.status(statusCode).json(successResponse(responseData));
+  } else {
+    res.status(statusCode).json(errorResponse('DEPENDENCIES_DEGRADED', 'Some dependencies are unhealthy', responseData, statusCode));
+  }
 });
 
 export default router;

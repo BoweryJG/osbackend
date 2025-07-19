@@ -5,13 +5,14 @@ import {
   createCampaign, 
   getEmailStats 
 } from '../services/emailService.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
 // Middleware to check authentication
 const requireAuth = (req, res, next) => {
   if (!req.session?.user?.id) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
   }
   next();
 };
@@ -30,9 +31,7 @@ router.post('/send', requireAuth, async (req, res) => {
     } = req.body;
 
     if (!to || !subject || (!html && !text)) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: to, subject, and html or text' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Missing required fields: to, subject, and html or text', null, 400));
     }
 
     const result = await sendEmail({
@@ -46,10 +45,10 @@ router.post('/send', requireAuth, async (req, res) => {
       userId: req.session.user.id
     });
 
-    res.json(result);
+    res.json(successResponse(result, 'Email sent successfully'));
   } catch (error) {
     console.error('Email send error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('EMAIL_SEND_ERROR', 'Failed to send email', error.message, 500));
   }
 });
 
@@ -65,9 +64,7 @@ router.post('/send-as-client', requireAuth, async (req, res) => {
     } = req.body;
 
     if (!clientEmail || !clientName || !recipientEmail || !subject || !body) {
-      return res.status(400).json({ 
-        error: 'Missing required fields' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Missing required fields: clientEmail, clientName, recipientEmail, subject, body', null, 400));
     }
 
     const result = await sendAsClient(
@@ -78,10 +75,10 @@ router.post('/send-as-client', requireAuth, async (req, res) => {
       body
     );
 
-    res.json(result);
+    res.json(successResponse(result, 'Email sent as client successfully'));
   } catch (error) {
     console.error('Send as client error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('CLIENT_EMAIL_ERROR', 'Failed to send email as client', error.message, 500));
   }
 });
 
@@ -97,9 +94,7 @@ router.post('/campaign', requireAuth, async (req, res) => {
     } = req.body;
 
     if (!name || !recipients || !subject || !htmlTemplate || !schedule) {
-      return res.status(400).json({ 
-        error: 'Missing required fields for campaign' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Missing required fields: name, recipients, subject, htmlTemplate, schedule', null, 400));
     }
 
     const campaign = await createCampaign({
@@ -111,13 +106,10 @@ router.post('/campaign', requireAuth, async (req, res) => {
       userId: req.session.user.id
     });
 
-    res.json({
-      success: true,
-      campaign
-    });
+    res.json(successResponse({ campaign }, 'Email campaign created successfully'));
   } catch (error) {
     console.error('Campaign creation error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('CAMPAIGN_ERROR', 'Failed to create email campaign', error.message, 500));
   }
 });
 
@@ -127,9 +119,7 @@ router.post('/bulk', requireAuth, async (req, res) => {
     const { emails, delayBetween = 5000 } = req.body;
 
     if (!Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).json({ 
-        error: 'emails must be an array with at least one email' 
-      });
+      return res.status(400).json(errorResponse('INVALID_INPUT', 'emails must be an array with at least one email', null, 400));
     }
 
     const results = [];
@@ -155,15 +145,15 @@ router.post('/bulk', requireAuth, async (req, res) => {
       }
     }
 
-    res.json({
+    res.json(successResponse({
       total: emails.length,
       successful: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
       results
-    });
+    }, 'Bulk email send completed'));
   } catch (error) {
     console.error('Bulk send error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('BULK_SEND_ERROR', 'Failed to send bulk emails', error.message, 500));
   }
 });
 
@@ -171,10 +161,10 @@ router.post('/bulk', requireAuth, async (req, res) => {
 router.get('/stats', requireAuth, async (req, res) => {
   try {
     const stats = await getEmailStats();
-    res.json(stats);
+    res.json(successResponse(stats));
   } catch (error) {
     console.error('Stats error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('STATS_ERROR', 'Failed to get email statistics', error.message, 500));
   }
 });
 
@@ -196,14 +186,13 @@ router.post('/test', requireAuth, async (req, res) => {
       userId: req.session.user.id
     });
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       message: 'Test email sent successfully',
       ...result
-    });
+    }, 'Test email sent successfully'));
   } catch (error) {
     console.error('Test email error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('TEST_EMAIL_ERROR', 'Failed to send test email', error.message, 500));
   }
 });
 
@@ -213,9 +202,7 @@ router.post('/sync', async (req, res) => {
     const { userId, accountEmail } = req.body;
     
     if (!userId) {
-      return res.status(400).json({ 
-        error: 'userId is required' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'userId is required', null, 400));
     }
 
     // Import Gmail sync service
@@ -223,18 +210,13 @@ router.post('/sync', async (req, res) => {
     
     const result = await syncGmailEmails(userId, accountEmail);
     
-    res.json({
-      success: true,
+    res.json(successResponse({
       syncedCount: result.syncedCount || 0,
       message: `Successfully synced ${result.syncedCount || 0} emails`
-    });
+    }, `Successfully synced ${result.syncedCount || 0} emails`));
   } catch (error) {
     console.error('Gmail sync error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message,
-      syncedCount: 0
-    });
+    res.status(500).json(errorResponse('SYNC_ERROR', 'Failed to sync Gmail emails', error.message, 500));
   }
 });
 

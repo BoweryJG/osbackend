@@ -3,6 +3,7 @@ import { authenticateUser } from '../auth.js';
 import { createClient } from '@supabase/supabase-js';
 import julieAI from '../services/julieAI.js';
 import WebRTCVoiceService from '../services/webrtcVoiceService.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get('/health', (req, res) => {
   const hasTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
   const hasVoipms = !!(process.env.VOIPMS_USERNAME && process.env.VOIPMS_API_PASSWORD);
   
-  res.json({
+  res.json(successResponse({
     status: 'ok',
     phone_system: 'available',
     default_method: 'webrtc',
@@ -38,17 +39,19 @@ router.get('/health', (req, res) => {
       voipms: hasVoipms,
       webrtc: true
     }
-  });
+  }));
 });
 
 // Middleware to check phone system configuration
 const checkPhoneSystemConfig = (req, res, next) => {
   const sb = getSupabase();
   if (!sb) {
-    return res.status(503).json({ 
-      error: 'Phone system not configured', 
-      message: 'Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables' 
-    });
+    return res.status(503).json(errorResponse(
+      'SERVICE_UNAVAILABLE', 
+      'Phone system not configured - Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables',
+      null,
+      503
+    ));
   }
   next();
 };
@@ -61,10 +64,10 @@ router.get('/phone-numbers', authenticateUser, checkPhoneSystemConfig, async (re
   try {
     const { clientId } = req.query;
     const numbers = await phoneNumberService.getPhoneNumbers(clientId);
-    res.json(numbers);
+    res.json(successResponse(numbers));
   } catch (error) {
     console.error('Error fetching phone numbers:', error);
-    res.status(500).json({ error: 'Failed to fetch phone numbers' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch phone numbers', error.message, 500));
   }
 });
 
@@ -76,10 +79,10 @@ router.post('/phone-numbers/search', authenticateUser, checkPhoneSystemConfig, a
       numberType,
       pattern
     });
-    res.json(availableNumbers);
+    res.json(successResponse(availableNumbers));
   } catch (error) {
     console.error('Error searching numbers:', error);
-    res.status(500).json({ error: 'Failed to search numbers' });
+    res.status(500).json(errorResponse('SEARCH_ERROR', 'Failed to search numbers', error.message, 500));
   }
 });
 
@@ -91,10 +94,10 @@ router.post('/phone-numbers/provision', authenticateUser, checkPhoneSystemConfig
       phoneNumber,
       capabilities
     );
-    res.json(provisionedNumber);
+    res.json(successResponse(provisionedNumber, 'Phone number provisioned successfully'));
   } catch (error) {
     console.error('Error provisioning number:', error);
-    res.status(500).json({ error: 'Failed to provision number' });
+    res.status(500).json(errorResponse('PROVISION_ERROR', 'Failed to provision number', error.message, 500));
   }
 });
 
@@ -114,10 +117,10 @@ router.post('/calls/initiate', authenticateUser, checkPhoneSystemConfig, async (
       user_id: req.user.id
     });
     
-    res.json(call);
+    res.json(successResponse(call, 'Call initiated successfully'));
   } catch (error) {
     console.error('Error initiating call:', error);
-    res.status(500).json({ error: 'Failed to initiate call' });
+    res.status(500).json(errorResponse('CALL_ERROR', 'Failed to initiate call', error.message, 500));
   }
 });
 
@@ -125,10 +128,10 @@ router.get('/calls/:callId', authenticateUser, async (req, res) => {
   try {
     const { callId } = req.params;
     const call = await twilioService.getCallDetails(callId);
-    res.json(call);
+    res.json(successResponse(call));
   } catch (error) {
     console.error('Error fetching call:', error);
-    res.status(500).json({ error: 'Failed to fetch call details' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch call details', error.message, 500));
   }
 });
 
@@ -136,10 +139,10 @@ router.get('/calls/:callId/recording', authenticateUser, async (req, res) => {
   try {
     const { callId } = req.params;
     const recordings = await twilioService.getCallRecordings(callId);
-    res.json(recordings);
+    res.json(successResponse(recordings));
   } catch (error) {
     console.error('Error fetching recording:', error);
-    res.status(500).json({ error: 'Failed to fetch recording' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch recording', error.message, 500));
   }
 });
 
@@ -160,10 +163,10 @@ router.post('/sms/send', authenticateUser, async (req, res) => {
       user_id: req.user.id
     });
     
-    res.json(message);
+    res.json(successResponse(message, 'SMS sent successfully'));
   } catch (error) {
     console.error('Error sending SMS:', error);
-    res.status(500).json({ error: 'Failed to send SMS' });
+    res.status(500).json(errorResponse('SMS_ERROR', 'Failed to send SMS', error.message, 500));
   }
 });
 
@@ -181,10 +184,10 @@ router.get('/sms/conversations', authenticateUser, async (req, res) => {
       .order('last_message_at', { ascending: false });
       
     if (error) throw error;
-    res.json(conversations);
+    res.json(successResponse(conversations));
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    res.status(500).json({ error: 'Failed to fetch conversations' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch conversations', error.message, 500));
   }
 });
 
@@ -193,10 +196,10 @@ router.get('/usage/summary', authenticateUser, async (req, res) => {
   try {
     const { clientId, startDate, endDate } = req.query;
     const summary = await usageService.getUsageSummary(clientId, startDate, endDate);
-    res.json(summary);
+    res.json(successResponse(summary));
   } catch (error) {
     console.error('Error fetching usage summary:', error);
-    res.status(500).json({ error: 'Failed to fetch usage summary' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch usage summary', error.message, 500));
   }
 });
 
@@ -208,10 +211,10 @@ router.get('/usage/details', authenticateUser, async (req, res) => {
       startDate,
       endDate
     });
-    res.json(details);
+    res.json(successResponse(details));
   } catch (error) {
     console.error('Error fetching usage details:', error);
-    res.status(500).json({ error: 'Failed to fetch usage details' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch usage details', error.message, 500));
   }
 });
 
@@ -286,14 +289,13 @@ router.post('/julie/start-session', async (req, res) => {
   try {
     const { callSid, phoneNumber } = req.body;
     const connection = await julieAI.startSession(callSid, phoneNumber);
-    res.json({ 
-      success: true, 
+    res.json(successResponse({ 
       sessionId: callSid,
       status: 'started' 
-    });
+    }, 'Julie AI session started successfully'));
   } catch (error) {
     console.error('Error starting Julie AI session:', error);
-    res.status(500).json({ error: 'Failed to start AI session' });
+    res.status(500).json(errorResponse('SESSION_START_ERROR', 'Failed to start AI session', error.message, 500));
   }
 });
 
@@ -301,10 +303,10 @@ router.post('/julie/end-session', async (req, res) => {
   try {
     const { callSid } = req.body;
     await julieAI.endSession(callSid);
-    res.json({ success: true, status: 'ended' });
+    res.json(successResponse({ status: 'ended' }, 'Julie AI session ended successfully'));
   } catch (error) {
     console.error('Error ending Julie AI session:', error);
-    res.status(500).json({ error: 'Failed to end AI session' });
+    res.status(500).json(errorResponse('SESSION_END_ERROR', 'Failed to end AI session', error.message, 500));
   }
 });
 
@@ -312,20 +314,20 @@ router.post('/julie/audio', async (req, res) => {
   try {
     const { callSid, audioData } = req.body;
     await julieAI.handleIncomingAudio(callSid, audioData);
-    res.json({ success: true, status: 'processed' });
+    res.json(successResponse({ status: 'processed' }, 'Audio processed successfully'));
   } catch (error) {
     console.error('Error processing audio:', error);
-    res.status(500).json({ error: 'Failed to process audio' });
+    res.status(500).json(errorResponse('AUDIO_PROCESSING_ERROR', 'Failed to process audio', error.message, 500));
   }
 });
 
 router.get('/julie/sessions', authenticateUser, async (req, res) => {
   try {
     const sessions = julieAI.getActiveSessions();
-    res.json({ sessions });
+    res.json(successResponse({ sessions }));
   } catch (error) {
     console.error('Error getting active sessions:', error);
-    res.status(500).json({ error: 'Failed to get sessions' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to get sessions', error.message, 500));
   }
 });
 
@@ -335,19 +337,19 @@ router.get('/julie/session/:callSid', authenticateUser, async (req, res) => {
     const session = julieAI.getSession(callSid);
     
     if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Session not found', null, 404));
     }
     
-    res.json({ 
+    res.json(successResponse({ 
       callSid,
       phoneNumber: session.phoneNumber,
       duration: Math.floor((new Date() - session.startTime) / 1000),
       stage: session.connection.context.conversationStage,
       patientInfo: session.connection.context.patientInfo
-    });
+    }));
   } catch (error) {
     console.error('Error getting session details:', error);
-    res.status(500).json({ error: 'Failed to get session details' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to get session details', error.message, 500));
   }
 });
 
@@ -381,14 +383,13 @@ router.post('/webrtc/start-session', async (req, res) => {
   try {
     const { sessionId, clientInfo } = req.body;
     const session = await webrtcService.createSession(sessionId, clientInfo);
-    res.json({ 
-      success: true, 
+    res.json(successResponse({ 
       sessionId: session.sessionId,
       status: 'ready' 
-    });
+    }, 'WebRTC session started successfully'));
   } catch (error) {
     console.error('Error starting WebRTC session:', error);
-    res.status(500).json({ error: 'Failed to start WebRTC session' });
+    res.status(500).json(errorResponse('WEBRTC_START_ERROR', 'Failed to start WebRTC session', error.message, 500));
   }
 });
 
@@ -396,20 +397,20 @@ router.post('/webrtc/end-session', async (req, res) => {
   try {
     const { sessionId } = req.body;
     await webrtcService.endSession(sessionId);
-    res.json({ success: true, status: 'ended' });
+    res.json(successResponse({ status: 'ended' }, 'WebRTC session ended successfully'));
   } catch (error) {
     console.error('Error ending WebRTC session:', error);
-    res.status(500).json({ error: 'Failed to end WebRTC session' });
+    res.status(500).json(errorResponse('WEBRTC_END_ERROR', 'Failed to end WebRTC session', error.message, 500));
   }
 });
 
 router.get('/webrtc/sessions', authenticateUser, async (req, res) => {
   try {
     const sessions = webrtcService.getActiveSessions();
-    res.json({ sessions });
+    res.json(successResponse({ sessions }));
   } catch (error) {
     console.error('Error getting WebRTC sessions:', error);
-    res.status(500).json({ error: 'Failed to get sessions' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to get sessions', error.message, 500));
   }
 });
 

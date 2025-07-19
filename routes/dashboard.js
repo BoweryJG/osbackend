@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken, requireTier } from '../middleware/auth.js';
 import { apiRateLimiter, createTierBasedRateLimiter } from '../middleware/rateLimiter.js';
 import logger from '../utils/logger.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 // Import services
 import metricsAggregator, { 
@@ -45,23 +46,16 @@ router.get('/overview', async (req, res) => {
     // Get system status
     const systemStatus = await getSystemStatus();
     
-    res.json({
-      success: true,
-      data: {
-        summary,
-        userMetrics,
-        recentActivity,
-        systemStatus,
-        timestamp: new Date().toISOString()
-      }
-    });
+    res.json(successResponse({
+      summary,
+      userMetrics,
+      recentActivity,
+      systemStatus,
+      timestamp: new Date().toISOString()
+    }));
   } catch (error) {
     logger.error('Error fetching dashboard overview:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch dashboard overview',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch dashboard overview', error.message, 500));
   }
 });
 
@@ -106,24 +100,17 @@ router.get('/agents', async (req, res) => {
       })
     );
     
-    res.json({
-      success: true,
-      data: {
-        agents: enrichedAgents,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total: agents.length
-        }
+    res.json(successResponse({
+      agents: enrichedAgents,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: agents.length
       }
-    });
+    }));
   } catch (error) {
     logger.error('Error fetching agents:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch agents',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch agents', error.message, 500));
   }
 });
 
@@ -144,10 +131,7 @@ router.get('/metrics/:agentId', async (req, res) => {
       .single();
     
     if (agentError || !agent) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Agent not found' 
-      });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Agent not found', null, 404));
     }
     
     // Get detailed performance metrics
@@ -172,24 +156,17 @@ router.get('/metrics/:agentId', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(50);
     
-    res.json({
-      success: true,
-      data: {
-        agent,
-        performance,
-        aggregatedMetrics,
-        successRates,
-        recentConversations: conversations || [],
-        period
-      }
-    });
+    res.json(successResponse({
+      agent,
+      performance,
+      aggregatedMetrics,
+      successRates,
+      recentConversations: conversations || [],
+      period
+    }));
   } catch (error) {
     logger.error('Error fetching agent metrics:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch agent metrics',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch agent metrics', error.message, 500));
   }
 });
 
@@ -242,20 +219,13 @@ router.get('/voice-profiles', async (req, res) => {
       })
     );
     
-    res.json({
-      success: true,
-      data: {
-        profiles: enrichedProfiles,
-        total: enrichedProfiles.length
-      }
-    });
+    res.json(successResponse({
+      profiles: enrichedProfiles,
+      total: enrichedProfiles.length
+    }));
   } catch (error) {
     logger.error('Error fetching voice profiles:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch voice profiles',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch voice profiles', error.message, 500));
   }
 });
 
@@ -288,20 +258,13 @@ router.get('/personality-templates', async (req, res) => {
       }))
     ];
     
-    res.json({
-      success: true,
-      data: {
-        templates: allTemplates,
-        total: allTemplates.length
-      }
-    });
+    res.json(successResponse({
+      templates: allTemplates,
+      total: allTemplates.length
+    }));
   } catch (error) {
     logger.error('Error fetching personality templates:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch personality templates',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch personality templates', error.message, 500));
   }
 });
 
@@ -346,20 +309,13 @@ router.get('/quick-clips', async (req, res) => {
       })
     );
     
-    res.json({
-      success: true,
-      data: {
-        clips: enrichedClips,
-        total: enrichedClips.length
-      }
-    });
+    res.json(successResponse({
+      clips: enrichedClips,
+      total: enrichedClips.length
+    }));
   } catch (error) {
     logger.error('Error fetching quick clips:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch quick clips',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch quick clips', error.message, 500));
   }
 });
 
@@ -400,22 +356,15 @@ router.get('/training-status', async (req, res) => {
       .filter(session => session.status === 'completed')
       .slice(0, 10);
     
-    res.json({
-      success: true,
-      data: {
-        stats,
-        activeSessions,
-        recentCompletions,
-        allSessions: trainingSessions || []
-      }
-    });
+    res.json(successResponse({
+      stats,
+      activeSessions,
+      recentCompletions,
+      allSessions: trainingSessions || []
+    }));
   } catch (error) {
     logger.error('Error fetching training status:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch training status',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch training status', error.message, 500));
   }
 });
 
@@ -433,21 +382,14 @@ router.post('/refresh-metrics', requireTier('professional'), async (req, res) =>
     // Get fresh dashboard summary
     const summary = await getDashboardSummary();
     
-    res.json({
-      success: true,
-      data: {
-        message: 'Metrics refreshed successfully',
-        summary,
-        refreshedAt: new Date().toISOString()
-      }
-    });
+    res.json(successResponse({
+      message: 'Metrics refreshed successfully',
+      summary,
+      refreshedAt: new Date().toISOString()
+    }, 'Metrics refreshed successfully'));
   } catch (error) {
     logger.error('Error refreshing metrics:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to refresh metrics',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('REFRESH_ERROR', 'Failed to refresh metrics', error.message, 500));
   }
 });
 
@@ -501,11 +443,7 @@ router.get('/export', requireTier('professional'), async (req, res) => {
     }
   } catch (error) {
     logger.error('Error exporting dashboard data:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to export dashboard data',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('EXPORT_ERROR', 'Failed to export dashboard data', error.message, 500));
   }
 });
 

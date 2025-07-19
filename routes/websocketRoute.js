@@ -1,5 +1,6 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import websocketManager from '../services/websocketManager.js';
 import logger from '../utils/logger.js';
 
@@ -14,14 +15,14 @@ const router = express.Router();
 router.get('/ws/status', (req, res) => {
   try {
     const stats = websocketManager.getClientStats();
-    res.json({
+    res.json(successResponse({
       status: 'active',
       stats,
       port: process.env.WS_PORT || 8082
-    });
+    }));
   } catch (error) {
     logger.error('Error getting WebSocket status:', error);
-    res.status(500).json({ error: 'Failed to get WebSocket status' });
+    res.status(500).json(errorResponse('WEBSOCKET_STATUS_ERROR', 'Failed to get WebSocket status', error.message, 500));
   }
 });
 
@@ -29,10 +30,10 @@ router.get('/ws/status', (req, res) => {
 router.get('/ws/rooms', (req, res) => {
   try {
     const rooms = websocketManager.getRoomStats();
-    res.json({ rooms });
+    res.json(successResponse({ rooms }));
   } catch (error) {
     logger.error('Error getting room stats:', error);
-    res.status(500).json({ error: 'Failed to get room stats' });
+    res.status(500).json(errorResponse('ROOM_STATS_ERROR', 'Failed to get room stats', error.message, 500));
   }
 });
 
@@ -42,21 +43,21 @@ router.post('/ws/broadcast', async (req, res) => {
     // Check admin permissions
     const user = req.user;
     if (!user || user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json(errorResponse('UNAUTHORIZED', 'Admin access required', null, 403));
     }
 
     const { room, message } = req.body;
     
     if (!room || !message) {
-      return res.status(400).json({ error: 'Room and message are required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Room and message are required', null, 400));
     }
 
     websocketManager.broadcastToRoom(room, message);
     
-    res.json({ success: true, message: 'Message broadcasted' });
+    res.json(successResponse({}, 'Message broadcasted'));
   } catch (error) {
     logger.error('Error broadcasting message:', error);
-    res.status(500).json({ error: 'Failed to broadcast message' });
+    res.status(500).json(errorResponse('BROADCAST_ERROR', 'Failed to broadcast message', error.message, 500));
   }
 });
 

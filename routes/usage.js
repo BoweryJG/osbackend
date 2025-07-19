@@ -1,6 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateToken } from '../middleware/auth.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -39,10 +40,10 @@ router.get('/', authenticateToken, async (req, res) => {
       ripples_sent: 0,
     };
 
-    res.json(usage);
+    res.json(successResponse(usage));
   } catch (error) {
     console.error('Error fetching usage:', error);
-    res.status(500).json({ error: 'Failed to fetch usage data' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch usage data', error.message, 500));
   }
 });
 
@@ -53,7 +54,7 @@ router.post('/increment', authenticateToken, async (req, res) => {
     const { feature } = req.body;
     
     if (!feature) {
-      return res.status(400).json({ error: 'Feature is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Feature is required', null, 400));
     }
 
     // Get current month's start date
@@ -83,12 +84,11 @@ router.post('/increment', authenticateToken, async (req, res) => {
     const limit = limits[feature];
 
     if (limit !== -1 && current >= limit) {
-      return res.status(403).json({ 
-        error: 'Usage limit reached',
+      return res.status(403).json(errorResponse('USAGE_LIMIT_REACHED', 'Usage limit reached', {
         current,
         limit,
         tier
-      });
+      }, 403));
     }
 
     // Increment usage
@@ -117,14 +117,14 @@ router.post('/increment', authenticateToken, async (req, res) => {
         timestamp: new Date().toISOString(),
       });
 
-    res.json({ 
+    res.json(successResponse({ 
       success: true, 
       usage: data,
       remaining: limit === -1 ? 'unlimited' : limit - (current + 1)
-    });
+    }, 'Usage incremented successfully'));
   } catch (error) {
     console.error('Error incrementing usage:', error);
-    res.status(500).json({ error: 'Failed to increment usage' });
+    res.status(500).json(errorResponse('INCREMENT_ERROR', 'Failed to increment usage', error.message, 500));
   }
 });
 
@@ -135,7 +135,7 @@ router.post('/check', authenticateToken, async (req, res) => {
     const { feature } = req.body;
     
     if (!feature) {
-      return res.status(400).json({ error: 'Feature is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Feature is required', null, 400));
     }
 
     // Get current month's start date
@@ -167,7 +167,7 @@ router.post('/check', authenticateToken, async (req, res) => {
     const canUse = limit === -1 || current < limit;
     const percentage = limit === -1 ? 0 : (current / limit) * 100;
 
-    res.json({
+    res.json(successResponse({
       canUse,
       current,
       limit,
@@ -175,10 +175,10 @@ router.post('/check', authenticateToken, async (req, res) => {
       percentage,
       tier,
       shouldShowUpgrade: percentage >= 80 && percentage < 100,
-    });
+    }));
   } catch (error) {
     console.error('Error checking usage:', error);
-    res.status(500).json({ error: 'Failed to check usage' });
+    res.status(500).json(errorResponse('CHECK_ERROR', 'Failed to check usage', error.message, 500));
   }
 });
 

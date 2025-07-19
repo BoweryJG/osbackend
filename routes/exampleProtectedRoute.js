@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../src/middleware/authMiddleware.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import logger from '../src/utils/logger.js';
 
 const router = express.Router();
@@ -12,13 +13,13 @@ const router = express.Router();
 // Public route - no authentication required
 router.get('/public-data', async (req, res) => {
   try {
-    res.json({
+    res.json(successResponse({
       message: 'This is public data',
       timestamp: new Date().toISOString()
-    });
+    }));
   } catch (error) {
     logger.error('Public route error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('INTERNAL_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -29,17 +30,17 @@ router.get('/protected-data', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const userEmail = req.user.email;
     
-    res.json({
+    res.json(successResponse({
       message: 'This is protected data',
       user: {
         id: userId,
         email: userEmail
       },
       timestamp: new Date().toISOString()
-    });
+    }));
   } catch (error) {
     logger.error('Protected route error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('INTERNAL_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -51,9 +52,7 @@ router.post('/create-resource', requireAuth, async (req, res) => {
     
     // Validate input
     if (!name || !description) {
-      return res.status(400).json({ 
-        error: 'Name and description are required' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Name and description are required', null, 400));
     }
     
     // Create resource (example)
@@ -65,13 +64,12 @@ router.post('/create-resource', requireAuth, async (req, res) => {
       createdAt: new Date().toISOString()
     };
     
-    res.json({
-      message: 'Resource created successfully',
+    res.json(successResponse({
       resource
-    });
+    }, 'Resource created successfully'));
   } catch (error) {
     logger.error('Create resource error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('RESOURCE_CREATE_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -80,13 +78,23 @@ const protectedRouter = express.Router();
 protectedRouter.use(requireAuth); // Apply to all routes below
 
 protectedRouter.get('/user-profile', async (req, res) => {
-  // All routes here are protected
-  res.json({ userId: req.user.id });
+  try {
+    // All routes here are protected
+    res.json(successResponse({ userId: req.user.id }));
+  } catch (error) {
+    logger.error('User profile error:', error);
+    res.status(500).json(errorResponse('PROFILE_ERROR', 'Internal server error', error.message, 500));
+  }
 });
 
 protectedRouter.put('/user-settings', async (req, res) => {
-  // This is also protected
-  res.json({ message: 'Settings updated' });
+  try {
+    // This is also protected
+    res.json(successResponse({}, 'Settings updated'));
+  } catch (error) {
+    logger.error('User settings error:', error);
+    res.status(500).json(errorResponse('SETTINGS_ERROR', 'Internal server error', error.message, 500));
+  }
 });
 
 // Mount the protected router

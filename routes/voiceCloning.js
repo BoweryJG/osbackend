@@ -1,6 +1,7 @@
 import express from 'express';
 import { VoiceCloningService } from '../services/voiceCloningService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
@@ -33,7 +34,7 @@ router.post('/clone-from-url', authenticateToken, async (req, res) => {
     const { url, name, description, labels } = req.body;
     
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'URL is required', null, 400));
     }
     
     // Clone voice
@@ -44,24 +45,17 @@ router.post('/clone-from-url', authenticateToken, async (req, res) => {
     });
     
     if (!result.success) {
-      return res.status(400).json({ 
-        error: result.error,
-        details: result.details 
-      });
+      return res.status(400).json(errorResponse('CLONE_FAILED', result.error, result.details, 400));
     }
     
-    res.json({
-      success: true,
+    res.json(successResponse({
       voice: result.voice,
       metadata: result.metadata
-    });
+    }, 'Voice cloned successfully'));
     
   } catch (error) {
     console.error('Voice cloning error:', error);
-    res.status(500).json({ 
-      error: 'Failed to clone voice',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('CLONE_ERROR', 'Failed to clone voice', error.message, 500));
   }
 });
 
@@ -76,11 +70,11 @@ router.post('/clone-from-files', authenticateToken, upload.array('audioFiles', 5
     const { name, description, labels } = req.body;
     
     if (!uploadedFiles.length) {
-      return res.status(400).json({ error: 'No audio files provided' });
+      return res.status(400).json(errorResponse('MISSING_FILES', 'No audio files provided', null, 400));
     }
     
     if (!name) {
-      return res.status(400).json({ error: 'Voice name is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Voice name is required', null, 400));
     }
     
     // Process uploaded files
@@ -102,17 +96,11 @@ router.post('/clone-from-files', authenticateToken, upload.array('audioFiles', 5
       }
     );
     
-    res.json({
-      success: true,
-      voice: voice
-    });
+    res.json(successResponse({ voice }, 'Voice cloned successfully from uploaded files'));
     
   } catch (error) {
     console.error('Voice cloning error:', error);
-    res.status(500).json({ 
-      error: 'Failed to clone voice',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('CLONE_ERROR', 'Failed to clone voice', error.message, 500));
     
   } finally {
     // Cleanup uploaded files
@@ -137,17 +125,14 @@ router.get('/voices/:voiceId', authenticateToken, async (req, res) => {
     const voice = await voiceCloningService.getVoiceProfile(voiceId);
     
     if (!voice) {
-      return res.status(404).json({ error: 'Voice not found' });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Voice not found', null, 404));
     }
     
-    res.json(voice);
+    res.json(successResponse(voice));
     
   } catch (error) {
     console.error('Error getting voice:', error);
-    res.status(500).json({ 
-      error: 'Failed to get voice profile',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to get voice profile', error.message, 500));
   }
 });
 
@@ -165,17 +150,14 @@ router.get('/voices', authenticateToken, async (req, res) => {
       userId: req.user.id
     });
     
-    res.json({
+    res.json(successResponse({
       voices: voices,
       total: voices.length
-    });
+    }));
     
   } catch (error) {
     console.error('Error listing voices:', error);
-    res.status(500).json({ 
-      error: 'Failed to list voices',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to list voices', error.message, 500));
   }
 });
 
@@ -189,22 +171,16 @@ router.put('/voices/:voiceId/settings', authenticateToken, async (req, res) => {
     const { settings } = req.body;
     
     if (!settings) {
-      return res.status(400).json({ error: 'Settings are required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Settings are required', null, 400));
     }
     
     const updated = await voiceCloningService.updateVoiceSettings(voiceId, settings);
     
-    res.json({
-      success: true,
-      voice: updated
-    });
+    res.json(successResponse({ voice: updated }, 'Voice settings updated successfully'));
     
   } catch (error) {
     console.error('Error updating voice settings:', error);
-    res.status(500).json({ 
-      error: 'Failed to update voice settings',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update voice settings', error.message, 500));
   }
 });
 
@@ -218,14 +194,11 @@ router.delete('/voices/:voiceId', authenticateToken, async (req, res) => {
     
     const result = await voiceCloningService.deleteVoiceProfile(voiceId);
     
-    res.json(result);
+    res.json(successResponse(result, 'Voice profile deleted successfully'));
     
   } catch (error) {
     console.error('Error deleting voice:', error);
-    res.status(500).json({ 
-      error: 'Failed to delete voice',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('DELETE_ERROR', 'Failed to delete voice', error.message, 500));
   }
 });
 
@@ -238,20 +211,19 @@ router.post('/extract-audio', authenticateToken, async (req, res) => {
     const { url } = req.body;
     
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'URL is required', null, 400));
     }
     
     const audioInfo = await voiceCloningService.extractAudioFromUrl(url);
     
-    res.json({
-      success: true,
+    res.json(successResponse({
       info: {
         title: audioInfo.title,
         duration: audioInfo.duration,
         uploader: audioInfo.uploader,
         fileSize: audioInfo.fileSize
       }
-    });
+    }, 'Audio extracted successfully'));
     
     // Cleanup the extracted file
     try {
@@ -262,10 +234,7 @@ router.post('/extract-audio', authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('Error extracting audio:', error);
-    res.status(500).json({ 
-      error: 'Failed to extract audio',
-      message: error.message 
-    });
+    res.status(500).json(errorResponse('EXTRACT_ERROR', 'Failed to extract audio', error.message, 500));
   }
 });
 

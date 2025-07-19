@@ -1,4 +1,5 @@
 import express from 'express';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -19,16 +20,12 @@ router.post('/start-session', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
     const { repId, coachId, procedureCategory, sessionType = 'practice_pitch' } = req.body;
 
     if (!repId || !coachId || !procedureCategory) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: repId, coachId, procedureCategory' 
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Missing required fields: repId, coachId, procedureCategory', null, 400));
     }
 
     // Check coach availability
@@ -39,9 +36,7 @@ router.post('/start-session', async (req, res) => {
       .single();
 
     if (availError || !availability?.is_available) {
-      return res.status(409).json({ 
-        error: 'Coach is not available for instant sessions' 
-      });
+      return res.status(409).json(errorResponse('COACH_UNAVAILABLE', 'Coach is not available for instant sessions', null, 409));
     }
 
     // Create unique room ID
@@ -64,7 +59,7 @@ router.post('/start-session', async (req, res) => {
 
     if (sessionError) {
       logger.error('Error creating session:', sessionError);
-      return res.status(500).json({ error: 'Failed to create coaching session' });
+      return res.status(500).json(errorResponse('SESSION_CREATE_ERROR', 'Failed to create coaching session', sessionError.message, 500));
     }
 
     // Mark coach as busy
@@ -81,8 +76,7 @@ router.post('/start-session', async (req, res) => {
       logger.error('Error updating coach availability:', busyError);
     }
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       session: {
         ...session,
         roomId,
@@ -90,11 +84,11 @@ router.post('/start-session', async (req, res) => {
           iceServers: getIceServers()
         }
       }
-    });
+    }, 'Coaching session started successfully'));
 
   } catch (error) {
     logger.error('Error starting coaching session:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SESSION_START_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -105,9 +99,7 @@ router.post('/end-session/:sessionId', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
     const { sessionId } = req.params;
     const { notes, feedback } = req.body;
@@ -120,7 +112,7 @@ router.post('/end-session/:sessionId', async (req, res) => {
       .single();
 
     if (sessionError || !session) {
-      return res.status(404).json({ error: 'Session not found' });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Session not found', null, 404));
     }
 
     // Calculate duration
@@ -141,7 +133,7 @@ router.post('/end-session/:sessionId', async (req, res) => {
 
     if (updateError) {
       logger.error('Error updating session:', updateError);
-      return res.status(500).json({ error: 'Failed to end session' });
+      return res.status(500).json(errorResponse('SESSION_UPDATE_ERROR', 'Failed to end session', updateError.message, 500));
     }
 
     // Free up coach
@@ -173,18 +165,17 @@ router.post('/end-session/:sessionId', async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       session: {
         id: sessionId,
         duration_seconds: duration,
         status: 'completed'
       }
-    });
+    }, 'Session ended successfully'));
 
   } catch (error) {
     logger.error('Error ending coaching session:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SESSION_END_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -195,9 +186,7 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
     const { procedureCategory } = req.params;
 
@@ -213,10 +202,7 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
 
     if (error) {
       logger.error('Error fetching specializations:', error);
-      return res.status(500).json({ 
-        error: 'Failed to fetch available coaches',
-        details: error.message 
-      });
+      return res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch available coaches', error.message, 500));
     }
 
     // Then check availability for each coach
@@ -239,14 +225,13 @@ router.get('/available-coaches/:procedureCategory', async (req, res) => {
 
     const data = coachesWithAvailability;
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       coaches: data || []
-    });
+    }));
 
   } catch (error) {
     logger.error('Error in available coaches endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('COACHES_FETCH_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -257,9 +242,7 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
     const { procedureCategory } = req.params;
     const { difficulty } = req.query;
@@ -277,17 +260,16 @@ router.get('/practice-scenarios/:procedureCategory', async (req, res) => {
 
     if (error) {
       logger.error('Error fetching scenarios:', error);
-      return res.status(500).json({ error: 'Failed to fetch practice scenarios' });
+      return res.status(500).json(errorResponse('SCENARIOS_FETCH_ERROR', 'Failed to fetch practice scenarios', error.message, 500));
     }
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       scenarios: data || []
-    });
+    }));
 
   } catch (error) {
     logger.error('Error in practice scenarios endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SCENARIOS_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -298,9 +280,7 @@ router.get('/test-yomi-coaches', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
 
     // First check what procedure categories exist
@@ -316,19 +296,18 @@ router.get('/test-yomi-coaches', async (req, res) => {
       .eq('procedure_category', 'yomi_robot')
       .limit(10);
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       availableCategories: categories ? [...new Set(categories.map(c => c.procedure_category))] : [],
       yomiRobotCoaches: yomiCoaches || [],
       errors: {
         categories: catError?.message,
         yomi: yomiError?.message
       }
-    });
+    }));
 
   } catch (error) {
     logger.error('Error testing yomi coaches:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json(errorResponse('TEST_ERROR', 'Error testing yomi coaches', error.message, 500));
   }
 });
 
@@ -336,9 +315,7 @@ router.get('/test-tables', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
 
     const tables = [
@@ -369,14 +346,13 @@ router.get('/test-tables', async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       tables: results
-    });
+    }));
 
   } catch (error) {
     logger.error('Error testing tables:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('TABLE_TEST_ERROR', 'Internal server error', error.message, 500));
   }
 });
 
@@ -387,9 +363,7 @@ router.get('/session-status/:sessionId', async (req, res) => {
   try {
     const supabase = getSupabase(req);
     if (!supabase) {
-      return res.status(503).json({ 
-        error: 'Database service unavailable. Please try again later.' 
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Database service unavailable. Please try again later.', null, 503));
     }
     const { sessionId } = req.params;
 
@@ -404,17 +378,16 @@ router.get('/session-status/:sessionId', async (req, res) => {
       .single();
 
     if (error || !data) {
-      return res.status(404).json({ error: 'Session not found' });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Session not found', null, 404));
     }
 
-    res.json({
-      success: true,
+    res.json(successResponse({
       session: data
-    });
+    }));
 
   } catch (error) {
     logger.error('Error fetching session status:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(errorResponse('SESSION_STATUS_ERROR', 'Internal server error', error.message, 500));
   }
 });
 

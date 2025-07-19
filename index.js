@@ -66,6 +66,7 @@ import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 import voiceCloningRoutes from './routes/voiceCloning.js';
 import dashboardRoutes from './routes/dashboard.js';
 import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
+import { successResponse, errorResponse } from './utils/responseHelpers.js';
 
 // Initialize cache for API responses
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
@@ -162,7 +163,7 @@ app.locals.supabase = null; // Will be set after connection
 // Stripe webhook needs raw body
 app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
-    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+    return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
   }
 
   const sig = req.headers['stripe-signature'];
@@ -204,10 +205,10 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
       default:
         console.log(`Unhandled Stripe event: ${event.type}`);
     }
-    res.json({ received: true });
+    res.json(successResponse({ received: true }));
   } catch (err) {
     console.error('Error processing Stripe webhook:', err);
-    res.status(500).send('Webhook handler failed');
+    res.status(500).json(errorResponse('WEBHOOK_ERROR', 'Webhook handler failed', err.message, 500));
   }
 });
 
@@ -298,7 +299,7 @@ app.use(cors({
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json(successResponse({ status: 'ok' }));
 });
 
 // Supabase client setup with connection retry
@@ -680,7 +681,7 @@ async function canAccessModel(email, modelId) {
 app.get('/api/models', async (req, res) => {
   if (!process.env.OPENAI_API_KEY) {
     console.error('OpenAI API key not configured');
-    return res.status(500).json({ message: 'OpenAI API key not configured' });
+    return res.status(500).json(errorResponse('SERVICE_UNAVAILABLE', 'OpenAI API key not configured', null, 500));
   }
 
   try {
@@ -712,25 +713,22 @@ app.get('/api/models', async (req, res) => {
       }
     ];
     
-    res.json(models);
+    res.json(successResponse(models));
   } catch (error) {
     console.error('Error fetching models:', error.message);
-    res.status(500).json({ 
-      message: 'Failed to fetch models',
-      details: error.message
-    });
+    res.status(500).json(errorResponse('MODELS_ERROR', 'Failed to fetch models', error.message, 500));
   }
 });
 
 // Create a Stripe Checkout session
 app.post('/api/checkout', async (req, res) => {
   if (!stripe || !process.env.STRIPE_PRICE_ID) {
-    return res.status(503).json({ success: false, message: 'Stripe not configured' });
+    return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
   }
 
   const email = req.body.email;
   if (!email) {
-    return res.status(400).json({ success: false, message: 'Email is required' });
+    return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Email is required', null, 400));
   }
 
   try {
@@ -742,10 +740,10 @@ app.post('/api/checkout', async (req, res) => {
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/cancel`
     });
-    res.json({ url: session.url });
+    res.json(successResponse({ url: session.url }));
   } catch (err) {
     console.error('Error creating Stripe checkout session:', err);
-    res.status(500).json({ success: false, message: 'Failed to create checkout session' });
+    res.status(500).json(errorResponse('CHECKOUT_ERROR', 'Failed to create checkout session', err.message, 500));
   }
 });
 
@@ -756,26 +754,15 @@ app.get('/api/modules/access', async (req, res) => {
     const module = req.query.module;
     
     if (!email || !module) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Email and module parameters are required'
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Email and module parameters are required', null, 400));
     }
     
     const hasAccess = await hasModuleAccess(email, module);
     
-    return res.json({
-      success: true,
-      hasAccess
-    });
+    return res.json(successResponse({ hasAccess }));
   } catch (err) {
     console.error('Error checking module access:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: 'Error checking module access'
-    });
+    return res.status(500).json(errorResponse('INTERNAL_ERROR', 'Error checking module access', err.message, 500));
   }
 });
 
@@ -785,19 +772,11 @@ app.get('/api/modules/list', async (req, res) => {
     const email = req.query.email;
     
     if (!email) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bad Request',
-        message: 'Email parameter is required'
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Email parameter is required', null, 400));
     }
     
     if (!supabase) {
-      return res.status(503).json({
-        success: false,
-        error: 'Service Unavailable',
-        message: 'Supabase connection is not available'
-      });
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Supabase connection is not available', null, 503));
     }
     
     // First get the user_id from user_subscriptions
@@ -808,11 +787,7 @@ app.get('/api/modules/list', async (req, res) => {
       .single();
     
     if (userError || !userData) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: 'User not found'
-      });
+      return res.status(404).json(errorResponse('NOT_FOUND', 'User not found', null, 404));
     }
     
     // Then get all modules user has access to
@@ -826,17 +801,10 @@ app.get('/api/modules/list', async (req, res) => {
       throw error;
     }
     
-    return res.json({
-      success: true,
-      modules: data.map(item => item.module)
-    });
+    return res.json(successResponse({ modules: data.map(item => item.module) }));
   } catch (err) {
     console.error('Error listing accessible modules:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      message: 'Error listing accessible modules'
-    });
+    return res.status(500).json(errorResponse('INTERNAL_ERROR', 'Error listing accessible modules', err.message, 500));
   }
 });
 
@@ -1001,44 +969,34 @@ app.delete('/api/data/:appName', async (req, res) => {
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
   if (!userId || !req.file) {
-    return res.status(400).json({
-      success: false,
-      message: 'User ID and audio file are required'
-    });
+    return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'User ID and audio file are required', null, 400));
   }
 
   try {
     const result = await processAudioFile(userId, req.file);
     if (result.success) {
-      return res.json({
-        success: true,
-        message: 'Audio file processed successfully',
-        transcription: result.transcription
-      });
+      return res.json(successResponse({ transcription: result.transcription }, 'Audio file processed successfully'));
     }
 
-    return res.status(500).json({
-      success: false,
-      error: result.error || 'Error processing audio file'
-    });
+    return res.status(500).json(errorResponse('PROCESSING_ERROR', result.error || 'Error processing audio file', null, 500));
   } catch (err) {
     console.error('Error processing audio file:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json(errorResponse('TRANSCRIPTION_ERROR', err.message, null, 500));
   }
 });
 
 app.get('/api/transcriptions', async (req, res) => {
   const userId = req.header('x-user-id') || req.query.userId;
   if (!userId) {
-    return res.status(400).json({ success: false, message: 'User ID is required' });
+    return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
   }
 
   try {
     const transcriptions = await getUserTranscriptions(userId);
-    return res.json({ success: true, transcriptions });
+    return res.json(successResponse({ transcriptions }));
   } catch (err) {
     console.error('Error getting user transcriptions:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json(errorResponse('TRANSCRIPTIONS_ERROR', err.message, null, 500));
   }
 });
 
@@ -1046,15 +1004,15 @@ app.get('/api/transcriptions/:id', async (req, res) => {
   const userId = req.header('x-user-id') || req.query.userId;
   const { id } = req.params;
   if (!userId || !id) {
-    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+    return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Transcription ID and user ID are required', null, 400));
   }
 
   try {
     const transcription = await getTranscriptionById(id, userId);
-    return res.json({ success: true, transcription });
+    return res.json(successResponse({ transcription }));
   } catch (err) {
     console.error('Error getting transcription:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json(errorResponse('TRANSCRIPTION_GET_ERROR', err.message, null, 500));
   }
 });
 
@@ -1062,15 +1020,15 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
   const userId = req.header('x-user-id') || req.query.userId;
   const { id } = req.params;
   if (!userId || !id) {
-    return res.status(400).json({ success: false, message: 'Transcription ID and user ID are required' });
+    return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Transcription ID and user ID are required', null, 400));
   }
 
   try {
     await deleteTranscription(id, userId);
-    return res.json({ success: true, message: 'Transcription deleted successfully' });
+    return res.json(successResponse({}, 'Transcription deleted successfully'));
   } catch (err) {
     console.error('Error deleting transcription:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json(errorResponse('TRANSCRIPTION_DELETE_ERROR', err.message, null, 500));
   }
 });
 
@@ -1241,11 +1199,10 @@ app.post('/webhook', async (req, res) => {
 
 // Pricing and subscription endpoints
 app.get('/api/pricing', (req, res) => {
-  res.json({
-    success: true,
+  res.json(successResponse({
     plans: pricingPlans,
     usage: usageProducts
-  });
+  }));
 });
 
 app.get('/api/subscription/:userId', async (req, res) => {
@@ -1253,10 +1210,7 @@ app.get('/api/subscription/:userId', async (req, res) => {
     const { userId } = req.params;
     
     if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required'
-      });
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
     }
 
     // Get subscription info
@@ -1555,7 +1509,7 @@ app.post('/task', async (req, res) => {
       }
       
       // Return the LLM result
-      res.json({ success: true, llmResult });
+      res.json(successResponse({ llmResult }));
     } catch (err) {
       console.error('Error calling LLM:', err);
       
