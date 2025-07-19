@@ -66,6 +66,7 @@ import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 import voiceCloningRoutes from './routes/voiceCloning.js';
 import dashboardRoutes from './routes/dashboard.js';
 import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
+import stripeRoutes from './routes/stripe.js';
 import { successResponse, errorResponse } from './utils/responseHelpers.js';
 
 // Initialize cache for API responses
@@ -2282,6 +2283,9 @@ app.use(twilioWebhookRoutes);
 
 // Add Auth routes
 app.use('/api/auth', authRoutes);
+
+// Add Stripe routes for RepX subscriptions
+app.use('/api/stripe', stripeRoutes);
 
 // Add Health monitoring routes
 app.use('/', healthRoutes);
