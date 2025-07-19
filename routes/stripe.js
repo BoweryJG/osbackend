@@ -15,54 +15,168 @@ const repxPricing = {
   repx1: {
     monthly: {
       amount: 3900, // $39.00 in cents
-      priceId: process.env.STRIPE_REPX1_MONTHLY_PRICE_ID || 'price_repx1_monthly_placeholder'
+      priceId: process.env.STRIPE_REPX1_MONTHLY_PRICE_ID || 'price_1RRutVGRiAPUZqWuDMSAqHsD'
     },
     annual: {
       amount: 39000, // $390.00 in cents
-      priceId: process.env.STRIPE_REPX1_ANNUAL_PRICE_ID || 'price_repx1_annual_placeholder'
+      priceId: process.env.STRIPE_REPX1_ANNUAL_PRICE_ID || 'price_1RWMSCGRiAPUZqWu30j19b9G'
     }
   },
   repx2: {
     monthly: {
       amount: 9700, // $97.00 in cents
-      priceId: process.env.STRIPE_REPX2_MONTHLY_PRICE_ID || 'price_repx2_monthly_placeholder'
+      priceId: process.env.STRIPE_REPX2_MONTHLY_PRICE_ID || 'price_1RRushGRiAPUZqWuIvqueK7h'
     },
     annual: {
       amount: 97000, // $970.00 in cents
-      priceId: process.env.STRIPE_REPX2_ANNUAL_PRICE_ID || 'price_repx2_annual_placeholder'
+      priceId: process.env.STRIPE_REPX2_ANNUAL_PRICE_ID || 'price_1RWMT4GRiAPUZqWuqiNhkZfw'
     }
   },
   repx3: {
     monthly: {
       amount: 19700, // $197.00 in cents
-      priceId: process.env.STRIPE_REPX3_MONTHLY_PRICE_ID || 'price_repx3_monthly_placeholder'
+      priceId: process.env.STRIPE_REPX3_MONTHLY_PRICE_ID || 'price_1RWMW3GRiAPUZqWuoTA0eLUC'
     },
     annual: {
       amount: 197000, // $1970.00 in cents
-      priceId: process.env.STRIPE_REPX3_ANNUAL_PRICE_ID || 'price_repx3_annual_placeholder'
+      priceId: process.env.STRIPE_REPX3_ANNUAL_PRICE_ID || 'price_1RRus5GRiAPUZqWup3jk1S8U'
     }
   },
   repx4: {
     monthly: {
       amount: 39700, // $397.00 in cents
-      priceId: process.env.STRIPE_REPX4_MONTHLY_PRICE_ID || 'price_repx4_monthly_placeholder'
+      priceId: process.env.STRIPE_REPX4_MONTHLY_PRICE_ID || 'price_1RRurNGRiAPUZqWuklICsE4P'
     },
     annual: {
       amount: 397000, // $3970.00 in cents
-      priceId: process.env.STRIPE_REPX4_ANNUAL_PRICE_ID || 'price_repx4_annual_placeholder'
+      priceId: process.env.STRIPE_REPX4_ANNUAL_PRICE_ID || 'price_1RWMWjGRiAPUZqWu6YBZY7o4'
     }
   },
   repx5: {
     monthly: {
-      amount: 69700, // $697.00 in cents
-      priceId: process.env.STRIPE_REPX5_MONTHLY_PRICE_ID || 'price_repx5_monthly_placeholder'
+      amount: 79700, // $797.00 in cents
+      priceId: process.env.STRIPE_REPX5_MONTHLY_PRICE_ID || 'price_1RRuqbGRiAPUZqWu3f91wnNx'
     },
     annual: {
-      amount: 697000, // $6970.00 in cents
-      priceId: process.env.STRIPE_REPX5_ANNUAL_PRICE_ID || 'price_repx5_annual_placeholder'
+      amount: 797000, // $7970.00 in cents
+      priceId: process.env.STRIPE_REPX5_ANNUAL_PRICE_ID || 'price_1RWMXEGRiAPUZqWuPwcgrovN'
     }
   }
 };
+
+/**
+ * Get RepX pricing plans - used by all frontends
+ * GET /api/stripe/repx/plans
+ */
+router.get('/repx/plans', async (req, res) => {
+  try {
+    // Add feature details for each tier
+    const plansWithFeatures = {
+      repx1: {
+        ...repxPricing.repx1,
+        name: 'RepX1 Professional Business Line',
+        features: {
+          calls: 100,
+          emails: 0,
+          canvas_scans: 0,
+          basic: [
+            'Your Professional Business Line for Life',
+            'AI transcription of every sales call',
+            'Transcriptions sent directly to your CRM',
+            'Professional/personal call separation',
+            'Basic call analytics and history',
+            '100 calls per month',
+            'Eternal professional phone number'
+          ]
+        }
+      },
+      repx2: {
+        ...repxPricing.repx2,
+        name: 'RepX2 Market Intelligence',
+        features: {
+          calls: 200,
+          emails: 50,
+          canvas_scans: 10,
+          basic: [
+            'Everything in RepX1, plus:',
+            'Work email integration (no IT approval needed)',
+            'Basic Market Data access (all procedures)',
+            '200 calls per month',
+            '50 emails per day',
+            '10 Canvas practice scans per day',
+            'Enhanced call analytics and insights'
+          ]
+        }
+      },
+      repx3: {
+        ...repxPricing.repx3,
+        name: 'RepX3 Territory Command',
+        features: {
+          calls: 400,
+          emails: 100,
+          canvas_scans: 25,
+          basic: [
+            'Everything in RepX2, plus:',
+            'Full Canvas practice intelligence platform',
+            'Territory mapping and local insights',
+            'Advanced market analytics with trends',
+            '400 calls per month',
+            '100 emails per day',
+            '25 Canvas practice scans per day',
+            'Competitive intelligence reports'
+          ]
+        }
+      },
+      repx4: {
+        ...repxPricing.repx4,
+        name: 'RepX4 Executive Operations',
+        features: {
+          calls: 800,
+          emails: 200,
+          canvas_scans: 50,
+          basic: [
+            'Everything in RepX3, plus:',
+            'AI coaching insights and recommendations',
+            'Workflow automation (up to 5 workflows)',
+            'Advanced CRM integration and automation',
+            '800 calls per month',
+            '200 emails per day',
+            '50 Canvas practice scans per day',
+            'Real-time sales performance analytics'
+          ]
+        }
+      },
+      repx5: {
+        ...repxPricing.repx5,
+        name: 'RepX5 Elite Global',
+        features: {
+          calls: 'unlimited',
+          emails: 'unlimited',
+          canvas_scans: 'unlimited',
+          basic: [
+            'Everything in RepX4, plus:',
+            'Real-time AI whisper coaching during live calls',
+            'Unlimited calls, emails, and Canvas scans',
+            'Unlimited workflow automations',
+            'Custom AI agent configuration'
+          ],
+          premium: [
+            'Dedicated success manager',
+            'Priority support and training',
+            'Custom integrations and setup',
+            'Early access to new AI features',
+            'The complete "Enhanced Rep" experience'
+          ]
+        }
+      }
+    };
+
+    res.json(successResponse('RepX plans retrieved successfully', plansWithFeatures));
+  } catch (error) {
+    console.error('Error fetching RepX plans:', error);
+    res.status(500).json(errorResponse('INTERNAL_ERROR', 'Failed to fetch RepX plans', error.message, 500));
+  }
+});
 
 /**
  * Create Stripe checkout session for RepX subscription tiers
