@@ -4,6 +4,7 @@ import { AgentCore } from '../../agents/core/agentCore.js';
 import { ConversationManager } from '../../agents/core/conversationManager.js';
 import { ProcedureService } from '../../agents/services/procedureService.js';
 import { createClient } from '@supabase/supabase-js';
+import { successResponse, errorResponse } from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -30,10 +31,12 @@ if (process.env.SUPABASE_URL && supabaseKey) {
 // Middleware to check if services are initialized
 const checkServicesInitialized = (req, res, next) => {
   if (!supabase || !agentCore || !conversationManager) {
-    return res.status(503).json({ 
-      error: 'Agent services not available',
-      message: 'The server is missing required configuration for agent features'
-    });
+    return res.status(503).json(errorResponse(
+      'SERVICE_UNAVAILABLE', 
+      'Agent services not available - missing required configuration', 
+      null, 
+      503
+    ));
   }
   next();
 };
@@ -41,27 +44,27 @@ const checkServicesInitialized = (req, res, next) => {
 // Middleware to verify authentication
 const requireAuth = async (req, res, next) => {
   if (!supabase) {
-    return res.status(503).json({ error: 'Authentication service not available' });
+    return res.status(503).json(errorResponse('AUTH_SERVICE_UNAVAILABLE', 'Authentication service not available', null, 503));
   }
 
   const token = req.headers.authorization?.replace('Bearer ', '');
   
   if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json(errorResponse('MISSING_TOKEN', 'Authentication token required', null, 401));
   }
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return res.status(401).json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
     }
 
     req.user = user;
     next();
   } catch (error) {
     console.error('Auth error:', error);
-    res.status(401).json({ error: 'Authentication failed' });
+    res.status(401).json(errorResponse('AUTH_FAILED', 'Authentication failed', null, 401));
   }
 };
 
@@ -69,10 +72,10 @@ const requireAuth = async (req, res, next) => {
 router.get('/agents', checkServicesInitialized, requireAuth, async (req, res) => {
   try {
     const agents = await agentCore.listAgents();
-    res.json({ agents });
+    res.json(successResponse({ agents }));
   } catch (error) {
     console.error('Error listing agents:', error);
-    res.status(500).json({ error: 'Failed to list agents' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to list agents', error.message, 500));
   }
 });
 
@@ -80,10 +83,10 @@ router.get('/agents', checkServicesInitialized, requireAuth, async (req, res) =>
 router.get('/agents/:agentId', requireAuth, async (req, res) => {
   try {
     const agent = await agentCore.getAgent(req.params.agentId);
-    res.json({ agent });
+    res.json(successResponse({ agent }));
   } catch (error) {
     console.error('Error fetching agent:', error);
-    res.status(500).json({ error: 'Failed to fetch agent' });
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch agent', error.message, 500));
   }
 });
 
