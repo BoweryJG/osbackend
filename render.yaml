@@ -3,7 +3,7 @@ services:
     name: spheres-consolidated-backend
     env: node
     buildCommand: npm install
-    startCommand: node index.js
+    startCommand: node start.js
     healthCheckPath: /health
     envVars:
       - key: OPENROUTER_API_KEY

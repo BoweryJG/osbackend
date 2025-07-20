@@ -207,6 +207,7 @@ async function runDiagnostics() {
   console.log(`Whisper Connection: ${openaiOk ? '✅ OK' : whisperConfigured ? '❌ Issues Found' : '⚠️ Not Configured'}`);
   
   // Check if at least one of OpenAI is working
+  const hasWorkingAI = openaiOk;
   
   if (envVarsOk && supabaseOk && hasWorkingAI) {
     console.log('\n✅ Environment is correctly set up for the transcription service!');
@@ -215,8 +216,6 @@ async function runDiagnostics() {
       console.log('\n⚠️ Whisper connection failed - transcription functionality may not work');
     } else if (!openaiOk) {
       console.log('\n⚠️ Whisper service not configured - transcription functionality will not work');
-    }
-    
     }
     
     console.log('\nYou can now run the transcription service with:');
@@ -250,8 +249,6 @@ SUPABASE_STORAGE_BUCKET=audio_recordings
       console.log('\nFor Whisper API issues:');
       console.log('2. Ensure your account has billing enabled or sufficient credits');
       console.log('3. Confirm that Whisper access is permitted by your provider');
-    }
-    
     }
   }
 }
