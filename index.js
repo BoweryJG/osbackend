@@ -23,6 +23,7 @@ import cookieParser from 'cookie-parser';
 import AgentWebSocketServer from './agents/websocket/server.js';
 import agentRoutes from './routes/agents/agentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import fundingStrategyRoutes from './routes/fundingStrategy.js';
 import healthRoutes from './routes/healthRoutes.js';
 import rateLimiterMiddleware from './middleware/rateLimiter.js';
 import responseTimeMiddleware from './middleware/responseTime.js';
@@ -2283,6 +2284,9 @@ app.use(twilioWebhookRoutes);
 
 // Add Auth routes
 app.use('/api/auth', authRoutes);
+
+// Add protected Funding Strategy routes
+app.use('/api/funding', fundingStrategyRoutes);
 
 // Add Stripe routes for RepX subscriptions
 app.use('/api/stripe', stripeRoutes);
