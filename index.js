@@ -2266,6 +2266,9 @@ app.use('/', zapierRoutes);
 // Add Canvas Agent routes
 app.use('/api/canvas', agentRoutes);
 
+// Add RepConnect Agent routes  
+app.use('/api/repconnect', agentRoutes);
+
 // Add Call Transcription routes
 app.use('/api', callTranscriptionRoutes);
 
