@@ -656,11 +656,13 @@ router.post('/firecrawl-scrape', async (req, res) => {
 // OpenRouter endpoint for Canvas
 router.post('/openrouter', async (req, res) => {
   try {
-    const { prompt, model = 'anthropic/claude-opus-4' } = req.body;
+    const { prompt, model = 'anthropic/claude-3-opus-20240229' } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
+
+    console.log(`OpenRouter request - Model: ${model}, Prompt length: ${prompt.length}`);
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -679,12 +681,20 @@ router.post('/openrouter', async (req, res) => {
       }
     );
 
+    console.log('OpenRouter response received successfully');
     res.json(response.data);
   } catch (error) {
-    console.error('OpenRouter error:', error);
+    console.error('OpenRouter error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
+    
     res.status(500).json({ 
       error: 'OpenRouter API failed', 
-      message: error.message 
+      message: error.response?.data?.error?.message || error.message,
+      details: error.response?.status ? `HTTP ${error.response.status}` : 'Network error'
     });
   }
 });
