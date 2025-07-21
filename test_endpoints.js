@@ -32,42 +32,85 @@ async function testEndpoint(name, url, options = {}) {
 }
 
 async function runTests() {
-  console.log('🚀 Starting endpoint tests...');
+  console.log('🚀 Starting comprehensive endpoint tests...');
   console.log(`Backend URL: ${BASE_URL}`);
   
   // Test 1: RepConnect agents endpoint
-  await testEndpoint(
+  const repconnectResult = await testEndpoint(
     'RepConnect GET /api/repconnect/agents',
     `${BASE_URL}/api/repconnect/agents`
   );
   
+  if (repconnectResult.success) {
+    const agents = repconnectResult.data.agents || [];
+    console.log(`\n📊 RepConnect Agent Summary:`);
+    console.log(`Total agents: ${agents.length}`);
+    console.log(`Voice enabled: ${agents.filter(a => a.voice_enabled).length}`);
+    console.log(`Categories: ${[...new Set(agents.map(a => a.agent_category))].join(', ')}`);
+    
+    // Check for Harvey
+    const harvey = agents.find(a => a.name === 'Harvey Specter');
+    if (harvey) {
+      console.log(`\n🔥 Harvey Specter found:`);
+      console.log(`- Category: ${harvey.agent_category}`);
+      console.log(`- Voice: ${harvey.voice_name}`);
+      console.log(`- Whisper support: ${harvey.whisper_supported}`);
+    }
+  }
+  
   // Test 2: Canvas agents endpoint  
-  await testEndpoint(
+  const canvasResult = await testEndpoint(
     'Canvas GET /api/canvas/agents',
     `${BASE_URL}/api/canvas/agents`
   );
   
-  // Test 3: Check what tables exist in the database
-  console.log('\n📊 Checking database tables...');
+  if (canvasResult.success) {
+    const agents = canvasResult.data.agents || [];
+    console.log(`\n📊 Canvas Agent Summary:`);
+    console.log(`Total agents: ${agents.length}`);
+    console.log(`Active agents: ${agents.filter(a => a.is_active).length}`);
+  }
   
-  // Test 4: Create a test RepConnect agent (requires auth)
-  const testAgent = {
-    name: 'Test RepConnect Agent',
-    role: 'Test Role',
-    tagline: 'Testing RepConnect endpoints',
-    category: 'test',
-    active: true
-  };
-  
-  console.log('\n🔧 Testing RepConnect POST (will fail without auth - this is expected)');
+  // Test 3: RepConnect voice-enabled agents
   await testEndpoint(
-    'RepConnect POST /api/repconnect/agents',
-    `${BASE_URL}/api/repconnect/agents`,
-    {
-      method: 'POST',
-      body: JSON.stringify(testAgent)
-    }
+    'RepConnect GET /api/repconnect/agents/voice-enabled',
+    `${BASE_URL}/api/repconnect/agents/voice-enabled`
   );
+  
+  // Test 4: Harvey Specter specific endpoint
+  await testEndpoint(
+    'RepConnect GET /api/repconnect/agents/harvey',
+    `${BASE_URL}/api/repconnect/agents/harvey`
+  );
+  
+  // Test 5: Agent categories
+  const categoriesResult = await testEndpoint(
+    'RepConnect GET /api/repconnect/agents/categories',
+    `${BASE_URL}/api/repconnect/agents/categories`
+  );
+  
+  if (categoriesResult.success) {
+    console.log('\n📋 Available Categories:');
+    categoriesResult.data.categories.forEach(cat => {
+      console.log(`- ${cat.label}: ${cat.count} agents`);
+    });
+  }
+  
+  // Test 6: Validate agent data structure
+  if (repconnectResult.success) {
+    const sampleAgent = repconnectResult.data.agents[0];
+    if (sampleAgent) {
+      console.log('\n🔍 Validating agent data structure:');
+      const requiredFields = ['id', 'name', 'voice_id', 'voice_enabled', 'agent_category'];
+      const missingFields = requiredFields.filter(field => !(field in sampleAgent));
+      
+      if (missingFields.length === 0) {
+        console.log('✅ All required fields present');
+      } else {
+        console.log(`❌ Missing fields: ${missingFields.join(', ')}`);
+      }
+    }
+  }
   
   console.log('\n✅ Test suite completed!');
 }

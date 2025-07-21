@@ -38,25 +38,13 @@ export class AgentCore {
       return this.agentCache.get(agentId);
     }
 
-    // Try unified_agents table first
-    let { data: agent, error } = await this.supabase
+    // ONLY use unified_agents table - single source of truth
+    const { data: agent, error } = await this.supabase
       .from('unified_agents')
       .select('*')
       .eq('id', agentId)
       .contains('available_in_apps', ['canvas'])
       .single();
-
-    // Fallback to canvas_ai_agents if not found
-    if (error || !agent) {
-      const fallbackResult = await this.supabase
-        .from('canvas_ai_agents')
-        .select('*')
-        .eq('id', agentId)
-        .single();
-        
-      agent = fallbackResult.data;
-      error = fallbackResult.error;
-    }
 
     if (error) {
       throw new Error(`Failed to fetch agent: ${error.message}`);
@@ -80,18 +68,7 @@ export class AgentCore {
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
-    // Fallback to canvas_ai_agents if unified_agents fails or returns empty
-    if (error || !agents || agents.length === 0) {
-      const fallbackResult = await this.supabase
-        .from('canvas_ai_agents')
-        .select('*')
-        .order('created_at', { ascending: false });
-        
-      if (!error || (agents && agents.length === 0)) {
-        agents = fallbackResult.data || [];
-        error = fallbackResult.error;
-      }
-    }
+    // No fallback - only use unified_agents table
 
     if (error) {
       throw new Error(`Failed to list agents: ${error.message}`);
@@ -102,7 +79,7 @@ export class AgentCore {
 
   async createAgent(agentData) {
     const { data: agent, error } = await this.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .insert(agentData)
       .select()
       .single();
@@ -118,7 +95,7 @@ export class AgentCore {
 
   async updateAgent(agentId, updates) {
     const { data: agent, error } = await this.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .update(updates)
       .eq('id', agentId)
       .select()
