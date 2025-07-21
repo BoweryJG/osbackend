@@ -407,9 +407,9 @@ Return ONLY valid JSON with trait names and numerical values.`;
     // Validate traits
     const warnings = this.validateTraits(personality.traits || {});
     
-    // Update agent personality in database
+    // Update agent personality in database - using unified_agents table
     const { data, error } = await this.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .update({ 
         personality: {
           ...personality,
@@ -439,7 +439,7 @@ Return ONLY valid JSON with trait names and numerical values.`;
     }
 
     const { data, error } = await this.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .select('personality')
       .eq('id', agentId)
       .single();

@@ -67,9 +67,9 @@ router.get('/agents', async (req, res) => {
   try {
     const { page = 1, limit = 20, sortBy = 'created_at', order = 'desc' } = req.query;
     
-    // Get agents from database
+    // Get agents from database - using unified_agents table
     const { data: agents, error } = await req.app.locals.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .select('*')
       .order(sortBy, { ascending: order === 'asc' })
       .range((page - 1) * limit, page * limit - 1);
@@ -123,9 +123,9 @@ router.get('/metrics/:agentId', async (req, res) => {
     const { agentId } = req.params;
     const { startDate, endDate, period = 'day' } = req.query;
     
-    // Validate agent exists
+    // Validate agent exists - using unified_agents table
     const { data: agent, error: agentError } = await req.app.locals.supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .select('*')
       .eq('id', agentId)
       .single();
@@ -331,7 +331,7 @@ router.get('/training-status', async (req, res) => {
       .from('agent_training_sessions')
       .select(`
         *,
-        canvas_ai_agents(name, type)
+        unified_agents(name, type)
       `)
       .order('created_at', { ascending: false });
     
@@ -420,10 +420,10 @@ router.get('/export', requireTier('professional'), async (req, res) => {
       });
     }
     
-    // Get agents if requested
+    // Get agents if requested - using unified_agents table
     if (dataTypes === 'all' || dataTypes.includes('agents')) {
       const { data: agents } = await req.app.locals.supabase
-        .from('canvas_ai_agents')
+        .from('unified_agents')
         .select('*');
       exportData.data.agents = agents;
     }

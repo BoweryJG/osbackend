@@ -580,9 +580,9 @@ class KnowledgeBankService {
   // Certificate Generation
   async generateCertificate(agentId, trackId, userId) {
     try {
-      // Get agent and track details
+      // Get agent and track details - using unified_agents table
       const { data: agent } = await supabase
-        .from('canvas_ai_agents')
+        .from('unified_agents')
         .select('*')
         .eq('id', agentId)
         .single();

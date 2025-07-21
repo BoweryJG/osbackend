@@ -2264,7 +2264,7 @@ app.use('/api/coaching', coachingSessionRoutes);
 // Add Zapier webhook routes
 app.use('/', zapierRoutes);
 
-// Add Canvas Agent routes
+// Add Agent routes (unified agent system)
 app.use('/api/canvas', agentRoutes);
 
 // Add RepConnect Agent routes  
@@ -2392,7 +2392,7 @@ httpServer.listen(PORT, () => {
   console.log(`OpenAI configured: ${!!process.env.OPENAI_API_KEY}`);
   console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
   console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
-  console.log(`Canvas Agents WebSocket: Active on /agents-ws`);
+  console.log(`Agent System WebSocket: Active on /agents-ws`);
   console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
   console.log(`Harvey AI WebSocket: Active on /harvey-ws`);
   console.log(`Voice Agents WebRTC: Active on /voice-agents`);

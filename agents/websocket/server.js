@@ -30,7 +30,8 @@ class AgentWebSocketServer {
       this.supabase = null;
     }
 
-    this.agentCore = new AgentCore();
+    // Store AgentCore instances per app (lazy initialization)
+    this.agentCores = new Map();
     this.conversationManager = new ConversationManager(this.supabase);
     
     this.setupMiddleware();
@@ -41,6 +42,12 @@ class AgentWebSocketServer {
     // Authentication middleware
     this.io.use(async (socket, next) => {
       try {
+        // Get appName from handshake, default to 'canvas'
+        const appName = socket.handshake.auth.appName || 'canvas';
+        socket.appName = appName;
+        
+        console.log(`WebSocket connection attempt for app: ${appName}`);
+
         // Skip auth if Supabase is not configured
         if (!this.supabase) {
           console.warn('WebSocket: Authentication skipped - Supabase not configured');
@@ -69,9 +76,18 @@ class AgentWebSocketServer {
     });
   }
 
+  // Get or create AgentCore for a specific app
+  getAgentCore(appName) {
+    if (!this.agentCores.has(appName)) {
+      console.log(`Creating new AgentCore instance for app: ${appName}`);
+      this.agentCores.set(appName, new AgentCore(appName));
+    }
+    return this.agentCores.get(appName);
+  }
+
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`User ${socket.userId} connected to agent chat`);
+      console.log(`User ${socket.userId} connected to agent chat for app: ${socket.appName}`);
 
       // Join user-specific room
       socket.join(`user:${socket.userId}`);
@@ -133,10 +149,25 @@ class AgentWebSocketServer {
         }
       });
 
+      // Handle agent listing
+      socket.on('agent:list', async () => {
+        try {
+          const agentCore = this.getAgentCore(socket.appName);
+          const agents = await agentCore.listAgents();
+          socket.emit('agent:list', agents);
+        } catch (error) {
+          socket.emit('error', {
+            message: 'Failed to list agents',
+            code: 'AGENT_LIST_ERROR'
+          });
+        }
+      });
+
       // Handle agent selection
       socket.on('agent:select', async (agentId) => {
         try {
-          const agent = await this.agentCore.getAgent(agentId);
+          const agentCore = this.getAgentCore(socket.appName);
+          const agent = await agentCore.getAgent(agentId);
           socket.emit('agent:selected', agent);
         } catch (error) {
           socket.emit('error', {
@@ -181,7 +212,7 @@ class AgentWebSocketServer {
 
       // Handle disconnection
       socket.on('disconnect', () => {
-        console.log(`User ${socket.userId} disconnected from agent chat`);
+        console.log(`User ${socket.userId} disconnected from agent chat (app: ${socket.appName})`);
       });
     });
   }
@@ -207,8 +238,9 @@ class AgentWebSocketServer {
         socket.userId
       );
 
-      // Stream agent response
-      const stream = await this.agentCore.streamResponse(
+      // Get app-specific agent core and stream response
+      const agentCore = this.getAgentCore(socket.appName);
+      const stream = await agentCore.streamResponse(
         agentId,
         message,
         context,
@@ -252,8 +284,8 @@ class AgentWebSocketServer {
       // Stop typing indicator
       socket.emit('agent:typing', { isTyping: false });
 
-      // Check for proactive insights
-      const insights = await this.agentCore.checkProactiveInsights(
+      // Check for proactive insights using app-specific agent core
+      const insights = await agentCore.checkProactiveInsights(
         conversationId,
         socket.userId
       );
@@ -290,6 +322,8 @@ class AgentWebSocketServer {
 
   // Clean up
   close() {
+    // Clear all AgentCore instances
+    this.agentCores.clear();
     this.io.close();
   }
 }

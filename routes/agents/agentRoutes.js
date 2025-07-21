@@ -25,7 +25,7 @@ if (process.env.SUPABASE_URL && supabaseKey) {
   conversationManager = new ConversationManager(supabase);
   procedureService = new ProcedureService();
 } else {
-  console.warn('Canvas Agents: Missing Supabase credentials, agent features will be disabled');
+  console.warn('Agent System: Missing Supabase credentials, agent features will be disabled');
 }
 
 // Middleware to check if services are initialized
@@ -343,7 +343,7 @@ router.post('/agents/suggest', requireAuth, async (req, res) => {
     const { need, specialty } = req.body;
     
     let query = supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .select('*');
     
     if (specialty) {
@@ -547,12 +547,12 @@ router.get('/agents/external', requireAuth, async (req, res) => {
   }
 });
 
-// Get combined agents (local Canvas + external agentbackend)
+// Get combined agents (local unified agents + external agentbackend)
 router.get('/agents/combined', requireAuth, async (req, res) => {
   try {
     const { role, purpose, category } = req.query;
     
-    // Fetch local Canvas agents
+    // Fetch local unified agents
     const localAgents = await agentCore.listAgents();
     
     // Fetch external agents from agentbackend
@@ -592,7 +592,7 @@ router.get('/agents/combined', requireAuth, async (req, res) => {
     
     // Combine agents with source identification
     const combinedAgents = [
-      ...localAgents.map(agent => ({ ...agent, source: 'canvas', external: false })),
+      ...localAgents.map(agent => ({ ...agent, source: 'unified', external: false })),
       ...externalAgents.map(agent => ({ ...agent, source: 'agentbackend', external: true }))
     ];
     
@@ -600,7 +600,7 @@ router.get('/agents/combined', requireAuth, async (req, res) => {
       agents: combinedAgents,
       count: combinedAgents.length,
       sources: {
-        canvas: localAgents.length,
+        unified: localAgents.length,
         agentbackend: externalAgents.length
       }
     }));

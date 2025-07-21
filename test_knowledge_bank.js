@@ -45,14 +45,15 @@ async function testKnowledgeBank() {
     
     console.log('✓ Specialization track created:', track.name);
     
-    // Test 3: Create a test agent
+    // Test 3: Create a test agent - using unified_agents table
     console.log('\n3. Creating test agent...');
     const { data: agent, error: agentError } = await supabase
-      .from('canvas_ai_agents')
+      .from('unified_agents')
       .insert({
         name: 'Test Agent ' + Date.now(),
         specialty: ['test'],
-        personality: { tone: 'professional' }
+        personality: { tone: 'professional' },
+        available_in_apps: ['canvas'] // Add apps array for unified table
       })
       .select()
       .single();
@@ -154,7 +155,7 @@ async function testKnowledgeBank() {
     await supabase.from('agent_knowledge_progress').delete().eq('agent_id', agent.id);
     await supabase.from('agent_specialization_progress').delete().eq('agent_id', agent.id);
     await supabase.from('quiz_attempts').delete().eq('agent_id', agent.id);
-    await supabase.from('canvas_ai_agents').delete().eq('id', agent.id);
+    await supabase.from('unified_agents').delete().eq('id', agent.id);
     await supabase.from('knowledge_quizzes').delete().eq('id', quiz.id);
     await supabase.from('knowledge_embeddings').delete().eq('document_id', urlDocument.id);
     await supabase.from('knowledge_documents').delete().eq('id', urlDocument.id);

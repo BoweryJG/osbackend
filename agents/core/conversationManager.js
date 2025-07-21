@@ -40,7 +40,7 @@ export class ConversationManager {
         agent_id,
         created_at,
         metadata,
-        canvas_ai_agents (
+        unified_agents (
           id,
           name,
           avatar_url,
@@ -76,7 +76,7 @@ export class ConversationManager {
       .from('agent_conversations')
       .select(`
         *,
-        canvas_ai_agents (
+        unified_agents (
           id,
           name,
           avatar_url,
@@ -227,11 +227,11 @@ export class ConversationManager {
     } else if (format === 'markdown') {
       // Convert to markdown format
       let markdown = `# ${conversation.title}\n\n`;
-      markdown += `Agent: ${conversation.canvas_ai_agents.name}\n`;
+      markdown += `Agent: ${conversation.unified_agents.name}\n`;
       markdown += `Date: ${new Date(conversation.created_at).toLocaleDateString()}\n\n`;
       
       conversation.messages.forEach(msg => {
-        markdown += `### ${msg.role === 'user' ? 'You' : conversation.canvas_ai_agents.name}\n`;
+        markdown += `### ${msg.role === 'user' ? 'You' : conversation.unified_agents.name}\n`;
         markdown += `${msg.content}\n\n`;
       });
 

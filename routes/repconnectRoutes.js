@@ -1,5 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { AgentCore } from '../agents/core/agentCore.js';
+import { ConversationManager } from '../agents/core/conversationManager.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
@@ -7,13 +9,17 @@ const router = express.Router();
 // Initialize Supabase for RepConnect
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 let supabase = null;
+let agentCore = null;
+let conversationManager = null;
 
 if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(
     process.env.SUPABASE_URL,
     supabaseKey
   );
-  console.log('RepConnect Agents: Supabase initialized');
+  agentCore = new AgentCore('repconnect');
+  conversationManager = new ConversationManager(supabase);
+  console.log('RepConnect Agents: Supabase and AgentCore initialized');
 } else {
   console.warn('RepConnect Agents: Missing Supabase credentials');
 }
@@ -24,6 +30,19 @@ const checkSupabase = (req, res, next) => {
     return res.status(503).json(errorResponse(
       'SERVICE_UNAVAILABLE', 
       'RepConnect agent service not available', 
+      null, 
+      503
+    ));
+  }
+  next();
+};
+
+// Middleware to check if chat services are initialized
+const checkChatServices = (req, res, next) => {
+  if (!supabase || !agentCore || !conversationManager) {
+    return res.status(503).json(errorResponse(
+      'SERVICE_UNAVAILABLE', 
+      'RepConnect chat services not available - missing required configuration', 
       null, 
       503
     ));
@@ -460,6 +479,326 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
   } catch (error) {
     console.error('Error starting voice session:', error);
     res.status(500).json(errorResponse('SESSION_ERROR', 'Failed to start voice session', error.message, 500));
+  }
+});
+
+// ========================================
+// CHAT FUNCTIONALITY ENDPOINTS
+// ========================================
+
+// POST /api/repconnect/chat/stream - Streaming chat response
+router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => {
+  try {
+    const { agentId, message, conversationId, context } = req.body;
+    
+    if (!agentId || !message) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+    }
+
+    // Verify agent exists and is available for RepConnect
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*')
+      .eq('id', agentId)
+      .contains('available_in_apps', ['repconnect'])
+      .eq('is_active', true)
+      .single();
+
+    if (agentError || !agent) {
+      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+    }
+
+    // Load conversation history if conversationId provided
+    let conversation = null;
+    let previousMessages = [];
+    
+    if (conversationId) {
+      conversation = await conversationManager.loadConversation(conversationId, req.user.id);
+      if (conversation && conversation.messages) {
+        previousMessages = conversation.messages;
+      }
+    }
+
+    // Build context for RepConnect agents
+    const repconnectContext = {
+      ...context,
+      appName: 'repconnect',
+      userType: 'sales_rep',
+      previousMessages,
+      conversation: conversation || null
+    };
+
+    // Set up SSE headers for streaming
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    // Stream the response
+    const stream = await agentCore.streamResponse(agentId, message, repconnectContext, req.user.id);
+    let fullResponse = '';
+
+    try {
+      for await (const chunk of stream) {
+        if (chunk.type === 'text_delta' && chunk.text) {
+          fullResponse += chunk.text;
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        } else if (chunk.type === 'message_start') {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        } else if (chunk.type === 'message_stop') {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+      }
+
+      // Save message to conversation if conversationId provided
+      if (conversationId && fullResponse) {
+        const newMessages = [
+          ...(conversation?.messages || []),
+          { role: 'user', content: message, timestamp: new Date().toISOString() },
+          { role: 'assistant', content: fullResponse, timestamp: new Date().toISOString() }
+        ];
+
+        await supabase
+          .from('agent_conversations')
+          .update({ 
+            messages: newMessages,
+            metadata: {
+              ...conversation?.metadata,
+              last_active: new Date().toISOString()
+            }
+          })
+          .eq('id', conversationId)
+          .eq('user_id', req.user.id);
+      }
+
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    } catch (streamError) {
+      console.error('Streaming error:', streamError);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`);
+      res.end();
+    }
+  } catch (error) {
+    console.error('Error in RepConnect chat stream:', error);
+    res.status(500).json(errorResponse('CHAT_STREAM_ERROR', 'Failed to stream chat response', error.message, 500));
+  }
+});
+
+// POST /api/repconnect/chat/message - Regular chat message (non-streaming)
+router.post('/chat/message', checkChatServices, requireAuth, async (req, res) => {
+  try {
+    const { agentId, message, conversationId, context } = req.body;
+    
+    if (!agentId || !message) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+    }
+
+    // Verify agent exists and is available for RepConnect
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*')
+      .eq('id', agentId)
+      .contains('available_in_apps', ['repconnect'])
+      .eq('is_active', true)
+      .single();
+
+    if (agentError || !agent) {
+      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+    }
+
+    // Load conversation history if conversationId provided
+    let conversation = null;
+    let previousMessages = [];
+    
+    if (conversationId) {
+      conversation = await conversationManager.loadConversation(conversationId, req.user.id);
+      if (conversation && conversation.messages) {
+        previousMessages = conversation.messages;
+      }
+    }
+
+    // Build context for RepConnect agents
+    const repconnectContext = {
+      ...context,
+      appName: 'repconnect',
+      userType: 'sales_rep',
+      previousMessages,
+      conversation: conversation || null
+    };
+
+    // Get non-streaming response
+    const stream = await agentCore.streamResponse(agentId, message, repconnectContext, req.user.id);
+    let fullResponse = '';
+
+    // Collect the full response
+    for await (const chunk of stream) {
+      if (chunk.type === 'text_delta' && chunk.text) {
+        fullResponse += chunk.text;
+      }
+    }
+
+    // Save message to conversation if conversationId provided
+    if (conversationId && fullResponse) {
+      const newMessages = [
+        ...(conversation?.messages || []),
+        { role: 'user', content: message, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: fullResponse, timestamp: new Date().toISOString() }
+      ];
+
+      await supabase
+        .from('agent_conversations')
+        .update({ 
+          messages: newMessages,
+          metadata: {
+            ...conversation?.metadata,
+            last_active: new Date().toISOString()
+          }
+        })
+        .eq('id', conversationId)
+        .eq('user_id', req.user.id);
+    }
+
+    res.json(successResponse({
+      response: fullResponse,
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        avatar_url: agent.avatar_url,
+        personality_type: agent.personality_profile?.type
+      },
+      conversationId,
+      timestamp: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('Error in RepConnect chat message:', error);
+    res.status(500).json(errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500));
+  }
+});
+
+// POST /api/repconnect/chat/conversations - Create new conversation
+router.post('/chat/conversations', checkChatServices, requireAuth, async (req, res) => {
+  try {
+    const { agentId, title, context } = req.body;
+    
+    if (!agentId) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Agent ID is required', null, 400));
+    }
+
+    // Verify agent exists and is available for RepConnect
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('name')
+      .eq('id', agentId)
+      .contains('available_in_apps', ['repconnect'])
+      .eq('is_active', true)
+      .single();
+
+    if (agentError || !agent) {
+      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+    }
+
+    // Create conversation with RepConnect context
+    const conversation = await conversationManager.createConversation(
+      req.user.id,
+      agentId,
+      title || `Chat with ${agent.name}`,
+      {
+        ...context,
+        appName: 'repconnect',
+        userType: 'sales_rep',
+        created_via: 'repconnect_api'
+      }
+    );
+
+    res.json(successResponse({ conversation }, 'RepConnect conversation created successfully'));
+  } catch (error) {
+    console.error('Error creating RepConnect conversation:', error);
+    res.status(500).json(errorResponse('CONVERSATION_CREATE_ERROR', 'Failed to create conversation', error.message, 500));
+  }
+});
+
+// GET /api/repconnect/chat/conversations - List user's RepConnect conversations
+router.get('/chat/conversations', checkChatServices, requireAuth, async (req, res) => {
+  try {
+    // Get conversations with RepConnect agents only
+    const { data: conversations, error } = await supabase
+      .from('agent_conversations')
+      .select(`
+        id,
+        title,
+        agent_id,
+        created_at,
+        updated_at,
+        metadata,
+        unified_agents!inner (
+          id,
+          name,
+          avatar_url,
+          agent_category
+        )
+      `)
+      .eq('user_id', req.user.id)
+      .contains('unified_agents.available_in_apps', ['repconnect'])
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    const transformedConversations = (conversations || []).map(conv => ({
+      id: conv.id,
+      title: conv.title,
+      agent: conv.unified_agents,
+      created_at: conv.created_at,
+      updated_at: conv.updated_at,
+      last_active: conv.metadata?.last_active || conv.updated_at,
+      message_count: conv.metadata?.message_count || 0
+    }));
+
+    res.json(successResponse({ 
+      conversations: transformedConversations,
+      count: transformedConversations.length
+    }));
+  } catch (error) {
+    console.error('Error listing RepConnect conversations:', error);
+    res.status(500).json(errorResponse('CONVERSATIONS_LIST_ERROR', 'Failed to list conversations', error.message, 500));
+  }
+});
+
+// GET /api/repconnect/chat/conversations/:conversationId - Get specific conversation
+router.get('/chat/conversations/:conversationId', checkChatServices, requireAuth, async (req, res) => {
+  try {
+    const conversation = await conversationManager.loadConversation(
+      req.params.conversationId,
+      req.user.id
+    );
+
+    if (!conversation) {
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Conversation not found', null, 404));
+    }
+
+    // Verify this conversation is with a RepConnect agent
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('name, avatar_url, agent_category')
+      .eq('id', conversation.agent_id)
+      .contains('available_in_apps', ['repconnect'])
+      .single();
+
+    if (agentError || !agent) {
+      return res.status(404).json(errorResponse('INVALID_CONVERSATION', 'Conversation not found or not accessible via RepConnect', null, 404));
+    }
+
+    res.json(successResponse({ 
+      conversation: {
+        ...conversation,
+        agent
+      }
+    }));
+  } catch (error) {
+    console.error('Error loading RepConnect conversation:', error);
+    res.status(500).json(errorResponse('CONVERSATION_LOAD_ERROR', 'Failed to load conversation', error.message, 500));
   }
 });
 

@@ -149,7 +149,7 @@ Generates a human-readable personality description.
 
 ## Database Schema
 
-Personality data is stored in the `canvas_ai_agents` table:
+Personality data is stored in the `unified_agents` table:
 
 ```sql
 personality JSONB DEFAULT '{

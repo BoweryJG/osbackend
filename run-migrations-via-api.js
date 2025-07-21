@@ -73,9 +73,9 @@ $$ LANGUAGE plpgsql;
     console.log(`\n${i + 1}. ${fileName}`);
     console.log('─'.repeat(50));
     
-    // For the knowledge bank migration, we need to check if canvas_ai_agents table exists
+    // For the knowledge bank migration, we need to check if unified_agents table exists
     if (fileName === 'create_knowledge_bank_tables.sql') {
-      console.log('⚠️  Note: This migration references canvas_ai_agents and profiles tables.');
+      console.log('⚠️  Note: This migration references unified_agents and profiles tables.');
       console.log('   Make sure these tables exist before running this migration.');
       console.log('   You may need to run create_canvas_agents_tables.sql first.\n');
     }

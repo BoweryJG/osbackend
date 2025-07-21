@@ -2,7 +2,10 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 
 export class AgentCore {
-  constructor() {
+  constructor(appName = 'canvas') {
+    // Store the appName for filtering
+    this.appName = appName;
+    
     // Initialize Anthropic if API key is available
     if (process.env.ANTHROPIC_API_KEY) {
       this.anthropic = new Anthropic({
@@ -43,7 +46,7 @@ export class AgentCore {
       .from('unified_agents')
       .select('*')
       .eq('id', agentId)
-      .contains('available_in_apps', ['canvas'])
+      .contains('available_in_apps', [this.appName])
       .single();
 
     if (error) {
@@ -64,7 +67,7 @@ export class AgentCore {
     let { data: agents, error } = await this.supabase
       .from('unified_agents')
       .select('*')
-      .contains('available_in_apps', ['canvas'])
+      .contains('available_in_apps', [this.appName])
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
