@@ -38,12 +38,25 @@ export class AgentCore {
       return this.agentCache.get(agentId);
     }
 
-    // Fetch from database
-    const { data: agent, error } = await this.supabase
-      .from('canvas_ai_agents')
+    // Try unified_agents table first
+    let { data: agent, error } = await this.supabase
+      .from('unified_agents')
       .select('*')
       .eq('id', agentId)
+      .contains('available_in_apps', ['canvas'])
       .single();
+
+    // Fallback to canvas_ai_agents if not found
+    if (error || !agent) {
+      const fallbackResult = await this.supabase
+        .from('canvas_ai_agents')
+        .select('*')
+        .eq('id', agentId)
+        .single();
+        
+      agent = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       throw new Error(`Failed to fetch agent: ${error.message}`);
@@ -59,16 +72,32 @@ export class AgentCore {
       throw new Error('Database connection not available');
     }
 
-    const { data: agents, error } = await this.supabase
-      .from('canvas_ai_agents')
+    // Try unified_agents table first
+    let { data: agents, error } = await this.supabase
+      .from('unified_agents')
       .select('*')
+      .contains('available_in_apps', ['canvas'])
+      .eq('is_active', true)
       .order('created_at', { ascending: false });
+
+    // Fallback to canvas_ai_agents if unified_agents fails or returns empty
+    if (error || !agents || agents.length === 0) {
+      const fallbackResult = await this.supabase
+        .from('canvas_ai_agents')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (!error || (agents && agents.length === 0)) {
+        agents = fallbackResult.data || [];
+        error = fallbackResult.error;
+      }
+    }
 
     if (error) {
       throw new Error(`Failed to list agents: ${error.message}`);
     }
 
-    return agents;
+    return agents || [];
   }
 
   async createAgent(agentData) {
