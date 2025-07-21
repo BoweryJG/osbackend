@@ -450,4 +450,166 @@ router.post('/cancel-subscription', async (req, res) => {
   }
 });
 
+/**
+ * Validate RepX feature access based on tier and usage
+ * POST /api/repx/validate-access
+ */
+router.post('/validate-access', async (req, res) => {
+  try {
+    const { userTier, feature, usage } = req.body;
+
+    console.log('🔍 Validating RepX access:', { userTier, feature, usage });
+
+    // Validate required parameters
+    if (!userTier || !feature || !usage) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'userTier, feature, and usage are required', null, 400));
+    }
+
+    // Get tier configuration
+    if (!repxPricing[userTier]) {
+      return res.status(400).json(errorResponse('INVALID_TIER', `Invalid tier: ${userTier}`, null, 400));
+    }
+
+    const tierConfig = repxPricing[userTier];
+    
+    // Define feature limits for each tier
+    const tierLimits = {
+      repx1: { calls: 100, emails: 0, canvas_scans: 0 },
+      repx2: { calls: 200, emails: 50, canvas_scans: 10 },
+      repx3: { calls: 400, emails: 100, canvas_scans: 25 },
+      repx4: { calls: 800, emails: 200, canvas_scans: 50 },
+      repx5: { calls: 'unlimited', emails: 'unlimited', canvas_scans: 'unlimited' }
+    };
+
+    const limits = tierLimits[userTier];
+    const currentUsage = usage[feature] || 0;
+    const limit = limits[feature];
+
+    let hasAccess = false;
+    let remainingUsage = 0;
+
+    if (limit === 'unlimited') {
+      hasAccess = true;
+      remainingUsage = 'unlimited';
+    } else if (typeof limit === 'number') {
+      hasAccess = currentUsage < limit;
+      remainingUsage = Math.max(0, limit - currentUsage);
+    }
+
+    console.log('✅ Access validation result:', { 
+      userTier, 
+      feature, 
+      currentUsage, 
+      limit, 
+      hasAccess, 
+      remainingUsage 
+    });
+
+    return res.json(successResponse('Feature access validated successfully', {
+      hasAccess,
+      userTier,
+      feature,
+      currentUsage,
+      limit,
+      remainingUsage,
+      tierName: tierConfig.name || `RepX${userTier.slice(-1)} Enhancement Level`
+    }));
+
+  } catch (error) {
+    console.error('❌ Error validating RepX access:', error);
+    return res.status(500).json(errorResponse('VALIDATION_ERROR', 'Failed to validate feature access', error.message, 500));
+  }
+});
+
+/**
+ * Get subscription status and details
+ * POST /api/stripe/subscription (expects customer email in body)
+ */
+router.post('/subscription', async (req, res) => {
+  try {
+    const { customer_email, subscription_id } = req.body;
+
+    console.log('🔍 Getting subscription status:', { customer_email, subscription_id });
+
+    if (!stripe || !process.env.STRIPE_SECRET_KEY) {
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
+    }
+
+    if (!customer_email && !subscription_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'customer_email or subscription_id is required', null, 400));
+    }
+
+    let subscriptions = [];
+
+    if (subscription_id) {
+      // Get specific subscription by ID
+      const subscription = await stripe.subscriptions.retrieve(subscription_id);
+      subscriptions = [subscription];
+    } else {
+      // Find customer by email and get their subscriptions
+      const customers = await stripe.customers.list({ email: customer_email, limit: 1 });
+      
+      if (customers.data.length === 0) {
+        return res.status(404).json(errorResponse('NOT_FOUND', 'No customer found with this email', null, 404));
+      }
+
+      const customer = customers.data[0];
+      const customerSubscriptions = await stripe.subscriptions.list({ 
+        customer: customer.id,
+        status: 'all',
+        limit: 10
+      });
+      subscriptions = customerSubscriptions.data;
+    }
+
+    if (subscriptions.length === 0) {
+      return res.status(404).json(errorResponse('NOT_FOUND', 'No subscriptions found', null, 404));
+    }
+
+    // Get the most recent subscription
+    const subscription = subscriptions[0];
+    
+    // Extract tier information from metadata or price ID
+    let tier = subscription.metadata?.tier || subscription.metadata?.repx_tier;
+    
+    if (!tier && subscription.items?.data?.[0]?.price?.id) {
+      const priceId = subscription.items.data[0].price.id;
+      // Match price ID to tier
+      for (const [tierKey, pricing] of Object.entries(repxPricing)) {
+        if (pricing.monthly.priceId === priceId || pricing.annual.priceId === priceId) {
+          tier = tierKey;
+          break;
+        }
+      }
+    }
+
+    console.log('✅ Subscription found:', { 
+      id: subscription.id, 
+      status: subscription.status, 
+      tier,
+      current_period_end: subscription.current_period_end 
+    });
+
+    return res.json(successResponse('Subscription retrieved successfully', {
+      subscription_id: subscription.id,
+      status: subscription.status,
+      tier,
+      customer_id: subscription.customer,
+      current_period_start: subscription.current_period_start,
+      current_period_end: subscription.current_period_end,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      canceled_at: subscription.canceled_at,
+      created: subscription.created,
+      plan_amount: subscription.items?.data?.[0]?.price?.unit_amount,
+      plan_currency: subscription.items?.data?.[0]?.price?.currency,
+      plan_interval: subscription.items?.data?.[0]?.price?.recurring?.interval,
+      metadata: subscription.metadata
+    }));
+
+  } catch (error) {
+    console.error('❌ Error getting subscription:', error);
+    return res.status(500).json(errorResponse('SUBSCRIPTION_ERROR', 'Failed to get subscription', error.message, 500));
+  }
+});
+
 export default router;
