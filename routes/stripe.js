@@ -522,6 +522,234 @@ router.post('/validate-access', async (req, res) => {
 });
 
 /**
+ * Get subscription status for Market Data app 
+ * GET /api/subscription/status - authenticated endpoint
+ */
+router.get('/status', async (req, res) => {
+  try {
+    // This would typically use authentication middleware to get user info
+    // For now, return a basic subscription structure
+    const defaultSubscription = {
+      isActive: true,
+      planId: 'professional',
+      features: {
+        aiQueries: 1000,
+        users: 5,
+        categories: 'unlimited',
+        automation: true,
+        api: true
+      },
+      usage: {
+        aiQueries: 42,
+        users: 1,
+        categories: 8,
+        automationRuns: 15
+      },
+      limits: {
+        aiQueries: 1000,
+        users: 5,
+        categories: 'unlimited'
+      }
+    };
+
+    return res.json(defaultSubscription);
+  } catch (error) {
+    console.error('❌ Error getting subscription status:', error);
+    return res.status(500).json(errorResponse('SUBSCRIPTION_ERROR', 'Failed to get subscription status', error.message, 500));
+  }
+});
+
+/**
+ * Track usage for Market Data app
+ * POST /api/subscription/track-usage
+ */
+router.post('/track-usage', async (req, res) => {
+  try {
+    const { feature, quantity = 1 } = req.body;
+    
+    if (!feature) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Feature is required', null, 400));
+    }
+
+    console.log('📊 Tracking usage:', { feature, quantity });
+    
+    // TODO: Implement actual usage tracking in database
+    // For now, just return success
+    return res.json(successResponse({ 
+      message: 'Usage tracked successfully',
+      feature,
+      quantity 
+    }));
+  } catch (error) {
+    console.error('❌ Error tracking usage:', error);
+    return res.status(500).json(errorResponse('TRACKING_ERROR', 'Failed to track usage', error.message, 500));
+  }
+});
+
+/**
+ * Purchase add-on for Market Data app
+ * POST /api/subscription/purchase-addon
+ */
+router.post('/purchase-addon', async (req, res) => {
+  try {
+    const { addon, quantity = 1 } = req.body;
+    
+    if (!addon) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Addon is required', null, 400));
+    }
+
+    console.log('💳 Processing addon purchase:', { addon, quantity });
+    
+    // TODO: Implement actual addon purchase logic
+    return res.json(successResponse({ 
+      message: 'Addon purchased successfully',
+      addon,
+      quantity,
+      transactionId: `txn_${Date.now()}`
+    }));
+  } catch (error) {
+    console.error('❌ Error purchasing addon:', error);
+    return res.status(500).json(errorResponse('PURCHASE_ERROR', 'Failed to purchase addon', error.message, 500));
+  }
+});
+
+/**
+ * Get subscription usage statistics
+ * GET /api/subscription/usage
+ */
+router.get('/usage', async (req, res) => {
+  try {
+    const usageStats = {
+      aiQueries: 42,
+      users: 1,
+      categories: 8,
+      automationRuns: 15,
+      apiCalls: 128,
+      period: 'current_month',
+      resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString()
+    };
+
+    return res.json(usageStats);
+  } catch (error) {
+    console.error('❌ Error getting usage:', error);
+    return res.status(500).json(errorResponse('USAGE_ERROR', 'Failed to get usage statistics', error.message, 500));
+  }
+});
+
+/**
+ * Get billing history
+ * GET /api/subscription/billing-history
+ */
+router.get('/billing-history', async (req, res) => {
+  try {
+    const billingHistory = [
+      {
+        id: 'inv_1',
+        date: new Date(2025, 0, 15).toISOString(),
+        amount: 299,
+        status: 'paid',
+        description: 'Professional Plan - January 2025',
+        invoiceUrl: '#'
+      },
+      {
+        id: 'inv_2', 
+        date: new Date(2024, 11, 15).toISOString(),
+        amount: 299,
+        status: 'paid',
+        description: 'Professional Plan - December 2024',
+        invoiceUrl: '#'
+      }
+    ];
+
+    return res.json(billingHistory);
+  } catch (error) {
+    console.error('❌ Error getting billing history:', error);
+    return res.status(500).json(errorResponse('BILLING_ERROR', 'Failed to get billing history', error.message, 500));
+  }
+});
+
+/**
+ * Create Stripe checkout session for Market Data
+ * POST /api/subscription/create-checkout
+ */
+router.post('/create-checkout', async (req, res) => {
+  try {
+    const { planId, successUrl, cancelUrl } = req.body;
+    
+    if (!planId) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Plan ID is required', null, 400));
+    }
+
+    if (!stripe) {
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
+    }
+
+    // Map Market Data plans to Stripe price IDs
+    const planPricing = {
+      free: null, // Free plan doesn't need checkout
+      starter: process.env.MARKET_DATA_STARTER_PRICE_ID,
+      professional: process.env.MARKET_DATA_PROFESSIONAL_PRICE_ID,
+      enterprise: process.env.MARKET_DATA_ENTERPRISE_PRICE_ID
+    };
+
+    const priceId = planPricing[planId];
+    if (!priceId) {
+      return res.status(400).json(errorResponse('INVALID_PLAN', `Invalid plan: ${planId}`, null, 400));
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{
+        price: priceId,
+        quantity: 1,
+      }],
+      success_url: successUrl || `${process.env.FRONTEND_URL || 'https://marketdata.repspheres.com'}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL || 'https://marketdata.repspheres.com'}/subscription/cancel`,
+      metadata: {
+        planId,
+        system: 'market_data'
+      }
+    });
+
+    console.log('✅ Market Data checkout session created:', { sessionId: session.id, planId });
+
+    return res.json(successResponse({ 
+      url: session.url,
+      sessionId: session.id 
+    }));
+  } catch (error) {
+    console.error('❌ Error creating checkout session:', error);
+    return res.status(500).json(errorResponse('CHECKOUT_ERROR', 'Failed to create checkout session', error.message, 500));
+  }
+});
+
+/**
+ * Create customer portal session for Market Data
+ * POST /api/subscription/portal
+ */
+router.post('/portal', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
+    }
+
+    // TODO: Get customer ID from authenticated user
+    const customerId = req.body.customerId || 'cus_default'; // This should come from user auth
+    
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${process.env.FRONTEND_URL || 'https://marketdata.repspheres.com'}/subscription`,
+    });
+
+    return res.json(successResponse({ url: session.url }));
+  } catch (error) {
+    console.error('❌ Error creating portal session:', error);
+    return res.status(500).json(errorResponse('PORTAL_ERROR', 'Failed to create portal session', error.message, 500));
+  }
+});
+
+/**
  * Get subscription status and details
  * POST /api/stripe/subscription (expects customer email in body)
  */

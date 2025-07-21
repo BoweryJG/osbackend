@@ -2298,6 +2298,9 @@ app.use('/api/stripe', stripeRoutes);
 // Add RepX-specific routes (shared endpoints from stripe routes)
 app.use('/api/repx', stripeRoutes);
 
+// Add Market Data subscription routes (shared endpoints from stripe routes)
+app.use('/api/subscription', stripeRoutes);
+
 // Add Health monitoring routes
 app.use('/', healthRoutes);
 
