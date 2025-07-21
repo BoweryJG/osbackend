@@ -19,17 +19,17 @@ async function testPrivatePracticeIntelligence() {
   try {
     // Testing with Dr. Scott O. Kissel (NYC Periodontist)
     const testDoctor = {
-      npi: '1234567890', // placeholder
-      displayName: 'Dr. Scott O. Kissel, DMD',
-      firstName: 'Scott',
-      lastName: 'Kissel',
-      credential: 'DMD',
-      specialty: 'Periodontist, Implant Dentistry',
+      npi: '1922062728',
+      displayName: 'Dr. Jay Neugarten, DDS, MD',
+      firstName: 'Jay',
+      lastName: 'Neugarten',
+      credential: 'DDS, MD',
+      specialty: 'Oral and Maxillofacial Surgery',
       city: 'NEW YORK',
       state: 'NY',
-      fullAddress: '501 MADISON AVE STE 2101, NEW YORK, NY 10022',
-      phone: '212-702-9088',
-      organizationName: 'NYC Periodontics and Implant Dentistry'
+      fullAddress: '16 E 52ND ST FL 4, NEW YORK, NY 10022',
+      phone: '212-355-2290',
+      organizationName: 'NYC Oral & Maxillofacial Surgery'
     };
     
     const testProduct = 'iTero Intraoral Scanner';
