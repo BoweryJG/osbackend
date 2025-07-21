@@ -22,6 +22,7 @@ import { createServer } from 'http';
 import cookieParser from 'cookie-parser';
 import AgentWebSocketServer from './agents/websocket/server.js';
 import agentRoutes from './routes/agents/agentRoutes.js';
+import repconnectRoutes from './routes/repconnectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import fundingStrategyRoutes from './routes/fundingStrategy.js';
 import healthRoutes from './routes/healthRoutes.js';
@@ -2267,7 +2268,7 @@ app.use('/', zapierRoutes);
 app.use('/api/canvas', agentRoutes);
 
 // Add RepConnect Agent routes  
-app.use('/api/repconnect', agentRoutes);
+app.use('/api/repconnect', repconnectRoutes);
 
 // Add Call Transcription routes
 app.use('/api', callTranscriptionRoutes);
