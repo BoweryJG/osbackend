@@ -116,6 +116,133 @@ router.get('/agents', checkSupabase, async (req, res) => {
   }
 });
 
+// GET /api/repconnect/agents/voice-enabled - Get all voice-enabled agents
+router.get('/agents/voice-enabled', checkSupabase, async (req, res) => {
+  try {
+    const { data: agents, error } = await supabase
+      .from('unified_agents')
+      .select(`
+        *,
+        agent_voice_profiles (
+          voice_id,
+          voice_name,
+          voice_config,
+          voice_attributes,
+          sample_audio_url
+        ),
+        agent_conversation_styles (
+          greeting_style,
+          closing_style,
+          objection_handling_approach
+        )
+      `)
+      .contains('available_in_apps', ['repconnect'])
+      .not('voice_id', 'is', null)
+      .eq('is_active', true)
+      .order('agent_category', { ascending: true });
+
+    if (error) throw error;
+
+    res.json(successResponse({ 
+      agents: agents || [],
+      count: (agents || []).length 
+    }));
+  } catch (error) {
+    console.error('Error fetching voice-enabled agents:', error);
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch voice-enabled agents', error.message, 500));
+  }
+});
+
+// GET /api/repconnect/agents/harvey - Get Harvey Specter specifically
+router.get('/agents/harvey', checkSupabase, async (req, res) => {
+  try {
+    const { data: harvey, error } = await supabase
+      .from('unified_agents')
+      .select(`
+        *,
+        agent_voice_profiles (
+          voice_id,
+          voice_name,
+          voice_config,
+          voice_attributes
+        ),
+        agent_conversation_styles (
+          greeting_style,
+          closing_style,
+          objection_handling_approach,
+          question_asking_style
+        ),
+        whisper_prompts (
+          prompt_category,
+          trigger_phrase,
+          whisper_text,
+          whisper_timing
+        )
+      `)
+      .eq('name', 'Harvey Specter')
+      .single();
+
+    if (error) throw error;
+
+    if (!harvey) {
+      return res.status(404).json(errorResponse('NOT_FOUND', 'Harvey Specter not found', null, 404));
+    }
+
+    // Add special Harvey features
+    const harveyEnhanced = {
+      ...harvey,
+      voice_enabled: true,
+      voice_provider: 'elevenlabs',
+      whisper_supported: true,
+      aggression_level: harvey.personality_profile?.aggression || 9,
+      signature_move: 'The Harvey Close - Break them down, build them up stronger',
+      voice_profile: harvey.agent_voice_profiles?.[0] || null,
+      conversation_style: harvey.agent_conversation_styles?.[0] || null,
+      whisper_arsenal: harvey.whisper_prompts || []
+    };
+
+    res.json(successResponse({ agent: harveyEnhanced }));
+  } catch (error) {
+    console.error('Error fetching Harvey:', error);
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch Harvey', error.message, 500));
+  }
+});
+
+// GET /api/repconnect/agents/categories - Get available agent categories
+router.get('/agents/categories', checkSupabase, async (req, res) => {
+  try {
+    const { data: categories, error } = await supabase
+      .from('unified_agents')
+      .select('agent_category')
+      .contains('available_in_apps', ['repconnect'])
+      .eq('is_active', true);
+
+    if (error) throw error;
+
+    // Get unique categories with counts
+    const categoryCounts = (categories || []).reduce((acc, agent) => {
+      acc[agent.agent_category] = (acc[agent.agent_category] || 0) + 1;
+      return acc;
+    }, {});
+
+    const categoryList = Object.entries(categoryCounts).map(([category, count]) => ({
+      category,
+      count,
+      label: category.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ')
+    }));
+
+    res.json(successResponse({ 
+      categories: categoryList,
+      total: categoryList.length 
+    }));
+  } catch (error) {
+    console.error('Error fetching agent categories:', error);
+    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch categories', error.message, 500));
+  }
+});
+
 // GET /api/repconnect/agents/:id - Get specific agent with full voice details
 router.get('/agents/:agentId', checkSupabase, async (req, res) => {
   try {
@@ -269,133 +396,6 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting RepConnect agent:', error);
     res.status(500).json(errorResponse('DELETE_ERROR', 'Failed to delete agent', error.message, 500));
-  }
-});
-
-// GET /api/repconnect/agents/voice-enabled - Get all voice-enabled agents
-router.get('/agents/voice-enabled', checkSupabase, async (req, res) => {
-  try {
-    const { data: agents, error } = await supabase
-      .from('unified_agents')
-      .select(`
-        *,
-        agent_voice_profiles (
-          voice_id,
-          voice_name,
-          voice_config,
-          voice_attributes,
-          sample_audio_url
-        ),
-        agent_conversation_styles (
-          greeting_style,
-          closing_style,
-          objection_handling_approach
-        )
-      `)
-      .contains('available_in_apps', ['repconnect'])
-      .not('voice_id', 'is', null)
-      .eq('is_active', true)
-      .order('agent_category', { ascending: true });
-
-    if (error) throw error;
-
-    res.json(successResponse({ 
-      agents: agents || [],
-      count: (agents || []).length 
-    }));
-  } catch (error) {
-    console.error('Error fetching voice-enabled agents:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch voice-enabled agents', error.message, 500));
-  }
-});
-
-// GET /api/repconnect/agents/harvey - Get Harvey Specter specifically
-router.get('/agents/harvey', checkSupabase, async (req, res) => {
-  try {
-    const { data: harvey, error } = await supabase
-      .from('unified_agents')
-      .select(`
-        *,
-        agent_voice_profiles (
-          voice_id,
-          voice_name,
-          voice_config,
-          voice_attributes
-        ),
-        agent_conversation_styles (
-          greeting_style,
-          closing_style,
-          objection_handling_approach,
-          question_asking_style
-        ),
-        whisper_prompts (
-          prompt_category,
-          trigger_phrase,
-          whisper_text,
-          whisper_timing
-        )
-      `)
-      .eq('name', 'Harvey Specter')
-      .single();
-
-    if (error) throw error;
-
-    if (!harvey) {
-      return res.status(404).json(errorResponse('NOT_FOUND', 'Harvey Specter not found', null, 404));
-    }
-
-    // Add special Harvey features
-    const harveyEnhanced = {
-      ...harvey,
-      voice_enabled: true,
-      voice_provider: 'elevenlabs',
-      whisper_supported: true,
-      aggression_level: harvey.personality_profile?.aggression || 9,
-      signature_move: 'The Harvey Close - Break them down, build them up stronger',
-      voice_profile: harvey.agent_voice_profiles?.[0] || null,
-      conversation_style: harvey.agent_conversation_styles?.[0] || null,
-      whisper_arsenal: harvey.whisper_prompts || []
-    };
-
-    res.json(successResponse({ agent: harveyEnhanced }));
-  } catch (error) {
-    console.error('Error fetching Harvey:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch Harvey', error.message, 500));
-  }
-});
-
-// GET /api/repconnect/agents/categories - Get available agent categories
-router.get('/agents/categories', checkSupabase, async (req, res) => {
-  try {
-    const { data: categories, error } = await supabase
-      .from('unified_agents')
-      .select('agent_category')
-      .contains('available_in_apps', ['repconnect'])
-      .eq('is_active', true);
-
-    if (error) throw error;
-
-    // Get unique categories with counts
-    const categoryCounts = (categories || []).reduce((acc, agent) => {
-      acc[agent.agent_category] = (acc[agent.agent_category] || 0) + 1;
-      return acc;
-    }, {});
-
-    const categoryList = Object.entries(categoryCounts).map(([category, count]) => ({
-      category,
-      count,
-      label: category.split('_').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-      ).join(' ')
-    }));
-
-    res.json(successResponse({ 
-      categories: categoryList,
-      total: categoryList.length 
-    }));
-  } catch (error) {
-    console.error('Error fetching agent categories:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch categories', error.message, 500));
   }
 });
 
