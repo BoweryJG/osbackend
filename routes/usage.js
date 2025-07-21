@@ -5,9 +5,10 @@ import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
+// Initialize Supabase client with service role for admin operations
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
 );
 
 // Get current usage for a user
@@ -182,57 +183,241 @@ router.post('/check', authenticateToken, async (req, res) => {
   }
 });
 
-// Helper function to get tier limits
-function getTierLimits(tier) {
+/**
+ * Canvas Subscription Enforcement Routes
+ * RepX Tier system: free, repx1, repx2, repx3, repx4, repx5
+ */
+
+/**
+ * Check if user can perform a scan (validate limits)
+ * GET /api/usage/check-limits/:user_id
+ */
+router.get('/check-limits/:user_id', async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    
+    if (!user_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
+    }
+
+    // Call the PostgreSQL function to check limits
+    const { data, error } = await supabase.rpc('check_repx_scan_limit', {
+      p_user_id: user_id
+    });
+
+    if (error) {
+      console.error('Database error checking scan limits:', error);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to check scan limits', error.message, 500));
+    }
+
+    res.json(successResponse({
+      status: data,
+      canScan: data.allowed,
+      message: data.message
+    }, 'Scan limits checked successfully'));
+
+  } catch (error) {
+    console.error('Error checking scan limits:', error);
+    res.status(500).json(errorResponse('CHECK_LIMITS_ERROR', 'Internal server error', error.message, 500));
+  }
+});
+
+/**
+ * Record scan usage after successful scan
+ * POST /api/usage/record-scan
+ */
+router.post('/record-scan', async (req, res) => {
+  try {
+    const { user_id, scan_type = 'canvas' } = req.body;
+    
+    if (!user_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
+    }
+
+    // Call the PostgreSQL function to increment usage
+    const { data, error } = await supabase.rpc('increment_daily_usage', {
+      p_user_id: user_id,
+      p_scan_type: scan_type,
+      p_increment: 1
+    });
+
+    if (error) {
+      console.error('Database error recording scan usage:', error);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to record scan usage', error.message, 500));
+    }
+
+    res.json(successResponse({
+      newUsageCount: data
+    }, 'Scan usage recorded successfully'));
+
+  } catch (error) {
+    console.error('Error recording scan usage:', error);
+    res.status(500).json(errorResponse('RECORD_SCAN_ERROR', 'Internal server error', error.message, 500));
+  }
+});
+
+/**
+ * Validate scan request (comprehensive check)
+ * POST /api/usage/validate-scan
+ */
+router.post('/validate-scan', async (req, res) => {
+  try {
+    const { user_id, scan_type = 'canvas' } = req.body;
+    
+    if (!user_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
+    }
+
+    // Check current limits
+    const { data: limitCheck, error: limitError } = await supabase.rpc('check_repx_scan_limit', {
+      p_user_id: user_id
+    });
+
+    if (limitError) {
+      console.error('Database error validating scan:', limitError);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to validate scan request', limitError.message, 500));
+    }
+
+    res.json(successResponse({
+      allowed: limitCheck.allowed,
+      status: limitCheck,
+      errorMessage: limitCheck.allowed ? null : limitCheck.message,
+      userTier: limitCheck.tier,
+      scansRemaining: limitCheck.remaining,
+      dailyLimit: limitCheck.daily_limit,
+      currentUsage: limitCheck.current_usage
+    }, limitCheck.allowed ? 'Scan validated successfully' : 'Scan request denied'));
+
+  } catch (error) {
+    console.error('Error validating scan request:', error);
+    res.status(500).json(errorResponse('VALIDATE_SCAN_ERROR', 'Internal server error', error.message, 500));
+  }
+});
+
+/**
+ * Get daily usage stats for a user
+ * GET /api/usage/daily/:user_id
+ */
+router.get('/daily/:user_id', async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    const { date } = req.query; // Optional date parameter
+    
+    if (!user_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
+    }
+
+    // Get daily usage
+    const { data: dailyUsage, error: usageError } = await supabase.rpc('get_daily_usage', {
+      p_user_id: user_id,
+      p_date: date || new Date().toISOString().split('T')[0]
+    });
+
+    if (usageError) {
+      console.error('Database error fetching daily usage:', usageError);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to fetch daily usage', usageError.message, 500));
+    }
+
+    // Get subscription limits
+    const { data: limitCheck, error: limitError } = await supabase.rpc('check_repx_scan_limit', {
+      p_user_id: user_id
+    });
+
+    if (limitError) {
+      console.error('Database error checking limits:', limitError);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to check limits', limitError.message, 500));
+    }
+
+    res.json(successResponse({
+      date: date || new Date().toISOString().split('T')[0],
+      scansUsed: dailyUsage || 0,
+      scansRemaining: limitCheck.remaining,
+      dailyLimit: limitCheck.daily_limit,
+      tier: limitCheck.tier,
+      canScan: limitCheck.allowed,
+      upgradeAvailable: limitCheck.tier !== 'repx5' && limitCheck.daily_limit < 999999
+    }, 'Daily usage fetched successfully'));
+
+  } catch (error) {
+    console.error('Error fetching daily usage:', error);
+    res.status(500).json(errorResponse('DAILY_USAGE_ERROR', 'Internal server error', error.message, 500));
+  }
+});
+
+/**
+ * Get usage summary for display components
+ * GET /api/usage/summary/:user_id
+ */
+router.get('/summary/:user_id', async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    
+    if (!user_id) {
+      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'User ID is required', null, 400));
+    }
+
+    // Get comprehensive usage and limit information
+    const [dailyUsageResult, limitCheckResult] = await Promise.all([
+      supabase.rpc('get_daily_usage', { p_user_id: user_id }),
+      supabase.rpc('check_repx_scan_limit', { p_user_id: user_id })
+    ]);
+
+    if (dailyUsageResult.error) {
+      console.error('Error fetching daily usage:', dailyUsageResult.error);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to fetch usage data', dailyUsageResult.error.message, 500));
+    }
+
+    if (limitCheckResult.error) {
+      console.error('Error checking limits:', limitCheckResult.error);
+      return res.status(500).json(errorResponse('DATABASE_ERROR', 'Failed to check limits', limitCheckResult.error.message, 500));
+    }
+
+    const limitData = limitCheckResult.data;
+    const usageCount = dailyUsageResult.data || 0;
+
+    res.json(successResponse({
+      tier: limitData.tier,
+      scansUsed: usageCount,
+      scansRemaining: limitData.remaining,
+      dailyLimit: limitData.daily_limit,
+      upgradeAvailable: limitData.tier !== 'repx5' && limitData.daily_limit < 999999,
+      canScan: limitData.allowed,
+      message: limitData.message
+    }, 'Usage summary fetched successfully'));
+
+  } catch (error) {
+    console.error('Error fetching usage summary:', error);
+    res.status(500).json(errorResponse('SUMMARY_ERROR', 'Internal server error', error.message, 500));
+  }
+});
+
+// Helper function to get RepX tier limits (for reference)
+function getRepXTierLimits(tier) {
   const limits = {
     free: {
-      canvas_briefs: 3,
-      ai_prompts: 2,
-      call_analyses: 1,
-      market_procedures: 20,
-      contacts_generated: 5,
-      ripples_sent: 3,
+      canvas_scans: 3,
+      daily_limit: 3
     },
-    explorer: {
-      canvas_briefs: 25,
-      ai_prompts: 5,
-      call_analyses: 5,
-      market_procedures: 100,
-      contacts_generated: 10,
-      ripples_sent: 25,
+    repx1: {
+      canvas_scans: 0, // Phone-only tier
+      daily_limit: 0
     },
-    professional: {
-      canvas_briefs: 50,
-      ai_prompts: 50,
-      call_analyses: 10,
-      market_procedures: 500,
-      contacts_generated: 25,
-      ripples_sent: 50,
+    repx2: {
+      canvas_scans: 10,
+      daily_limit: 10
     },
-    growth: {
-      canvas_briefs: 100,
-      ai_prompts: -1, // unlimited
-      call_analyses: 50,
-      market_procedures: -1,
-      contacts_generated: 50,
-      ripples_sent: 100,
+    repx3: {
+      canvas_scans: 25,
+      daily_limit: 25
     },
-    enterprise: {
-      canvas_briefs: -1,
-      ai_prompts: -1,
-      call_analyses: -1,
-      market_procedures: -1,
-      contacts_generated: 100,
-      ripples_sent: -1,
+    repx4: {
+      canvas_scans: 50,
+      daily_limit: 50
     },
-    elite: {
-      canvas_briefs: -1,
-      ai_prompts: -1,
-      call_analyses: -1,
-      market_procedures: -1,
-      contacts_generated: -1,
-      ripples_sent: -1,
-    },
+    repx5: {
+      canvas_scans: -1, // Unlimited
+      daily_limit: 999999
+    }
   };
 
   return limits[tier] || limits.free;
