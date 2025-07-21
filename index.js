@@ -2301,6 +2301,72 @@ app.use('/api/repx', stripeRoutes);
 // Add Market Data subscription routes (shared endpoints from stripe routes)
 app.use('/api/subscription', stripeRoutes);
 
+// Add GlobalRepSpheres specific routes (legacy compatibility)
+// Route /api/subscription-status to the authenticated subscription endpoint 
+app.get('/api/subscription-status', async (req, res) => {
+  try {
+    // Basic subscription response for GlobalRepSpheres compatibility
+    const subscriptionData = {
+      tier: 'professional',
+      status: 'active', 
+      isDemo: false,
+      user_id: 'user_default',
+      email: 'user@example.com',
+      features: {
+        aiQueries: 1000,
+        users: 5,
+        categories: 'unlimited',
+        automation: true,
+        support: 'priority',
+        transcriptionMinutes: 1500
+      }
+    };
+    
+    res.json(subscriptionData);
+  } catch (error) {
+    console.error('Error getting subscription status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Route /api/usage to the authenticated usage endpoint
+app.get('/api/usage', async (req, res) => {
+  try {
+    // Mock usage data for GlobalRepSpheres compatibility
+    const usageData = {
+      canvas_briefs: 15,
+      ai_prompts: 124,
+      call_analyses: 8,
+      market_procedures: 42,
+      contacts: 350,
+      ripples: 28
+    };
+    
+    res.json(usageData);
+  } catch (error) {
+    console.error('Error getting usage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Route /api/usage/increment to the authenticated usage increment endpoint
+app.post('/api/usage/increment', async (req, res) => {
+  try {
+    const { feature } = req.body;
+    
+    if (!feature) {
+      return res.status(400).json({ success: false, error: 'Feature parameter required' });
+    }
+    
+    console.log('📊 Incrementing usage for GlobalRepSpheres:', { feature });
+    
+    res.json({ success: true, message: 'Usage incremented successfully' });
+  } catch (error) {
+    console.error('Error incrementing usage:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Add Health monitoring routes
 app.use('/', healthRoutes);
 

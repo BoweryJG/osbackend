@@ -725,6 +725,31 @@ router.post('/create-checkout', async (req, res) => {
 });
 
 /**
+ * Create Stripe portal session for GlobalRepSpheres
+ * POST /api/stripe/create-portal-session
+ */
+router.post('/create-portal-session', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
+    }
+
+    // TODO: Get customer ID from authenticated user
+    const customerId = req.body.customerId || 'cus_default'; // This should come from user auth
+    
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${process.env.FRONTEND_URL || 'https://repspheres.com'}/account`,
+    });
+
+    return res.json(successResponse({ url: session.url }));
+  } catch (error) {
+    console.error('❌ Error creating portal session:', error);
+    return res.status(500).json(errorResponse('PORTAL_ERROR', 'Failed to create portal session', error.message, 500));
+  }
+});
+
+/**
  * Create customer portal session for Market Data
  * POST /api/subscription/portal
  */
