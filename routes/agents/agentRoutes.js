@@ -68,8 +68,8 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
-// List all available agents
-router.get('/agents', checkServicesInitialized, requireAuth, async (req, res) => {
+// List all available agents (temporarily allow without auth for RepConnect)
+router.get('/agents', checkServicesInitialized, async (req, res) => {
   try {
     const agents = await agentCore.listAgents();
     res.json(successResponse({ agents }));
