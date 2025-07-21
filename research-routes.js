@@ -653,38 +653,51 @@ router.post('/firecrawl-scrape', async (req, res) => {
   }
 });
 
-// OpenRouter endpoint for Canvas
+// Direct Claude API endpoint for Canvas
 router.post('/openrouter', async (req, res) => {
   try {
-    const { prompt, model = 'anthropic/claude-3-opus-20240229' } = req.body;
+    const { prompt, model = 'claude-3-5-sonnet-20241022' } = req.body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    console.log(`OpenRouter request - Model: ${model}, Prompt length: ${prompt.length}`);
+    console.log(`Claude API request - Model: ${model}, Prompt length: ${prompt.length}`);
 
     const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
+      'https://api.anthropic.com/v1/messages',
       {
         model,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 4000
+        stream: false
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${process.env.ANTHROPIC_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://canvas.repspheres.com',
-          'X-Title': 'Canvas Sales Intelligence'
+          'anthropic-version': '2023-06-01'
         }
       }
     );
 
-    console.log('OpenRouter response received successfully');
-    res.json(response.data);
+    console.log('Claude API response received successfully');
+    
+    // Convert Anthropic response format to OpenAI-compatible format for frontend
+    const openaiResponse = {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: response.data.content[0].text
+        },
+        finish_reason: 'stop'
+      }],
+      usage: response.data.usage
+    };
+    
+    res.json(openaiResponse);
   } catch (error) {
-    console.error('OpenRouter error details:', {
+    console.error('Claude API error details:', {
       message: error.message,
       status: error.response?.status,
       statusText: error.response?.statusText,
@@ -692,7 +705,7 @@ router.post('/openrouter', async (req, res) => {
     });
     
     res.status(500).json({ 
-      error: 'OpenRouter API failed', 
+      error: 'Claude API failed', 
       message: error.response?.data?.error?.message || error.message,
       details: error.response?.status ? `HTTP ${error.response.status}` : 'Network error'
     });
