@@ -1,166 +1,298 @@
-# Canvas Sales Intelligence Backend (osbackend) 🚀
+# 🚀 Unified Agent System - Production Backend
 
-> Enterprise-grade API powering AI-driven medical sales intelligence
+A comprehensive multi-application backend supporting Canvas and RepConnect with unified agent architecture, voice capabilities, and real-time chat functionality.
 
 [![Deploy Status](https://img.shields.io/badge/deploy-live-success)](https://osbackend-zl1h.onrender.com)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![API](https://img.shields.io/badge/API-REST%20%2B%20WebSocket-blue)](https://osbackend-zl1h.onrender.com/api-docs)
 
-An enterprise-grade Node.js backend powering the Canvas Sales ecosystem - AI-powered sales intelligence tools for medical device and pharmaceutical representatives.
-
 **Production URL**: `https://osbackend-zl1h.onrender.com`  
 **Status**: ✅ Production Ready  
-**Architecture**: Multi-tenant, microservices-ready
+**Architecture**: Unified multi-app agent system
 
-## 📑 Table of Contents
+## 🏗️ Architecture Overview
 
-- [Core Capabilities](#-core-capabilities)
-- [System Architecture](#-system-architecture)
-- [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Configuration](#environment-configuration)
-  - [Database Setup](#database-setup)
-- [API Documentation](#-api-documentation)
-  - [Authentication](#authentication)
-  - [Canvas AI Agents](#canvas-ai-agents)
-  - [Doctor Research](#doctor-research)
-  - [Billing & Subscriptions](#billing--subscriptions)
-- [WebSocket Architecture](#-websocket-architecture)
-- [Deployment](#-deployment)
-- [Performance & Scaling](#-performance--scaling)
-- [Security](#-security)
-- [Monitoring](#-monitoring)
-- [Contributing](#-contributing)
-- [Support](#-support)  
+### Unified Agent System
+- **Single Source of Truth**: All agents stored in `unified_agents` table
+- **Multi-App Support**: Canvas and RepConnect share the same agent infrastructure
+- **App-Agnostic Design**: Dynamic filtering based on `available_in_apps` field
+- **22 Specialized Agents**: Across strategists, coaches, specialists, elite closers, and voice reps
 
-## 🚀 Core Capabilities
+### Applications Supported
+- **Canvas**: Medical sales intelligence platform with chat and voice
+- **RepConnect**: Sales representative platform with chat and voice
+- **Pedro**: Voice-only representatives (3 agents)
 
-### 🤖 Canvas AI Sales Agents
-- **4 Specialized Agent Personalities**: Hunter, Closer, Educator, Strategist
-- **Dynamic Procedure Specialization**: 200+ dental/aesthetic procedures
-- **Real-time Chat**: WebSocket-based conversations with Claude 3 Opus
-- **Proactive Insights**: AI-generated suggestions during conversations
-- **Conversation Management**: Full history with search and export
+## 🎯 Key Features
 
-### 🔬 AI & Intelligence Services
-- **Multi-LLM Orchestration** via OpenRouter (Claude Opus 4, GPT-4, Gemini Pro)
-- **Audio Transcription** with OpenAI Whisper + intelligent summarization
-- **Canvas Sales Intelligence** - 95% accuracy doctor profiling & market analysis
-- **Perplexity Deep Research** integration for comprehensive reports
-- **Apify Web Scraping** for social media intelligence
-- **Custom AI Workflows** with usage tracking and cost optimization
+### 🤖 Agent Capabilities
+- **Voice Conversations**: 19 ElevenLabs-powered voice agents
+- **Text Chat**: Real-time streaming chat responses
+- **Specialized Knowledge**: Medical procedures, sales coaching, closing techniques
+- **Personality-Driven**: Unique personalities, coaching styles, and communication approaches
 
-### 💰 Commerce & Billing
-- **Stripe Integration** with 11 pricing tiers (FREE to ELITE)
-  - Monthly & annual billing cycles
-  - Webhook processing for real-time updates
-  - Usage-based billing support
-- **Subscription Management** with tier-based feature access
-- **Module Access Control** for different RepSpheres applications
+### 💬 Communication Channels
+- **WebSocket**: Real-time chat for Canvas and RepConnect
+- **REST API**: RepConnect chat endpoints with streaming support  
+- **Voice Sessions**: ElevenLabs integration for voice conversations
+- **SMS/Phone**: Twilio integration for voice calls and messaging
 
-### 📞 Communication Services
-- **Twilio Voice/SMS** full integration
-  - Automated call handling & recording
-  - SMS campaigns and responses
-  - Transcription of call recordings
-- **Email Services** (SMTP ready)
-- **Real-time Notifications** via webhooks
-
-### 🔐 Authentication & Security
-- **Supabase Auth** with Google/Facebook OAuth
-- **JWT Token Management** with refresh logic
-- **Session Management** with PostgreSQL store
-- **Rate Limiting** and DDoS protection
-- **CORS Configuration** for multi-app support
-
-### 📊 Data & Storage
-- **Supabase Database** with optimized schemas
-- **File Upload Processing** (10MB limit, multiple formats)
-- **Redis Caching** support (optional)
-- **Intelligent Data Aggregation** across multiple sources
-
-## 📱 Applications Powered
-
-| App | Description | Features |
-|-----|-------------|----------|
-| **Canvas** | Sales Intelligence Platform | Doctor research, competitor analysis, AI conversation prep |
-| **Market Data** | Real-time procedure analytics | 350+ CPT/CDT codes, growth tracking, market sizing |
-| **Podcast RepSpheres** | Medical podcast aggregator | RSS parsing, Apple Podcasts API, trending detection |
-| **CRM** | Customer relationship management | Contact tracking, activity logging, pipeline management |
-| **GlobalRepSpheres** | Main platform & landing | Unified auth, subscription management, onboarding |
-
-## 🤖 Canvas AI Agents System
-
-### Agent Personalities
-1. **Hunter** 🎯 - Lead generation and prospecting specialist
-   - Direct, results-oriented communication
-   - Focuses on identifying opportunities
-   - Expert at qualifying prospects
-
-2. **Closer** 💼 - Deal negotiation and closing expert
-   - Persuasive, confidence-building approach
-   - Handles objections smoothly
-   - Masters the art of the close
-
-3. **Educator** 📚 - Product knowledge and training specialist
-   - Patient, detailed explanations
-   - Clinical evidence focus
-   - Builds trust through expertise
-
-4. **Strategist** 📊 - Territory planning and analytics expert
-   - Data-driven insights
-   - Competitive intelligence
-   - Long-term relationship building
-
-### Dynamic Procedure Specialization
-- **200+ Procedures**: Dental implants, orthodontics, aesthetics, and more
-- **Real-time Context**: Agents adapt their knowledge based on selected procedure
-- **Featured Procedures**: Top 20 high-value procedures highlighted
-- **Smart Search**: Find any procedure quickly with intelligent search
-
-### WebSocket Architecture
+### 🗄️ Database Architecture
 ```
-┌─────────────┐     WebSocket      ┌──────────────────┐
-│   Canvas    │ ←─────────────────→ │  Agent Server    │
-│  Frontend   │                     │  (Socket.io)     │
-└─────────────┘                     └────────┬─────────┘
-                                             │
-                                    ┌────────▼─────────┐
-                                    │  Claude 3 Opus   │
-                                    │  Streaming API   │
-                                    └──────────────────┘
+unified_agents (Master Table)
+├── Basic Info: id, name, agent_category, personality_type
+├── Voice: voice_id, voice_name, voice_settings, voice_personality_notes
+├── Personality: personality_profile, coaching_style, communication_style
+├── Capabilities: specialties, medical_specialties, device_expertise
+├── Content: system_prompt, background_story, signature_phrases
+├── Availability: available_in_apps[], is_active
+└── Relationships: agent_voice_profiles, agent_conversation_styles
 ```
 
-## 🏗️ Technical Architecture
+## 🚀 Quick Start
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend Apps                         │
-│  (Canvas, Market Data, CRM, Podcasts, GlobalRepSpheres)    │
-└─────────────────┬───────────────────────────────────────────┘
-                  │ HTTPS
-┌─────────────────▼───────────────────────────────────────────┐
-│                    osbackend (Node.js)                      │
-│  ┌─────────────┐ ┌──────────────┐ ┌───────────────────┐   │
-│  │   Auth      │ │   AI Routes  │ │   Billing/Stripe  │   │
-│  │  Middleware │ │  Research    │ │   Subscriptions   │   │
-│  └─────────────┘ └──────────────┘ └───────────────────┘   │
-│  ┌─────────────┐ ┌──────────────┐ ┌───────────────────┐   │
-│  │   Canvas    │ │  Transcribe  │ │   File Upload     │   │
-│  │   Agents   │ │   Service    │ │   Processing      │   │
-│  └─────────────┘ └──────────────┘ └───────────────────┘   │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────────────────┐
-│                    External Services                         │
-│  Supabase │ Anthropic │ Stripe │ Twilio │ Brave │ More    │
-└─────────────────────────────────────────────────────────────┘
+### Prerequisites
+- Node.js 18+
+- Supabase account with unified_agents table
+- Environment variables configured
+
+### Installation
+```bash
+# Clone repository
+git clone https://github.com/BoweryJG/osbackend.git
+cd osbackend
+
+# Install dependencies
+npm install
+
+# Configure environment variables
+cp .env.example .env
+# Fill in your Supabase, Twilio, OpenAI, ElevenLabs credentials
+
+# Start development server
+npm run dev
+
+# Or start production server
+npm start
 ```
 
-## 💎 Subscription Tiers
+### Environment Configuration
+```env
+# Core Database
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-key
+
+# Voice Services
+ELEVENLABS_API_KEY=your-elevenlabs-key
+OPENAI_API_KEY=your-openai-key (for Whisper)
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+
+# AI Services
+ANTHROPIC_API_KEY=your-claude-key
+
+# Application URLs
+FRONTEND_URL=https://canvas.repspheres.com
+SITE_URL=https://osbackend-zl1h.onrender.com
+```
+
+## 📡 API Endpoints
+
+### Canvas Agents (`/api/canvas`)
+```
+GET    /agents                    # List Canvas agents
+GET    /agents/:id                # Get specific agent
+POST   /conversations             # Create conversation
+GET    /conversations             # List conversations
+POST   /conversations/:id/messages # Send message (deprecated - use WebSocket)
+```
+
+### RepConnect Agents (`/api/repconnect`)
+```
+GET    /agents                    # List RepConnect agents
+GET    /agents/voice-enabled      # List voice-enabled agents
+GET    /agents/harvey             # Get Harvey Specter specifically
+GET    /agents/categories         # Get agent categories
+GET    /agents/:id                # Get specific agent
+
+# Chat Functionality (NEW)
+POST   /chat/stream               # Streaming chat responses (SSE)
+POST   /chat/message              # Standard chat messages
+POST   /chat/conversations        # Create conversation
+GET    /chat/conversations        # List conversations
+GET    /chat/conversations/:id    # Get conversation details
+
+# Voice Sessions
+POST   /agents/:id/start-voice-session  # Start voice session
+```
+
+### WebSocket Chat (`/agents-ws`)
+```javascript
+// Canvas Connection
+const canvas = io('ws://localhost:3001', {
+  path: '/agents-ws',
+  auth: { token: 'jwt-token', appName: 'canvas' }
+});
+
+// RepConnect Connection  
+const repconnect = io('ws://localhost:3001', {
+  path: '/agents-ws',
+  auth: { token: 'jwt-token', appName: 'repconnect' }
+});
+
+// Events
+socket.emit('message', { conversationId, message, agentId });
+socket.on('agent:message:chunk', (data) => { /* streaming response */ });
+socket.on('agent:message:complete', (data) => { /* response complete */ });
+```
+
+## 🎯 Agent Categories & Specialties
+
+### 🧠 Strategists (4 agents)
+- **Hunter**: Prospecting and lead generation specialist
+- **Closer**: Deal-making and negotiation expert  
+- **Educator**: Teaching-focused medical procedure expert
+- **Strategist**: Market intelligence and competitive analysis
+
+### 🏆 Elite Closers (2 agents)
+- **Harvey Specter**: Legendary closer with maximum aggression
+- **Victoria Sterling**: Elite negotiator with sophisticated approach
+
+### 👥 Coaches (5 agents)
+- **Coach Alex**: Motivational sales coach (RepConnect exclusive)
+- **Alexis Rivera**: Confidence and mindset coaching
+- **David Park**: Strategic sales methodology
+- **Marcus Chen**: Performance optimization
+- **Sarah Mitchell**: Relationship building expertise
+
+### 🩺 Medical Specialists (6 agents)
+- **Dr. Amanda Foster**: Aesthetic procedures specialist
+- **Dr. Harvey Stern**: Surgical equipment expert
+- **Dr. Lisa Martinez**: Cardiology and cardiac devices
+- **Dr. Sarah Chen**: Orthopedic and spine procedures  
+- **Jake Thompson**: Sports medicine and rehabilitation
+- **Marcus Rodriguez**: Emergency medicine and trauma
+
+### 🎤 Voice Representatives (5 agents)
+- **Marcus**: Professional analytical approach (RepConnect exclusive)
+- **Sarah**: Friendly empathetic communication (RepConnect exclusive)
+- **Brian**: Pedro platform specialist
+- **Julie**: Pedro platform specialist  
+- **Maria**: Pedro platform specialist
+
+## 🔧 Development
+
+### Project Structure
+```
+osbackend/
+├── agents/
+│   ├── core/
+│   │   ├── agentCore.js           # App-agnostic agent management
+│   │   └── conversationManager.js # Chat conversation handling
+│   └── websocket/
+│       ├── server.js              # Multi-app WebSocket server
+│       ├── test-multiapp.js       # WebSocket testing
+│       └── README-multiapp.md     # WebSocket documentation
+├── routes/
+│   ├── agents/
+│   │   └── agentRoutes.js         # Canvas agent endpoints
+│   ├── repconnectRoutes.js        # RepConnect endpoints + chat
+│   ├── authRoutes.js              # Authentication
+│   └── dashboard.js               # Admin dashboard
+├── services/
+│   ├── knowledgeBankService.js    # Knowledge management
+│   └── personalityEngine.js      # Agent personality system
+└── migrations/
+    └── *.sql                      # Database migrations
+```
+
+### Testing
+```bash
+# Test Canvas WebSocket chat
+node test_canvas_chat.js
+
+# Test RepConnect REST API chat  
+node test_repconnect_chat.js
+
+# Test multi-app WebSocket server
+cd agents/websocket && node test-multiapp.js
+
+# Test knowledge bank functionality
+node test_knowledge_bank.js
+```
+
+### Database Migrations
+```bash
+# Apply database migrations
+node run-migrations-via-api.js
+
+# The unified_agents table will be created with:
+# - All agent profiles and personalities
+# - Voice configurations and settings
+# - System prompts for chat functionality
+# - App availability matrix
+```
+
+## 🎤 Voice Integration
+
+### ElevenLabs Configuration
+- **19 Voice-Enabled Agents**: Each with unique voice profiles
+- **Voice Cloning**: Custom voices for Harvey Specter and other premium agents
+- **Whisper Support**: Real-time coaching during calls
+- **Voice Sessions**: Tracked in `agent_voice_sessions` table
+
+### Voice Features
+- **Real-time Conversation**: Low-latency voice responses
+- **Personality Matching**: Voice tone matches agent personality
+- **Coaching Integration**: Whisper prompts during live calls
+- **Session Management**: Complete voice session tracking
+
+## 🔐 Authentication & Security
+
+### Authentication Methods
+- **JWT Tokens**: Supabase Auth integration
+- **Bearer Authentication**: API endpoint protection
+- **WebSocket Auth**: Token-based WebSocket connections
+- **Service Role**: Admin operations with elevated permissions
+
+### Security Features
+- **CORS Configuration**: Restricted origins for production
+- **Rate Limiting**: Request throttling per user
+- **Input Validation**: Comprehensive request validation
+- **Error Handling**: Secure error responses without data leaks
+
+## 📊 Monitoring & Analytics
+
+### Logging
+- **Structured Logging**: JSON-formatted logs with timestamps
+- **Error Tracking**: Comprehensive error logging and tracking
+- **Performance Monitoring**: Response time and throughput tracking
+- **User Analytics**: Conversation and interaction analytics
+
+### Health Checks
+```
+GET /health                 # Basic health status
+GET /api/canvas/agents      # Canvas agents availability  
+GET /api/repconnect/agents  # RepConnect agents availability
+```
+
+## 🚀 Production Deployment
+
+### Render Configuration
+- **Auto-Deploy**: Connected to GitHub main branch
+- **Environment Variables**: Configured in Render dashboard
+- **Health Checks**: Automatic health monitoring
+- **Zero-Downtime**: Rolling deployments
+
+### Performance Optimization
+- **Agent Caching**: In-memory agent profile caching
+- **Connection Pooling**: Optimized database connections
+- **WebSocket Scaling**: Multi-instance WebSocket support
+- **CDN Integration**: Static asset optimization
+
+## 💰 Subscription Tiers
 
 | Tier | Monthly | Annual | Key Features |
 |------|---------|---------|--------------|
@@ -171,650 +303,91 @@ An enterprise-grade Node.js backend powering the Canvas Sales ecosystem - AI-pow
 | **ENTERPRISE** | $749 | $7,490 | Custom AI training, 10 seats |
 | **ELITE** | $1,499 | $14,990 | White glove service, unlimited everything |
 
-## 🚀 Quick Start
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/BoweryJG/osbackend.git
-cd osbackend
-```
-
-2. **Install dependencies**
-```bash
-npm install
-```
-
-3. **Configure environment**
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
-
-4. **Start the server**
-```bash
-npm start
-# Server runs on http://localhost:3001
-```
-
-## 🔧 Environment Variables
-
-### Required
-- `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (for backend operations)
-- `STRIPE_SECRET_KEY` - Stripe API key
-- `STRIPE_WEBHOOK_SECRET` - Stripe webhook secret
-- `SESSION_SECRET` - Express session secret
-- `OPENROUTER_API_KEY` - For AI services
-- `ANTHROPIC_API_KEY` - For Canvas AI Agents (Claude 3 Opus)
-- `BRAVE_API_KEY` - For web search
-- `FIRECRAWL_API_KEY` - For web scraping
-
-### Optional
-- `TWILIO_ACCOUNT_SID` - For voice/SMS
-- `OPENAI_API_KEY` - For Whisper transcription
-- `PERPLEXITY_API_KEY` - For deep research
-- `APIFY_API_TOKEN` - For social scraping
-
-## 📚 API Endpoints
-
-### Authentication
-- `POST /auth/register` - User registration
-- `POST /auth/login` - User login
-- `POST /auth/logout` - User logout
-- `GET /auth/user` - Get current user
-
-### Canvas Intelligence
-- `POST /research/doctor` - Research doctor profile
-- `POST /research/batch` - Batch doctor research
-- `POST /openrouter` - AI conversation generation
-- `POST /firecrawl-scrape` - Web scraping
-
-### Canvas AI Agents
-- `GET /api/canvas/agents` - List all agents
-- `GET /api/canvas/agents/:id` - Get specific agent
-- `POST /api/canvas/agents/suggest` - Get agent recommendations
-- `GET /api/canvas/conversations` - List user conversations
-- `POST /api/canvas/conversations` - Create new conversation
-- `POST /api/canvas/conversations/with-procedure` - Create with procedure context
-- `GET /api/canvas/conversations/:id` - Get conversation details
-- `DELETE /api/canvas/conversations/:id` - Delete conversation
-- `GET /api/canvas/conversations/:id/export` - Export conversation
-- `GET /api/canvas/procedures/featured` - Get featured procedures
-- `GET /api/canvas/procedures/search?q=` - Search procedures
-- `GET /api/canvas/procedures/:id?type=` - Get procedure details
-
-### Subscriptions
-- `POST /create-checkout-session` - Start subscription
-- `POST /stripe-webhook` - Handle Stripe events
-- `GET /subscription-status` - Check user subscription
-
-### Transcription
-- `POST /transcribe` - Transcribe audio file
-- `POST /transcribe-url` - Transcribe from URL
-- `GET /transcriptions` - List user transcriptions
-
-### Twilio
-- `POST /twilio/voice` - Handle incoming calls
-- `POST /twilio/sms` - Handle SMS
-- `POST /make-call` - Initiate outbound call
-
-## 🧪 Testing
-
-### Test Suite Overview
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test suites
-npm run test:unit          # Unit tests
-npm run test:integration   # Integration tests
-npm run test:e2e          # End-to-end tests
-
-# Test coverage
-npm run test:coverage
-
-# Test specific services
-npm run test:agents       # AI agent tests
-npm run test:websocket    # WebSocket tests
-npm run test:stripe       # Payment tests
-npm run test:auth         # Authentication tests
-```
-
-### Testing Strategy
-
-#### Unit Tests
-```javascript
-// Example: Testing AgentCore
-describe('AgentCore', () => {
-  it('should build correct system prompt with procedure context', () => {
-    const agent = { name: 'Hunter', specialty: ['dental'] };
-    const context = { 
-      metadata: { 
-        procedureContext: { name: 'YOMI Implants' } 
-      } 
-    };
-    
-    const prompt = agentCore.buildSystemPrompt(agent, context);
-    expect(prompt).toContain('YOMI Implants');
-  });
-});
-```
-
-#### Integration Tests
-```javascript
-// Example: Testing WebSocket communication
-describe('WebSocket Integration', () => {
-  it('should stream AI responses', async () => {
-    const client = io(TEST_URL, { auth: { token } });
-    
-    client.emit('message', { 
-      conversationId: '123',
-      message: 'Hello'
-    });
-    
-    const chunks = [];
-    client.on('agent:message:chunk', (data) => {
-      chunks.push(data.chunk);
-    });
-    
-    await waitFor(() => {
-      expect(chunks.length).toBeGreaterThan(0);
-    });
-  });
-});
-```
-
-### Load Testing
-
-```bash
-# Install artillery
-npm install -g artillery
-
-# Run load test
-artillery run tests/load/websocket-test.yml
-
-# Example load test config
-config:
-  target: "https://osbackend-zl1h.onrender.com"
-  phases:
-    - duration: 60
-      arrivalRate: 10
-      rampTo: 100
-scenarios:
-  - engine: "socketio"
-    flow:
-      - emit:
-          channel: "message"
-          data:
-            conversationId: "test"
-            message: "Hello"
-```
-
-## 📈 Performance
-
-- **Response Time**: <200ms average
-- **Uptime**: 99.9% SLA
-- **Concurrent Users**: 10,000+
-- **API Rate Limit**: 100 requests/15min
-- **File Upload**: 10MB max
-
-## 🔒 Security
-
-- All API endpoints require authentication (except public routes)
-- HTTPS only in production
-- Environment variables for sensitive data
-- SQL injection protection via parameterized queries
-- XSS protection headers
-- CORS restricted to approved domains
-
-## 🚢 Deployment
-
-### Render Deployment (Production)
-
-#### Automatic Deployment
-1. Push to `main` branch triggers automatic deployment
-2. Render builds and deploys within 5-10 minutes
-3. Zero-downtime deployments with health checks
-
-#### Manual Deployment
-```bash
-# Install Render CLI
-brew install render/render/render
-
-# Deploy manually
-render deploy --service-id srv-xxx
-```
-
-#### Environment Variables
-Set in Render Dashboard → Environment:
-```bash
-NODE_ENV=production
-PORT=3002
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_KEY=xxx
-ANTHROPIC_API_KEY=xxx
-# ... other variables
-```
-
-### Docker Deployment
-
-```dockerfile
-# Dockerfile
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app .
-EXPOSE 3002
-CMD ["npm", "start"]
-```
-
-```bash
-# Build and run
-docker build -t canvas-backend .
-docker run -p 3002:3002 --env-file .env canvas-backend
-```
-
-### Kubernetes Deployment
-
-```yaml
-# deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: canvas-backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: canvas-backend
-  template:
-    metadata:
-      labels:
-        app: canvas-backend
-    spec:
-      containers:
-      - name: canvas-backend
-        image: canvas-backend:latest
-        ports:
-        - containerPort: 3002
-        env:
-        - name: NODE_ENV
-          value: "production"
-        envFrom:
-        - secretRef:
-            name: canvas-secrets
-```
-
-## 📊 Monitoring
-
-### Health Checks
-
-```javascript
-// GET /health
-{
-  "status": "ok",
-  "timestamp": "2024-06-19T12:00:00Z",
-  "services": {
-    "database": "connected",
-    "redis": "connected",
-    "anthropic": "ready",
-    "stripe": "ready"
-  },
-  "version": "1.0.0"
-}
-
-// GET /health/detailed
-{
-  "memory": {
-    "used": "256MB",
-    "total": "512MB"
-  },
-  "uptime": "24h 30m",
-  "requests": {
-    "total": 150000,
-    "errors": 23,
-    "rate": "100/s"
-  }
-}
-```
-
-### Logging
-
-```javascript
-// Winston logging configuration
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-    new winston.transports.Console({
-      format: winston.format.simple()
-    })
-  ]
-});
-
-// Usage
-logger.info('Agent conversation started', { 
-  userId: user.id, 
-  agentId: agent.id 
-});
-```
-
-### Metrics & Analytics
-
-```javascript
-// Prometheus metrics
-const promClient = require('prom-client');
-const collectDefaultMetrics = promClient.collectDefaultMetrics;
-
-// Collect default metrics
-collectDefaultMetrics({ timeout: 5000 });
-
-// Custom metrics
-const httpRequestDuration = new promClient.Histogram({
-  name: 'http_request_duration_seconds',
-  help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route', 'status']
-});
-
-// Grafana dashboard available at /metrics
-```
-
-## 🗄️ Database Management
-
-### Migrations
-
-```bash
-# Create new migration
-npm run db:migrate:create add_agent_features
-
-# Run migrations
-npm run db:migrate:up
-
-# Rollback last migration
-npm run db:migrate:down
-
-# Reset database
-npm run db:reset
-```
-
-### Backup & Restore
-
-```bash
-# Backup database
-pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
-
-# Restore database
-psql $DATABASE_URL < backup_20240619.sql
-
-# Automated daily backups via Supabase
-# Dashboard → Settings → Backups
-```
-
-### Performance Optimization
-
-```sql
--- Add indexes for common queries
-CREATE INDEX idx_conversations_user_id ON agent_conversations(user_id);
-CREATE INDEX idx_messages_conversation_id ON agent_messages(conversation_id);
-CREATE INDEX idx_procedures_featured ON dental_procedures(is_featured);
-
--- Analyze query performance
-EXPLAIN ANALYZE SELECT * FROM agent_conversations 
-WHERE user_id = '123' ORDER BY created_at DESC;
-```
-
-## 🔐 Security Best Practices
-
-### API Security
-- JWT tokens expire after 1 hour
-- Refresh tokens stored securely
-- Rate limiting per user/IP
-- Input validation on all endpoints
-- SQL injection prevention via parameterized queries
-
-### Environment Security
-```bash
-# Never commit .env files
-echo ".env*" >> .gitignore
-
-# Use secrets management
-# Render: Environment Groups
-# K8s: Secrets/ConfigMaps
-# AWS: Secrets Manager
-```
-
-### OWASP Top 10 Protection
-1. **Injection**: Parameterized queries, input validation
-2. **Broken Authentication**: JWT + refresh tokens
-3. **Sensitive Data**: Encryption at rest/transit
-4. **XXE**: XML parsing disabled
-5. **Broken Access Control**: RLS policies
-6. **Security Misconfiguration**: Security headers
-7. **XSS**: Content-Type validation
-8. **Insecure Deserialization**: JSON schema validation
-9. **Using Components with Vulnerabilities**: Regular updates
-10. **Insufficient Logging**: Comprehensive audit logs
-
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these guidelines:
-
 ### Development Workflow
-
-1. **Fork & Clone**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/osbackend.git
-   cd osbackend
-   ```
-
-2. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/agent-improvements
-   ```
-
-3. **Make Changes**
-   - Follow ESLint rules
-   - Add tests for new features
-   - Update API documentation
-
-4. **Test Thoroughly**
-   ```bash
-   npm run test
-   npm run lint
-   ```
-
-5. **Commit with Conventional Commits**
-   ```bash
-   git commit -m "feat(agents): add voice response capability"
-   git commit -m "fix(websocket): resolve reconnection issue"
-   git commit -m "docs(api): update agent endpoints"
-   ```
-
-6. **Push & Create PR**
-   ```bash
-   git push origin feature/agent-improvements
-   ```
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Make changes and test thoroughly
+4. Commit: `git commit -m 'Add amazing feature'`
+5. Push: `git push origin feature/amazing-feature`
+6. Create Pull Request
 
 ### Code Standards
-
-- **Style**: ESLint + Prettier
-- **Commits**: Conventional Commits
-- **Tests**: 80% coverage minimum
-- **Docs**: JSDoc for all public APIs
-
-### API Design Guidelines
-
-- RESTful principles
-- Consistent error responses
-- Versioned endpoints
-- Comprehensive OpenAPI docs
-
-## 📚 Additional Resources
-
-### Documentation
-- [API Reference](https://osbackend-zl1h.onrender.com/api-docs)
-- [Canvas Features Guide](./CANVAS-FEATURES.md)
-- [WebSocket Protocol](./docs/WEBSOCKET.md)
-- [Database Schema](./docs/SCHEMA.md)
-
-### Tutorials
-- [Building Custom Agents](./docs/tutorials/custom-agents.md)
-- [Integrating New AI Models](./docs/tutorials/ai-models.md)
-- [Scaling WebSocket Connections](./docs/tutorials/scaling.md)
-
-### Architecture Decisions
-- [ADR-001: WebSocket vs REST](./docs/adr/001-websocket.md)
-- [ADR-002: Multi-tenant Architecture](./docs/adr/002-multitenancy.md)
-- [ADR-003: AI Model Selection](./docs/adr/003-ai-models.md)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Database Connection
-```bash
-# Error: ECONNREFUSED
-# Solution: Check Supabase credentials
-echo $SUPABASE_URL
-echo $SUPABASE_SERVICE_KEY | wc -c  # Should be > 100
-
-# Test connection
-node -e "require('./supabase-test.js')"
-```
-
-#### WebSocket Issues
-```bash
-# Error: WebSocket connection failed
-# Check CORS settings
-curl -I https://osbackend-zl1h.onrender.com
-
-# Test WebSocket endpoint
-wscat -c wss://osbackend-zl1h.onrender.com/agents-ws
-```
-
-#### AI Agent Errors
-```bash
-# Error: Anthropic API error
-# Check API key and quota
-curl https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01"
-```
-
-### Debug Mode
-
-Enable verbose logging:
-```javascript
-// Set in environment
-DEBUG=* npm start
-
-// Or in code
-process.env.DEBUG = 'canvas:*';
-```
-
-## 📈 Performance Tuning
-
-### Node.js Optimization
-```bash
-# Increase memory limit
-node --max-old-space-size=4096 index.js
-
-# Enable clustering
-NODE_CLUSTER_WORKERS=4 npm start
-
-# Profile performance
-node --prof index.js
-node --prof-process isolate-*.log > profile.txt
-```
-
-### Database Optimization
-```sql
--- Connection pooling
--- Set in Supabase: Settings → Database → Connection Pooling
-
--- Query optimization
-ANALYZE agent_conversations;
-VACUUM ANALYZE;
-
--- Monitor slow queries
-SELECT query, calls, mean_exec_time
-FROM pg_stat_statements
-ORDER BY mean_exec_time DESC
-LIMIT 10;
-```
-
-### Caching Strategy
-```javascript
-// Redis caching (optional)
-const redis = require('redis');
-const client = redis.createClient(process.env.REDIS_URL);
-
-// Cache agent responses
-const cacheKey = `agent:${agentId}:${messageHash}`;
-const cached = await client.get(cacheKey);
-if (cached) return JSON.parse(cached);
-
-// Cache for 5 minutes
-await client.setex(cacheKey, 300, JSON.stringify(response));
-```
+- **ESLint**: JavaScript linting and formatting
+- **Error Handling**: Comprehensive try-catch blocks
+- **Documentation**: JSDoc comments for functions
+- **Testing**: Unit tests for new functionality
 
 ## 📞 Support
 
-### Getting Help
-- **Documentation**: [docs.canvassales.ai](https://docs.canvassales.ai)
-- **API Status**: [status.canvassales.ai](https://status.canvassales.ai)
+### Documentation
+- **API Documentation**: Detailed endpoint documentation
+- **WebSocket Guide**: Real-time communication setup
+- **Agent Profiles**: Complete agent capability matrix
+- **Troubleshooting**: Common issues and solutions
+
+### Contact
 - **Issues**: [GitHub Issues](https://github.com/BoweryJG/osbackend/issues)
-- **Email**: backend@canvassales.ai
+- **Email**: support@repspheres.com
+- **Documentation**: [API Docs](https://docs.repspheres.com)
 
-### Enterprise Support
-- **SLA**: 99.9% uptime guarantee
-- **Response Time**: < 4 hours
-- **Dedicated Slack channel**
-- **Phone support available**
+## 📈 Roadmap
 
-Contact: enterprise@canvassales.ai
+### Upcoming Features
+- **Multi-language Support**: International agent personalities
+- **Advanced Analytics**: Conversation sentiment analysis
+- **Custom Agent Creation**: User-defined agent personalities
+- **Integration Hub**: CRM and marketing platform integrations
 
-## 📄 License
+### Performance Improvements
+- **Redis Caching**: Enhanced caching layer
+- **GraphQL API**: Advanced query capabilities  
+- **Microservices**: Service decomposition for scaling
+- **AI Optimization**: Enhanced response quality and speed
 
-This project is proprietary software owned by Canvas Sales Intelligence, Inc.
+## 🧪 Testing Infrastructure
 
-- **Commercial Use**: Requires license
-- **Modifications**: Must be contributed back
-- **Distribution**: Prohibited
-- **Private Use**: Allowed with valid license
+### Test Files Available
+```bash
+# Canvas WebSocket chat testing
+/Users/jasonsmacbookpro2022/crm/test_canvas_chat.js
 
-For licensing: license@canvassales.ai
+# RepConnect REST API chat testing
+/Users/jasonsmacbookpro2022/crm/test_repconnect_chat.js
 
-## 🙏 Acknowledgments
+# Multi-app WebSocket testing
+/Users/jasonsmacbookpro2022/osbackend/agents/websocket/test-multiapp.js
 
-### Core Technologies
-- Node.js and Express communities
-- Anthropic for Claude AI
-- Supabase for backend infrastructure
-- Socket.io for real-time magic
-- All open source contributors
+# Knowledge bank functionality
+/Users/jasonsmacbookpro2022/osbackend/test_knowledge_bank.js
+```
 
-### Special Thanks
-- Canvas Engineering Team
-- Beta testers and early adopters
-- Medical sales professionals who provided feedback
+### Load Testing
+```bash
+# Install dependencies
+npm install axios ws
+
+# Run Canvas test
+cd /Users/jasonsmacbookpro2022/crm
+node test_canvas_chat.js
+
+# Run RepConnect test  
+node test_repconnect_chat.js
+```
+
+## 🔄 Recent Major Updates
+
+### 🚀 Unified Agent System (Latest)
+- ✅ **Single Source of Truth**: All 22 agents in unified_agents table
+- ✅ **App-Agnostic Architecture**: Dynamic filtering by app context
+- ✅ **RepConnect Chat**: Full REST API chat functionality added
+- ✅ **Multi-App WebSocket**: Supports both Canvas and RepConnect
+- ✅ **System Prompt Migration**: 100% coverage for all agents
+- ✅ **Voice + Chat Integration**: Both apps have identical capabilities
 
 ---
 
-<div align="center">
-  <p>Built with ❤️ by the Canvas Sales Intelligence Team</p>
-  <p>Powering the future of medical sales</p>
-  <br/>
-  <a href="https://canvassales.ai">Website</a> •
-  <a href="https://osbackend-zl1h.onrender.com">API</a> •
-  <a href="https://github.com/BoweryJG/osbackend">GitHub</a> •
-  <a href="https://twitter.com/canvassales">Twitter</a>
-</div>
+**Built with ❤️ by the RepSpheres Team**
+
+*Empowering sales representatives with AI-powered conversation intelligence.*
