@@ -2295,6 +2295,9 @@ app.use('/api/funding', fundingStrategyRoutes);
 // Add Stripe routes for RepX subscriptions
 app.use('/api/stripe', stripeRoutes);
 
+// Add RepX-specific routes (shared endpoints from stripe routes)
+app.use('/api/repx', stripeRoutes);
+
 // Add Health monitoring routes
 app.use('/', healthRoutes);
 
