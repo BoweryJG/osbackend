@@ -806,7 +806,7 @@ router.post('/openrouter', async (req, res) => {
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.ANTHROPIC_API_KEY}`,
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01'
         }
@@ -1569,7 +1569,7 @@ Return JSON format:
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.ANTHROPIC_API_KEY}`,
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01'
         }
@@ -1794,7 +1794,7 @@ Return JSON: {"sentiment": "...", "positioning": "...", "tone": "..."}`;
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.ANTHROPIC_API_KEY}`,
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01'
         }
@@ -1865,7 +1865,7 @@ Focus on ACTIONABLE INTELLIGENCE that gives this sales rep a massive advantage. 
       },
       {
         headers: {
-          'Authorization': `Bearer ${process.env.ANTHROPIC_API_KEY}`,
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
           'Content-Type': 'application/json',
           'anthropic-version': '2023-06-01'
         }
