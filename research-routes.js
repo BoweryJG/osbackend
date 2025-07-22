@@ -1005,7 +1005,68 @@ router.post('/apify-actor', async (req, res) => {
   }
 });
 
-// Research Intelligence proxy - Uses OpenRouter instead of Perplexity
+// Anthropic Claude proxy endpoint for Canvas
+router.post('/anthropic', async (req, res) => {
+  const { prompt, model = 'claude-3-5-sonnet-20241022' } = req.body;
+  
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt required' });
+  }
+  
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) {
+    console.error('ANTHROPIC_API_KEY not configured');
+    return res.status(500).json({ error: 'Anthropic not configured' });
+  }
+  
+  // Use Claude Opus 4 as requested
+  const apiModel = model;
+  
+  try {
+    console.log(`🤖 Anthropic API call: ${model} (using ${apiModel})`);
+    
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: apiModel,
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }],
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        }
+      }
+    );
+    
+    // Format response to match OpenRouter/Canvas expected format
+    res.json({
+      choices: [{
+        message: {
+          content: response.data.content[0].text
+        }
+      }],
+      model: model,
+      usage: response.data.usage
+    });
+    
+    console.log(`✅ Anthropic API call completed`);
+  } catch (error) {
+    console.error('Anthropic API error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Anthropic API failed', 
+      message: error.response?.data?.error?.message || error.message 
+    });
+  }
+});
+
+// Research Intelligence proxy - Uses Anthropic directly
 router.post('/perplexity-research', async (req, res) => {
   const { query, model = 'sonar' } = req.body;
   
@@ -1013,10 +1074,10 @@ router.post('/perplexity-research', async (req, res) => {
     return res.status(400).json({ error: 'Query required' });
   }
   
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  if (!OPENROUTER_API_KEY) {
-    console.error('OPENROUTER_API_KEY not configured');
-    return res.status(500).json({ error: 'OpenRouter not configured' });
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) {
+    console.error('ANTHROPIC_API_KEY not configured');
+    return res.status(500).json({ error: 'Anthropic not configured' });
   }
   
   try {
@@ -1057,9 +1118,9 @@ Provide a comprehensive answer that includes:
 Format your response to be clear and well-structured.`;
 
     const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
+      'https://api.anthropic.com/v1/messages',
       {
-        model: 'anthropic/claude-3-opus-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         messages: [{
           role: 'user',
           content: enhancedPrompt
@@ -1069,18 +1130,17 @@ Format your response to be clear and well-structured.`;
       },
       {
         headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://canvas.repspheres.com',
-          'X-Title': 'Canvas Sales Intelligence',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
         }
       }
     );
     
     res.json({
-      answer: response.data.choices[0].message.content,
+      answer: response.data.content[0].text,
       sources: searchContext ? ['Brave Search Results'] : [],
-      model: 'claude-3-opus (via OpenRouter)'
+      model: 'claude-3-opus (direct)'
     });
   } catch (error) {
     console.error('Research error:', error.response?.data || error.message);

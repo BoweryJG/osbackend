@@ -20,9 +20,10 @@ const supabase = createClient(
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin in production
   maxAge: 30 * 60 * 1000, // 30 minutes
-  path: '/'
+  path: '/',
+  domain: process.env.NODE_ENV === 'production' ? '.repspheres.com' : undefined // Allow subdomain sharing
 };
 
 // Exchange Supabase token for httpOnly cookies
