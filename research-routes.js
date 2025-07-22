@@ -6,6 +6,7 @@
 import express from 'express';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import puppeteerScraper from './services/puppeteerScraper.js';
 
 const router = express.Router();
 
@@ -625,6 +626,7 @@ router.post('/brave-search', async (req, res) => {
 });
 
 // Firecrawl Scrape endpoint for Canvas
+
 router.post('/firecrawl-scrape', async (req, res) => {
   try {
     const { url, formats = ['markdown'] } = req.body;
@@ -633,21 +635,38 @@ router.post('/firecrawl-scrape', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
-      url,
-      formats
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+    console.log(`🌐 Scraping website with Puppeteer: ${url}`);
+    
+    // Use Puppeteer instead of Firecrawl
+    const result = await puppeteerScraper.scrapeWebsite(url, {
+      extractMarkdown: formats.includes('markdown')
     });
 
-    res.json(response.data);
+    if (!result.success) {
+      throw new Error(result.error || 'Scraping failed');
+    }
+
+    // Format response to match Firecrawl structure
+    const response = {
+      success: true,
+      data: {
+        content: result.data.mainContent || '',
+        markdown: result.data.markdown || '',
+        metadata: {
+          title: result.data.title,
+          description: result.data.metaDescription,
+          url: url
+        },
+        // Include our extracted data
+        ...result.data
+      }
+    };
+
+    res.json(response);
   } catch (error) {
-    console.error('Firecrawl error:', error);
+    console.error('Puppeteer scraping error:', error);
     res.status(500).json({ 
-      error: 'Firecrawl scrape failed', 
+      error: 'Website scrape failed', 
       message: error.message 
     });
   }
