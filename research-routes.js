@@ -6,7 +6,6 @@
 import express from 'express';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import puppeteerScraper from './services/puppeteerScraper.js';
 
 const router = express.Router();
 
@@ -635,39 +634,39 @@ router.post('/firecrawl-scrape', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    console.log(`🌐 Scraping website with Puppeteer: ${url}`);
-    
-    // Use Puppeteer instead of Firecrawl
-    const result = await puppeteerScraper.scrapeWebsite(url, {
-      extractMarkdown: formats.includes('markdown')
-    });
-
-    if (!result.success) {
-      throw new Error(result.error || 'Scraping failed');
+    // Debug: Check if API key is set
+    if (!process.env.FIRECRAWL_API_KEY) {
+      console.error('FIRECRAWL_API_KEY not set in environment');
+      return res.status(500).json({ error: 'Firecrawl API key not configured' });
     }
 
-    // Format response to match Firecrawl structure
-    const response = {
-      success: true,
-      data: {
-        content: result.data.mainContent || '',
-        markdown: result.data.markdown || '',
-        metadata: {
-          title: result.data.title,
-          description: result.data.metaDescription,
-          url: url
-        },
-        // Include our extracted data
-        ...result.data
-      }
-    };
+    console.log(`🌐 Scraping website with Firecrawl: ${url}`);
 
-    res.json(response);
+    const response = await axios.post(
+      'https://api.firecrawl.dev/v0/scrape',
+      {
+        url,
+        pageOptions: {
+          includeHtml: false,
+          onlyMainContent: true,
+          screenshot: false
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    res.json(response.data);
   } catch (error) {
-    console.error('Puppeteer scraping error:', error);
+    console.error('Firecrawl scraping error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Website scrape failed', 
-      message: error.message 
+      message: error.message,
+      details: error.response?.data
     });
   }
 });
