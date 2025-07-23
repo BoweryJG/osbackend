@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+temp/
+uploads/
+migration-output/
+*.log
+*.pid
+*.min.js
+*.min.css
+package-lock.json
+netlify-deploy/
+pr-campaign/
+shared/
+.env*
+*.sql

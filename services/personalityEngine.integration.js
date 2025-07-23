@@ -1,5 +1,6 @@
-import { personalityEngine } from './personalityEngine.js';
 import { AgentCore } from '../agents/core/agentCore.js';
+
+import { personalityEngine } from './personalityEngine.js';
 
 /**
  * Example integration of PersonalityEngine with existing AgentCore

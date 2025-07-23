@@ -1,35 +1,74 @@
-import dotenv from 'dotenv';
+// Node.js built-in modules
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { createServer } from 'http';
+
+// External packages
+import dotenv from 'dotenv';
+import express from 'express';
+import * as Sentry from '@sentry/node';
+import axios from 'axios';
+import cors from 'cors';
+import multer from 'multer';
+import Stripe from 'stripe';
+import NodeCache from 'node-cache';
+import Parser from 'rss-parser';
+import cookieParser from 'cookie-parser';
+import { WebSocketServer } from 'ws';
 
 // Get the directory name and load environment variables first
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-import * as Sentry from '@sentry/node';
-import express from 'express';
-import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
-import cors from 'cors';
-import fs from 'fs';
-import multer from 'multer';
-import Stripe from 'stripe';
-import NodeCache from 'node-cache';
-import { v4 as uuidv4 } from 'uuid';
-import Parser from 'rss-parser';
-import { createServer } from 'http';
-import cookieParser from 'cookie-parser';
+// Internal utilities
+import gracefulShutdown from './utils/gracefulShutdown.js';
+import EnvValidator from './utils/envValidator.js';
+import logger from './utils/logger.js';
+// Validate environment variables in production
+if (process.env.NODE_ENV === 'production') {
+  const validator = new EnvValidator();
+  const validation = validator.validateAll();
+  
+  if (!validation.isValid) {
+    console.error('Environment validation failed. Exiting...');
+    throw new Error('Environment validation failed');
+  }
+}
+
+// Internal modules - agents
 import AgentWebSocketServer from './agents/websocket/server.js';
+// Internal modules - middleware
+import rateLimiterMiddleware from './middleware/rateLimiter.js';
+import responseTimeMiddleware from './middleware/responseTime.js';
+import { requestId, requestLogger, errorLogger, errorHandler } from './middleware/logging.js';
+// Internal modules - services
+import websocketManager, { startWebSocketServer } from './services/websocketManager.js';
+import CallTranscriptionService from './services/callTranscriptionService.js';
+import HarveyWebSocketService from './services/harveyWebSocketService.js';
+import databasePool, { query as dbQuery } from './services/databasePool.js';
+import optimizedQueries from './services/optimizedQueries.js';
+// Internal modules - routes
 import agentRoutes from './routes/agents/agentRoutes.js';
 import repconnectRoutes from './routes/repconnectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import fundingStrategyRoutes from './routes/fundingStrategy.js';
 import healthRoutes from './routes/healthRoutes.js';
-import rateLimiterMiddleware from './middleware/rateLimiter.js';
-import responseTimeMiddleware from './middleware/responseTime.js';
-import websocketManager, { startWebSocketServer } from './services/websocketManager.js';
 import websocketRoute, { websocketProxy } from './routes/websocketRoute.js';
+import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
+import callSummaryRoutes from './routes/callSummaryRoutes.js';
+import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
+import voiceCloningRoutes from './routes/voiceCloning.js';
+import dashboardRoutes from './routes/dashboard.js';
+import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
+import stripeRoutes from './routes/stripe.js';
+import usageRoutes from './routes/usage.js';
+import emailRoutes from './routes/email.js';
+import phoneRoutes from './routes/phone.js';
+import harveyRoutes from './routes/harvey.js';
+import coachingSessionRoutes from './routes/coachingSessionRoutes.js';
+// Internal modules - core services
 import {
   processAudioFile,
   processAudioFromUrl,
@@ -53,26 +92,18 @@ import {
 } from './twilio_service.js';
 import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
-import usageRoutes from './routes/usage.js';
-import emailRoutes from './routes/email.js';
-import phoneRoutes from './routes/phone.js';
-import harveyRoutes from './routes/harvey.js';
-import coachingSessionRoutes from './routes/coachingSessionRoutes.js';
 import { authenticateUser, optionalAuth } from './auth.js';
-import { WebSocketServer } from 'ws';
-import CallTranscriptionService from './services/callTranscriptionService.js';
-import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/callTranscription.js';
-import HarveyWebSocketService from './services/harveyWebSocketService.js';
-import callSummaryRoutes from './routes/callSummaryRoutes.js';
-import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
-import voiceCloningRoutes from './routes/voiceCloning.js';
-import dashboardRoutes from './routes/dashboard.js';
-import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
-import stripeRoutes from './routes/stripe.js';
 import { successResponse, errorResponse } from './utils/responseHelpers.js';
 
-// Initialize cache for API responses
-const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
+// Initialize cache for API responses with enhanced configuration
+const cache = new NodeCache({ 
+  stdTTL: 3600, // Cache for 1 hour
+  checkperiod: 600, // Check for expired keys every 10 minutes
+  useClones: false, // Better performance for read-heavy workloads
+  maxKeys: 10000, // Limit cache size
+  errorOnMissing: false,
+  deleteOnExpire: true
+});
 
 // Initialize Sentry
 if (process.env.SENTRY_DSN) {
@@ -174,7 +205,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error('Stripe webhook verification failed:', err.message);
+    logger.error('Stripe webhook verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -206,14 +237,18 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
         break;
       }
       default:
-        console.log(`Unhandled Stripe event: ${event.type}`);
+        logger.info(`Unhandled Stripe event: ${event.type}`);
     }
     res.json(successResponse({ received: true }));
   } catch (err) {
-    console.error('Error processing Stripe webhook:', err);
+    logger.error('Error processing Stripe webhook:', err);
     res.status(500).json(errorResponse('WEBHOOK_ERROR', 'Webhook handler failed', err.message, 500));
   }
 });
+
+// Request ID and logging middleware
+app.use(requestId); // Add unique request ID to each request
+app.use(requestLogger); // Log all requests and responses
 
 // JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
@@ -305,82 +340,58 @@ app.get('/health', (req, res) => {
   res.json(successResponse({ status: 'ok' }));
 });
 
-// Supabase client setup with connection retry
+// Database connection setup using connection pool
 let supabase;
 let supabaseConnected = false;
-const MAX_RETRIES = 5;
-const RETRY_DELAY = 2000; // 2 seconds
 
-async function connectToSupabase(retryCount = 0) {
+async function initializeDatabase() {
   try {
-    // Debug: Check which env vars are available
-    if (retryCount === 0) {
-      console.log('=== Supabase Environment Variables ===');
-      console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Set ✓' : 'Not set ✗');
-      console.log('SUPABASE_KEY:', process.env.SUPABASE_KEY ? 'Set ✓' : 'Not set ✗');
-      console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? 'Set ✓' : 'Not set ✗');
-      console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set ✓' : 'Not set ✗');
-      // Show key preview to verify it's correct
-      if (process.env.SUPABASE_KEY) {
-        console.log('SUPABASE_KEY preview:', process.env.SUPABASE_KEY.substring(0, 30) + '...');
-        console.log('SUPABASE_KEY length:', process.env.SUPABASE_KEY.length);
-      }
-    }
+    logger.info('=== Database Connection Pool Initialization ===');
     
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+    // Initialize the database pool (handles connection management internally)
+    await databasePool.healthCheck();
     
-    if (process.env.SUPABASE_URL && supabaseKey) {
-      console.log(`Connecting to Supabase at: ${process.env.SUPABASE_URL} (Attempt ${retryCount + 1})`);
-      
-      try {
-        // Create a new Supabase client
-        supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
-        
-        // Test the connection by making a simple query
-        const { data, error } = await supabase.from('user_subscriptions').select('*').limit(1);
-        
-        if (error && !error.message.includes('does not exist')) {
-          throw error;
-        }
-        
-        console.log('Successfully connected to Supabase!');
-        supabaseConnected = true;
-        
-        // Make supabase available to routes
-        app.locals.supabase = supabase;
-        
-        return true;
-      } catch (err) {
-        console.warn('Error connecting to Supabase:', err.message);
-        console.warn('Continuing with Supabase features disabled.');
-        return false;
+    // Get a connection from the pool to create the legacy supabase client
+    const connection = await databasePool.getConnection('main', 10000);
+    supabase = connection.client;
+    connection.release();
+    
+    // Make supabase available to routes for backwards compatibility
+    app.locals.supabase = supabase;
+    
+    supabaseConnected = true;
+    logger.info('Database connection pool initialized successfully!');
+    
+    // Set up pool metrics monitoring
+    databasePool.on('metrics', (metrics) => {
+      if (process.env.LOG_LEVEL === 'debug') {
+        logger.debug('Database Pool Metrics:', {
+          totalConnections: metrics.totalConnections,
+          activeConnections: metrics.activeConnections,
+          queryCount: metrics.queryCount,
+          avgQueryTime: metrics.avgQueryTime,
+          slowQueries: metrics.slowQueries,
+          healthy: metrics.connectionHealth.healthy
+        });
       }
-    } else {
-      console.warn('Supabase credentials not found. Supabase features will be disabled.');
-      return false;
-    }
+    });
+    
+    return true;
   } catch (err) {
-    console.error(`Error connecting to Supabase (Attempt ${retryCount + 1}):`, err);
-    
-    if (retryCount < MAX_RETRIES) {
-      console.log(`Retrying connection in ${RETRY_DELAY / 1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-      return connectToSupabase(retryCount + 1);
-    } else {
-      console.error(`Failed to connect to Supabase after ${MAX_RETRIES} attempts.`);
-      return false;
-    }
+    logger.error('Failed to initialize database connection pool:', err);
+    logger.warn('Continuing with reduced database functionality.');
+    return false;
   }
 }
 
-// Call connectToSupabase immediately and then set up periodic reconnection attempts if it fails
-connectToSupabase().then(connected => {
+// Initialize database connection pool
+initializeDatabase().then(connected => {
   if (!connected) {
-    // Try to reconnect every 30 seconds
-    setInterval(() => {
+    // Set up periodic health checks and reconnection attempts
+    setInterval(async () => {
       if (!supabaseConnected) {
-        console.log('Attempting to reconnect to Supabase...');
-        connectToSupabase();
+        logger.info('Attempting to reinitialize database connection...');
+        await initializeDatabase();
       }
     }, 30000);
   }
@@ -415,27 +426,17 @@ async function callLLM(prompt, llm_model) {
       model: modelToUse
     };
   } catch (error) {
-    console.error('Error calling OpenAI API:', error.message);
+    logger.error('Error calling OpenAI API:', error.message);
     throw error;
   }
 }
 
-// Log activity to Supabase
-async function logActivity(task, result) {
-  if (!supabase) {
-    console.warn('Supabase not configured. Activity logging skipped.');
-    return null;
-  }
-  
+// Log activity to Supabase using optimized queries
+async function logActivity(task, result, userId = null, metadata = {}) {
   try {
-    const { data, error } = await supabase.from('activity_log').insert([{ task, result }]);
-    if (error) {
-      console.error('Error logging activity to Supabase:', error);
-      return null;
-    }
-    return data;
+    return await optimizedQueries.activityLog.logActivity(task, result, userId, metadata);
   } catch (err) {
-    console.error('Exception logging activity to Supabase:', err);
+    logger.error('Exception logging activity:', err);
     return null;
   }
 }
@@ -456,7 +457,7 @@ function isFreeModel(modelId) {
   
   // Only consider all models as free if explicitly in development mode
   if (process.env.NODE_ENV === 'development' || process.env.LOCAL_DEV === 'true') {
-    console.log('Local development mode: All models are considered free');
+    logger.info('Local development mode: All models are considered free');
     return true;
   }
   
@@ -482,17 +483,13 @@ function isAsmModel(modelId) {
 
 // Helper function to check user's subscription level and features
 async function getUserSubscription(email) {
-  if (!email || !supabase) return { plan: 'free', features: pricingPlans.free.features };
+  if (!email) return { plan: 'free', features: pricingPlans.free.features };
   
   try {
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .select('subscription_level, subscription_status, plan_id')
-      .eq('email', email)
-      .single();
+    const data = await optimizedQueries.userSubscription.getByEmail(email);
     
-    if (error || !data) {
-      console.log(`No subscription found for ${email}, defaulting to free`);
+    if (!data) {
+      logger.debug(`No subscription found for ${email}, defaulting to free`);
       return { plan: 'free', features: pricingPlans.free.features };
     }
     
@@ -509,7 +506,7 @@ async function getUserSubscription(email) {
       status: data.subscription_status 
     };
   } catch (err) {
-    console.error('Error fetching subscription:', err);
+    logger.error('Error fetching subscription:', err);
     return { plan: 'free', features: pricingPlans.free.features };
   }
 }
@@ -527,14 +524,14 @@ async function checkUsageLimit(userId, action, amount = 1) {
       .single();
     
     if (subError || !userSub) {
-      console.log(`No subscription found for user ${userId}, using free plan`);
+      logger.info(`No subscription found for user ${userId}, using free plan`);
       return checkPlanLimits('free', action, amount, userId);
     }
     
     const planId = userSub.plan_id || 'free';
     return checkPlanLimits(planId, action, amount, userId);
   } catch (err) {
-    console.error('Error checking usage limit:', err);
+    logger.error('Error checking usage limit:', err);
     return { allowed: false, error: 'Failed to check usage limits' };
   }
 }
@@ -562,7 +559,7 @@ async function checkPlanLimits(planId, action, amount, userId) {
     .order('timestamp', { ascending: false });
   
   if (error) {
-    console.error('Error fetching usage:', error);
+    logger.error('Error fetching usage:', error);
     return { allowed: false, error: 'Failed to fetch usage data' };
   }
   
@@ -603,13 +600,13 @@ async function logUsage(userId, productType, quantity = 1, metadata = {}) {
       .single();
     
     if (error) {
-      console.error('Error logging usage:', error);
+      logger.error('Error logging usage:', error);
       return null;
     }
     
     return data;
   } catch (err) {
-    console.error('Error in logUsage:', err);
+    logger.error('Error in logUsage:', err);
     return null;
   }
 }
@@ -627,7 +624,7 @@ async function hasModuleAccess(email, moduleName) {
       .single();
 
     if (userError || !userData) {
-      console.log(`No user found for ${email}, denying module access`);
+      logger.info(`No user found for ${email}, denying module access`);
       return false;
     }
 
@@ -646,13 +643,13 @@ async function hasModuleAccess(email, moduleName) {
       .single();
 
     if (error || !data) {
-      console.log(`No module access found for ${email}/${moduleName}, denying access`);
+      logger.info(`No module access found for ${email}/${moduleName}, denying access`);
       return false;
     }
 
     return data.has_access;
   } catch (err) {
-    console.error('Error checking module access:', err);
+    logger.error('Error checking module access:', err);
     return false;
   }
 }
@@ -683,7 +680,7 @@ async function canAccessModel(email, modelId) {
 // Models endpoint - Return available OpenAI models
 app.get('/api/models', async (req, res) => {
   if (!process.env.OPENAI_API_KEY) {
-    console.error('OpenAI API key not configured');
+    logger.error('OpenAI API key not configured');
     return res.status(500).json(errorResponse('SERVICE_UNAVAILABLE', 'OpenAI API key not configured', null, 500));
   }
 
@@ -718,7 +715,7 @@ app.get('/api/models', async (req, res) => {
     
     res.json(successResponse(models));
   } catch (error) {
-    console.error('Error fetching models:', error.message);
+    logger.error('Error fetching models:', error.message);
     res.status(500).json(errorResponse('MODELS_ERROR', 'Failed to fetch models', error.message, 500));
   }
 });
@@ -745,7 +742,7 @@ app.post('/api/checkout', async (req, res) => {
     });
     res.json(successResponse({ url: session.url }));
   } catch (err) {
-    console.error('Error creating Stripe checkout session:', err);
+    logger.error('Error creating Stripe checkout session:', err);
     res.status(500).json(errorResponse('CHECKOUT_ERROR', 'Failed to create checkout session', err.message, 500));
   }
 });
@@ -764,7 +761,7 @@ app.get('/api/modules/access', async (req, res) => {
     
     return res.json(successResponse({ hasAccess }));
   } catch (err) {
-    console.error('Error checking module access:', err);
+    logger.error('Error checking module access:', err);
     return res.status(500).json(errorResponse('INTERNAL_ERROR', 'Error checking module access', err.message, 500));
   }
 });
@@ -806,7 +803,7 @@ app.get('/api/modules/list', async (req, res) => {
     
     return res.json(successResponse({ modules: data.map(item => item.module) }));
   } catch (err) {
-    console.error('Error listing accessible modules:', err);
+    logger.error('Error listing accessible modules:', err);
     return res.status(500).json(errorResponse('INTERNAL_ERROR', 'Error listing accessible modules', err.message, 500));
   }
 });
@@ -870,7 +867,7 @@ app.post('/api/data/:appName', async (req, res) => {
       data: result
     });
   } catch (err) {
-    console.error('Error saving app data:', err);
+    logger.error('Error saving app data:', err);
     return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
@@ -915,7 +912,7 @@ app.get('/api/data/:appName', async (req, res) => {
       data: data || null
     });
   } catch (err) {
-    console.error('Error fetching app data:', err);
+    logger.error('Error fetching app data:', err);
     return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
@@ -959,7 +956,7 @@ app.delete('/api/data/:appName', async (req, res) => {
       message: 'App data deleted successfully'
     });
   } catch (err) {
-    console.error('Error deleting app data:', err);
+    logger.error('Error deleting app data:', err);
     return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
@@ -983,7 +980,7 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
 
     return res.status(500).json(errorResponse('PROCESSING_ERROR', result.error || 'Error processing audio file', null, 500));
   } catch (err) {
-    console.error('Error processing audio file:', err);
+    logger.error('Error processing audio file:', err);
     return res.status(500).json(errorResponse('TRANSCRIPTION_ERROR', err.message, null, 500));
   }
 });
@@ -998,7 +995,7 @@ app.get('/api/transcriptions', async (req, res) => {
     const transcriptions = await getUserTranscriptions(userId);
     return res.json(successResponse({ transcriptions }));
   } catch (err) {
-    console.error('Error getting user transcriptions:', err);
+    logger.error('Error getting user transcriptions:', err);
     return res.status(500).json(errorResponse('TRANSCRIPTIONS_ERROR', err.message, null, 500));
   }
 });
@@ -1014,7 +1011,7 @@ app.get('/api/transcriptions/:id', async (req, res) => {
     const transcription = await getTranscriptionById(id, userId);
     return res.json(successResponse({ transcription }));
   } catch (err) {
-    console.error('Error getting transcription:', err);
+    logger.error('Error getting transcription:', err);
     return res.status(500).json(errorResponse('TRANSCRIPTION_GET_ERROR', err.message, null, 500));
   }
 });
@@ -1030,7 +1027,7 @@ app.delete('/api/transcriptions/:id', async (req, res) => {
     await deleteTranscription(id, userId);
     return res.json(successResponse({}, 'Transcription deleted successfully'));
   } catch (err) {
-    console.error('Error deleting transcription:', err);
+    logger.error('Error deleting transcription:', err);
     return res.status(500).json(errorResponse('TRANSCRIPTION_DELETE_ERROR', err.message, null, 500));
   }
 });
@@ -1091,7 +1088,7 @@ app.post('/api/upload-external-recording', upload.single('file'), async (req, re
     });
 
   } catch (error) {
-    console.error('External recording upload error:', error);
+    logger.error('External recording upload error:', error);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to process recording'
@@ -1106,7 +1103,7 @@ app.post('/webhook', async (req, res) => {
     const userId = req.header('x-user-id') || req.body.userId || req.query.userId;
     const { filename } = req.body;
     
-    console.log('Webhook received:', { 
+    logger.info('Webhook received', { 
       userId, 
       filename, 
       headers: req.headers, 
@@ -1116,7 +1113,7 @@ app.post('/webhook', async (req, res) => {
     
     // Check if user is authenticated
     if (!userId) {
-      console.log('No userId found in request');
+      logger.info('No userId found in request');
       return res.status(401).json({
         success: false,
         message: 'Authentication required. Please sign in to use this service.',
@@ -1141,7 +1138,7 @@ app.post('/webhook', async (req, res) => {
       });
     }
 
-    console.log('Processing audio from webhook:', { userId, filename });
+    logger.info('Processing audio from webhook:', { userId, filename });
 
     // Check if user can transcribe (usage limits)
     const usageCheck = await checkUsageLimit(userId, 'aiQueries', 1);
@@ -1192,7 +1189,7 @@ app.post('/webhook', async (req, res) => {
       error: result.error || 'Error processing audio file'
     });
   } catch (err) {
-    console.error('Error in webhook endpoint:', err);
+    logger.error('Error in webhook endpoint:', err);
     return res.status(500).json({ 
       success: false, 
       error: err.message 
@@ -1245,7 +1242,7 @@ app.get('/api/subscription/:userId', async (req, res) => {
       .gte('timestamp', startOfMonth.toISOString());
 
     if (usageError) {
-      console.error('Error fetching usage:', usageError);
+      logger.error('Error fetching usage:', usageError);
     }
 
     // Calculate usage by type
@@ -1267,7 +1264,7 @@ app.get('/api/subscription/:userId', async (req, res) => {
       limits: plan.features
     });
   } catch (err) {
-    console.error('Error fetching subscription:', err);
+    logger.error('Error fetching subscription:', err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -1317,7 +1314,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       url: session.url
     });
   } catch (err) {
-    console.error('Error creating checkout session:', err);
+    logger.error('Error creating checkout session:', err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -1357,7 +1354,7 @@ app.get('/api/subscription-status', authenticateUser, async (req, res) => {
       features: pricingPlans[planId]?.features || pricingPlans.free.features
     });
   } catch (err) {
-    console.error('Error fetching subscription status:', err);
+    logger.error('Error fetching subscription status:', err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -1382,7 +1379,7 @@ app.get('/api/usage', authenticateUser, async (req, res) => {
       .gte('timestamp', startOfMonth.toISOString());
 
     if (error) {
-      console.error('Error fetching usage:', error);
+      logger.error('Error fetching usage:', error);
       return res.status(500).json({
         success: false,
         error: error.message
@@ -1405,7 +1402,7 @@ app.get('/api/usage', authenticateUser, async (req, res) => {
       ripples: usageMap.ripples || 0
     });
   } catch (err) {
-    console.error('Error fetching usage:', err);
+    logger.error('Error fetching usage:', err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -1460,7 +1457,7 @@ app.post('/api/usage/increment', authenticateUser, async (req, res) => {
       message: 'Usage incremented successfully'
     });
   } catch (err) {
-    console.error('Error incrementing usage:', err);
+    logger.error('Error incrementing usage:', err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -1472,7 +1469,7 @@ app.post('/api/usage/increment', authenticateUser, async (req, res) => {
 app.post('/task', async (req, res) => {
   try {
     // Log the incoming request for debugging
-    console.log('Received request to /task endpoint:', {
+    logger.debug('Received request to /task endpoint', {
       body: req.body,
       headers: {
         'content-type': req.headers['content-type'],
@@ -1485,7 +1482,7 @@ app.post('/task', async (req, res) => {
     
     // Check if OpenAI API key is configured
     if (!process.env.OPENAI_API_KEY) {
-      console.warn('OpenAI API key not configured.');
+      logger.warn('OpenAI API key not configured.');
       return res.json({
         success: true,
         llmResult: {
@@ -1508,13 +1505,13 @@ app.post('/task', async (req, res) => {
       try {
         await logActivity({ prompt, llm_model }, llmResult);
       } catch (logErr) {
-        console.error('Error logging activity:', logErr);
+        logger.error('Error logging activity:', logErr);
       }
       
       // Return the LLM result
       res.json(successResponse({ llmResult }));
     } catch (err) {
-      console.error('Error calling LLM:', err);
+      logger.error('Error calling LLM:', err);
       
       // Handle specific error codes
       if (err.response && err.response.status === 429) {
@@ -1540,7 +1537,7 @@ app.post('/task', async (req, res) => {
     }
   } catch (err) {
     // Log the error
-    console.error('Error processing /task request:', err);
+    logger.error('Error processing /task request:', err);
     
     // Return a generic error response
     res.status(500).json({
@@ -1600,7 +1597,7 @@ app.post('/twilio/voice', express.urlencoded({ extended: false }), async (req, r
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
-    console.error('Error handling voice webhook:', err);
+    logger.error('Error handling voice webhook:', err);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -1635,7 +1632,7 @@ app.post('/twilio/sms', express.urlencoded({ extended: false }), async (req, res
     res.type('text/xml');
     res.send(twiml);
   } catch (err) {
-    console.error('Error handling SMS webhook:', err);
+    logger.error('Error handling SMS webhook:', err);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -1652,12 +1649,12 @@ app.post('/twilio/recording', express.urlencoded({ extended: false }), async (re
 
     // Process the recording asynchronously
     processRecording(req.body).catch(err => {
-      console.error('Error processing recording:', err);
+      logger.error('Error processing recording:', err);
     });
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('Error handling recording webhook:', err);
+    logger.error('Error handling recording webhook:', err);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -1683,7 +1680,7 @@ app.post('/api/twilio/stream-status', express.urlencoded({ extended: false }), a
       StreamEvent
     } = req.body;
 
-    console.log('Stream status update:', {
+    logger.info('Stream status update', {
       streamSid: StreamSid,
       callSid: CallSid,
       status: StreamStatus,
@@ -1707,7 +1704,7 @@ app.post('/api/twilio/stream-status', express.urlencoded({ extended: false }), a
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('Error handling stream status webhook:', err);
+    logger.error('Error handling stream status webhook:', err);
     res.status(500).send('Internal Server Error');
   }
 });
@@ -1740,7 +1737,7 @@ app.post('/api/twilio/make-call', async (req, res) => {
     const result = await makeCall(to, message, options);
     res.json({ success: true, call: result });
   } catch (err) {
-    console.error('Error making call:', err);
+    logger.error('Error making call:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1752,7 +1749,7 @@ app.post('/api/twilio/send-sms', async (req, res) => {
     const result = await sendSms(to, body, options);
     res.json({ success: true, message: result });
   } catch (err) {
-    console.error('Error sending SMS:', err);
+    logger.error('Error sending SMS:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1764,7 +1761,7 @@ app.get('/api/twilio/calls', async (req, res) => {
     const calls = await getCallHistory(phoneNumber, options);
     res.json({ success: true, calls });
   } catch (err) {
-    console.error('Error getting call history:', err);
+    logger.error('Error getting call history:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1776,7 +1773,7 @@ app.get('/api/twilio/sms', async (req, res) => {
     const messages = await getSmsHistory(phoneNumber, options);
     res.json({ success: true, messages });
   } catch (err) {
-    console.error('Error getting SMS history:', err);
+    logger.error('Error getting SMS history:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1813,10 +1810,10 @@ app.get('/api/search/brave', async (req, res) => {
     cache.set(cacheKey, response.data);
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching Brave search results:', error);
+    logger.error('Error fetching Brave search results:', error);
     if (error.response) {
-      console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
-      console.error('Error status:', error.response.status);
+      logger.error('Error response data:', JSON.stringify(error.response.data, null, 2));
+      logger.error('Error status:', error.response.status);
     }
     res.status(500).json({ 
       error: 'Failed to fetch Brave search results',
@@ -1881,7 +1878,7 @@ app.get('/api/news/brave', async (req, res) => {
     cache.set(cacheKey, formattedResponse);
     res.json(formattedResponse);
   } catch (error) {
-    console.error('Error fetching Brave news:', error);
+    logger.error('Error fetching Brave news:', error);
     res.status(500).json({ error: 'Failed to fetch Brave news' });
   }
 });
@@ -1922,7 +1919,7 @@ app.post('/api/polls', (req, res) => {
       poll: newPoll
     });
   } catch (err) {
-    console.error('Error creating poll:', err);
+    logger.error('Error creating poll:', err);
     return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
@@ -2002,7 +1999,7 @@ app.post('/api/polls/:id/vote', (req, res) => {
       poll
     });
   } catch (err) {
-    console.error('Error voting on poll:', err);
+    logger.error('Error voting on poll:', err);
     return res.status(500).json({
       success: false,
       error: 'Internal Server Error',
@@ -2043,7 +2040,7 @@ app.post('/api/feeds/rss', async (req, res) => {
     try {
       feed = await rssParser.parseURL(feedUrl);
     } catch (parseError) {
-      console.warn(`Failed to parse RSS feed ${feedUrl}:`, parseError.message);
+      logger.warn(`Failed to parse RSS feed ${feedUrl}:`, parseError.message);
       // Return empty array for invalid feeds instead of throwing error
       return res.json([]);
     }
@@ -2096,7 +2093,7 @@ app.post('/api/feeds/rss', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    console.error('Error parsing RSS feed:', error);
+    logger.error('Error parsing RSS feed:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to parse RSS feed',
@@ -2152,7 +2149,7 @@ app.post('/api/feeds/apple', async (req, res) => {
     
     res.json(podcasts);
   } catch (error) {
-    console.error('Error searching Apple Podcasts:', error);
+    logger.error('Error searching Apple Podcasts:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to search Apple Podcasts',
@@ -2233,7 +2230,7 @@ app.post('/api/feeds/trending', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    console.error('Error fetching trending podcasts:', error);
+    logger.error('Error fetching trending podcasts:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch trending podcasts',
@@ -2324,7 +2321,7 @@ app.get('/api/subscription-status', async (req, res) => {
     
     res.json(subscriptionData);
   } catch (error) {
-    console.error('Error getting subscription status:', error);
+    logger.error('Error getting subscription status:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -2344,7 +2341,7 @@ app.get('/api/usage', async (req, res) => {
     
     res.json(usageData);
   } catch (error) {
-    console.error('Error getting usage:', error);
+    logger.error('Error getting usage:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -2358,11 +2355,11 @@ app.post('/api/usage/increment', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Feature parameter required' });
     }
     
-    console.log('📊 Incrementing usage for GlobalRepSpheres:', { feature });
+    logger.info('📊 Incrementing usage for GlobalRepSpheres:', { feature });
     
     res.json({ success: true, message: 'Usage incremented successfully' });
   } catch (error) {
-    console.error('Error incrementing usage:', error);
+    logger.error('Error incrementing usage:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -2403,10 +2400,10 @@ voiceAgentWebRTC.setTranscriptionService(callTranscriptionService);
 // Initialize Harvey Socket.IO namespace
 const harveyNamespace = agentWSServer.io.of('/harvey-ws');
 harveyNamespace.on('connection', (socket) => {
-  console.log('Harvey Socket.IO connection established');
+  logger.info('Harvey Socket.IO connection established');
   
   socket.on('disconnect', () => {
-    console.log('Harvey Socket.IO disconnected');
+    logger.info('Harvey Socket.IO disconnected');
   });
   
   // Add Harvey-specific events here
@@ -2444,35 +2441,90 @@ wsServer.on('connection', (ws, request) => {
   callTranscriptionService.handleTwilioMediaStream(ws, request);
 });
 
+// Error logging middleware
+app.use(errorLogger);
+
 // Sentry error handler (must be after all routes)
 if (process.env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler());
 }
 
-// Global error handler
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
+// Standardized error handler
+app.use(errorHandler);
+
+// Initialize graceful shutdown handler
+gracefulShutdown.init(httpServer, 30000); // 30 second timeout
+
+// Register cleanup tasks for graceful shutdown
+gracefulShutdown.registerCleanupTask('websocket-connections', async () => {
+  logger.info('Closing WebSocket connections...');
+  if (agentWSServer && agentWSServer.io) {
+    agentWSServer.io.close();
+  }
+  if (wsServer) {
+    wsServer.close();
+  }
+}, 1);
+
+gracefulShutdown.registerCleanupTask('database-connections', async () => {
+  logger.info('Closing database connections...');
+  // Supabase client connections are automatically managed
+  // Add any custom database cleanup here
+}, 2);
+
+gracefulShutdown.registerCleanupTask('cache-cleanup', async () => {
+  logger.info('Clearing cache...');
+  if (cache) {
+    cache.flushAll();
+  }
+}, 3);
+
+gracefulShutdown.registerCleanupTask('mediasoup-cleanup', async () => {
+  logger.info('Cleaning up MediaSoup resources...');
+  if (mediasoupService) {
+    await mediasoupService.cleanup();
+  }
+}, 4);
+
+// Add shutdown middleware to reject requests during shutdown
+app.use(gracefulShutdown.middleware());
 
 // Start the server
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Supabase configured: ${!!process.env.SUPABASE_URL && !!(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY)}`);
-  console.log(`OpenAI configured: ${!!process.env.OPENAI_API_KEY}`);
-  console.log(`Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
-  console.log(`Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
-  console.log(`Agent System WebSocket: Active on /agents-ws`);
-  console.log(`Call Transcription WebSocket: Active on /call-transcription-ws`);
-  console.log(`Harvey AI WebSocket: Active on /harvey-ws`);
-  console.log(`Voice Agents WebRTC: Active on /voice-agents`);
-  console.log(`Twilio Media Stream WebSocket: Active on /api/media-stream`);
-  console.log(`Metrics Aggregator WebSocket: Active on port ${process.env.METRICS_WS_PORT || 8081}`);
-  console.log(`Dashboard API: Active on /api/dashboard/*`);
+  logger.info(`🚀 Server is running on port ${PORT}`);
+  logger.info(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`🗄️  Supabase configured: ${!!process.env.SUPABASE_URL && !!(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY)}`);
+  logger.info(`🤖 OpenAI configured: ${!!process.env.OPENAI_API_KEY}`);
+  logger.info(`💳 Stripe configured: ${!!process.env.STRIPE_SECRET_KEY}`);
+  logger.info(`📞 Twilio configured: ${!!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN}`);
+  logger.info(`🔌 Agent System WebSocket: Active on /agents-ws`);
+  logger.info(`📝 Call Transcription WebSocket: Active on /call-transcription-ws`);
+  logger.info(`🤖 Harvey AI WebSocket: Active on /harvey-ws`);
+  logger.info(`🎙️  Voice Agents WebRTC: Active on /voice-agents`);
+  logger.info(`📞 Twilio Media Stream WebSocket: Active on /api/media-stream`);
+  logger.info(`📊 Metrics Aggregator WebSocket: Active on port ${process.env.METRICS_WS_PORT || 8081}`);
+  logger.info(`📈 Dashboard API: Active on /api/dashboard/*`);
+  logger.info(`✅ Graceful shutdown handler: Initialized`);
   
   // Start the centralized WebSocket manager
   startWebSocketServer();
-  console.log(`Centralized WebSocket Manager: Active on port ${process.env.WS_PORT || 8082}`);
+  logger.info(`🔗 Centralized WebSocket Manager: Active on port ${process.env.WS_PORT || 8082}`);
+  
+  // Log service health summary
+  const services = {
+    'Supabase': !!supabaseConnected,
+    'OpenAI': !!process.env.OPENAI_API_KEY,
+    'Stripe': !!process.env.STRIPE_SECRET_KEY,
+    'Twilio': !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    'Sentry': !!process.env.SENTRY_DSN
+  };
+  
+  const healthyServices = Object.values(services).filter(Boolean).length;
+  const totalServices = Object.keys(services).length;
+  
+  logger.info(`🏥 Service Health: ${healthyServices}/${totalServices} services configured`);
+  Object.entries(services).forEach(([service, status]) => {
+    logger.info(`  ${service}: ${status ? '✅ Connected' : '❌ Not configured'}`);
+  });
 });

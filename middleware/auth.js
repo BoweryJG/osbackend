@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 
+import logger from '../utils/logger.js';
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
@@ -26,7 +28,7 @@ const authenticateToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    logger.error('Authentication error:', error);
     return res.status(403).json({ error: 'Invalid token' });
   }
 };
@@ -76,7 +78,7 @@ const requireTier = (minTier) => {
       req.userTier = userTier;
       next();
     } catch (error) {
-      console.error('Tier check error:', error);
+      logger.error('Tier check error:', error);
       return res.status(500).json({ error: 'Failed to verify subscription' });
     }
   };
@@ -100,7 +102,7 @@ const validateCanvasAccess = async (req, res, next) => {
     });
 
     if (error) {
-      console.error('Error checking scan limits:', error);
+      logger.error('Error checking scan limits:', error);
       return res.status(500).json({ 
         error: 'Failed to verify scan limits',
         message: 'Unable to validate subscription limits'
@@ -123,7 +125,7 @@ const validateCanvasAccess = async (req, res, next) => {
     req.userTier = limitCheck.tier;
     next();
   } catch (error) {
-    console.error('Canvas access validation error:', error);
+    logger.error('Canvas access validation error:', error);
     return res.status(500).json({ 
       error: 'Validation failed',
       message: 'Unable to validate Canvas access'
@@ -164,7 +166,7 @@ const requireCanvasAccess = async (req, res, next) => {
     req.userTier = userTier;
     next();
   } catch (error) {
-    console.error('Canvas access check error:', error);
+    logger.error('Canvas access check error:', error);
     return res.status(500).json({ 
       error: 'Access validation failed'
     });

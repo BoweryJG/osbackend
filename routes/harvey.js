@@ -1,9 +1,11 @@
 import express from 'express';
+import OpenAI from 'openai';
+
 import { authenticateUser } from '../auth.js';
 import HarveyVoiceService from '../services/harveyVoiceService.js';
-import OpenAI from 'openai';
 import { ProcedureService } from '../agents/services/procedureService.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 const harveyVoice = HarveyVoiceService.getInstance();
@@ -96,7 +98,7 @@ router.get('/metrics', async (req, res) => {
       leaderboard
     }));
   } catch (error) {
-    console.error('Error fetching Harvey metrics:', error);
+    logger.error('Error fetching Harvey metrics:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch metrics', error.message, 500));
   }
 });
@@ -141,7 +143,7 @@ router.get('/verdict', async (req, res) => {
     
     res.json(successResponse(verdict));
   } catch (error) {
-    console.error('Error getting Harvey verdict:', error);
+    logger.error('Error getting Harvey verdict:', error);
     res.status(500).json(errorResponse('VERDICT_ERROR', 'Failed to get verdict', error.message, 500));
   }
 });
@@ -152,7 +154,7 @@ router.post('/metrics', async (req, res) => {
     const { userId, updates } = req.body;
     const userIdKey = userId || 'demo-user';
     
-    let metrics = userMetrics.get(userIdKey) || {
+    const metrics = userMetrics.get(userIdKey) || {
       reputationPoints: 1000,
       currentStreak: 0,
       bestStreak: 0,
@@ -214,7 +216,7 @@ router.post('/metrics', async (req, res) => {
     userMetrics.set(userIdKey, metrics);
     res.json(successResponse(metrics, 'Metrics updated successfully'));
   } catch (error) {
-    console.error('Error updating Harvey metrics:', error);
+    logger.error('Error updating Harvey metrics:', error);
     res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update metrics', error.message, 500));
   }
 });
@@ -225,7 +227,7 @@ router.get('/leaderboard', async (req, res) => {
     const leaderboard = await getLeaderboardData();
     res.json(successResponse(leaderboard));
   } catch (error) {
-    console.error('Error fetching leaderboard:', error);
+    logger.error('Error fetching leaderboard:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch leaderboard', error.message, 500));
   }
 });
@@ -284,7 +286,7 @@ router.post('/voice-command', async (req, res) => {
       timestamp: new Date().toISOString()
     }));
   } catch (error) {
-    console.error('Error processing voice command:', error);
+    logger.error('Error processing voice command:', error);
     res.status(500).json(errorResponse('VOICE_COMMAND_ERROR', 'Failed to process command', error.message, 500));
   }
 });
@@ -303,7 +305,7 @@ router.get('/coaching-status', async (req, res) => {
       battleModeEnabled: true
     }));
   } catch (error) {
-    console.error('Error fetching coaching status:', error);
+    logger.error('Error fetching coaching status:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch coaching status', error.message, 500));
   }
 });
@@ -319,7 +321,7 @@ router.post('/coaching-settings', async (req, res) => {
       message: 'Coaching settings updated. Now get back to work.'
     }, 'Coaching settings updated successfully'));
   } catch (error) {
-    console.error('Error updating coaching settings:', error);
+    logger.error('Error updating coaching settings:', error);
     res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update settings', error.message, 500));
   }
 });
@@ -334,7 +336,7 @@ router.post('/coaching-audio', async (req, res) => {
     
     res.json(successResponse(coachingAudio));
   } catch (error) {
-    console.error('Error generating coaching audio:', error);
+    logger.error('Error generating coaching audio:', error);
     res.status(500).json(errorResponse('COACHING_ERROR', 'Failed to generate coaching', error.message, 500));
   }
 });
@@ -349,7 +351,7 @@ router.post('/analyze-call', async (req, res) => {
     
     res.json(successResponse(analysis));
   } catch (error) {
-    console.error('Error analyzing call:', error);
+    logger.error('Error analyzing call:', error);
     res.status(500).json(errorResponse('ANALYSIS_ERROR', 'Failed to analyze call', error.message, 500));
   }
 });
@@ -364,7 +366,7 @@ router.post('/battle-audio', async (req, res) => {
     
     res.json(successResponse(battleAudio));
   } catch (error) {
-    console.error('Error generating battle audio:', error);
+    logger.error('Error generating battle audio:', error);
     res.status(500).json(errorResponse('BATTLE_AUDIO_ERROR', 'Failed to generate battle audio', error.message, 500));
   }
 });
@@ -387,7 +389,7 @@ router.get('/greeting', async (req, res) => {
       ...audio
     }));
   } catch (error) {
-    console.error('Error generating greeting:', error);
+    logger.error('Error generating greeting:', error);
     res.status(500).json(errorResponse('GREETING_ERROR', 'Failed to generate greeting', error.message, 500));
   }
 });
@@ -431,7 +433,7 @@ router.post('/coaching/start-session', async (req, res) => {
       audio: audio.audio
     }, 'Coaching session started successfully'));
   } catch (error) {
-    console.error('Error starting coaching session:', error);
+    logger.error('Error starting coaching session:', error);
     res.status(500).json(errorResponse('SESSION_START_ERROR', 'Failed to start coaching session', error.message, 500));
   }
 });
@@ -448,7 +450,7 @@ router.get('/coaching/session/:sessionId', async (req, res) => {
     
     res.json(successResponse(session));
   } catch (error) {
-    console.error('Error fetching session:', error);
+    logger.error('Error fetching session:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch session', error.message, 500));
   }
 });
@@ -497,7 +499,7 @@ router.put('/coaching/session/:sessionId', async (req, res) => {
       audio: audio.audio
     }, 'Session updated successfully'));
   } catch (error) {
-    console.error('Error updating session:', error);
+    logger.error('Error updating session:', error);
     res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update session', error.message, 500));
   }
 });
@@ -540,7 +542,7 @@ router.post('/coaching/end-session/:sessionId', async (req, res) => {
       harveyVerdict: verdict
     }, 'Session ended successfully'));
   } catch (error) {
-    console.error('Error ending session:', error);
+    logger.error('Error ending session:', error);
     res.status(500).json(errorResponse('SESSION_END_ERROR', 'Failed to end session', error.message, 500));
   }
 });
@@ -559,7 +561,7 @@ router.get('/coaching/sessions', async (req, res) => {
     
     res.json(successResponse({ sessions: userSessions }));
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    logger.error('Error fetching sessions:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch sessions', error.message, 500));
   }
 });
@@ -679,7 +681,7 @@ router.post('/chat', async (req, res) => {
         enhancedSystemPrompt += agentProcedures.slice(0, 5).map(p => `- ${p.name}: ${p.short_description || p.category}`).join('\n');
       }
     } catch (error) {
-      console.error('Error fetching procedure data:', error);
+      logger.error('Error fetching procedure data:', error);
       // Continue with original prompt if procedure lookup fails
     }
 
@@ -707,7 +709,7 @@ router.post('/chat', async (req, res) => {
       timestamp: new Date().toISOString()
     }));
   } catch (error) {
-    console.error('Harvey chat error:', error);
+    logger.error('Harvey chat error:', error);
     res.status(500).json(errorResponse('CHAT_ERROR', 'Failed to process chat message', error.message, 500));
   }
 });

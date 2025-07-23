@@ -1,5 +1,6 @@
-import axios from 'axios';
 import { Transform } from 'stream';
+
+import axios from 'axios';
 import WebSocket from 'ws';
 
 /**
@@ -252,13 +253,13 @@ export class ElevenLabsTTS {
     
     for (let i = 0; i < pcm16.length; i++) {
       let sample = pcm16[i];
-      let sign = (sample >> 8) & 0x80;
+      const sign = (sample >> 8) & 0x80;
       if (sign !== 0) sample = -sample;
       if (sample > MULAW_MAX) sample = MULAW_MAX;
       sample += MULAW_BIAS;
-      let exponent = Math.floor(Math.log2(sample) - 7);
-      let mantissa = (sample >> (exponent + 3)) & 0x0F;
-      let byte = sign | (exponent << 4) | mantissa;
+      const exponent = Math.floor(Math.log2(sample) - 7);
+      const mantissa = (sample >> (exponent + 3)) & 0x0F;
+      const byte = sign | (exponent << 4) | mantissa;
       mulaw[i] = ~byte;
     }
     

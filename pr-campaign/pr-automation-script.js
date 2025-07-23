@@ -2,6 +2,7 @@
 // This script automates press release distribution to free platforms
 
 const puppeteer = require('puppeteer');
+
 const fs = require('fs').promises;
 
 // Configuration

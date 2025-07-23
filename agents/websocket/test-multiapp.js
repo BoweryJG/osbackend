@@ -140,11 +140,13 @@ async function runTests() {
     console.log('⚠️  Some tests failed. Check the server logs for more details.');
   }
 
-  process.exit(successCount === results.length ? 0 : 1);
+  if (successCount !== results.length) {
+    throw new Error('Some tests failed');
+  }
 }
 
 // Run the tests
 runTests().catch(error => {
   console.error('💥 Test runner error:', error);
-  process.exit(1);
+  throw error;
 });

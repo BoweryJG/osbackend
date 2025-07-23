@@ -2,21 +2,93 @@ services:
   - type: web
     name: spheres-consolidated-backend
     env: node
-    buildCommand: npm install
+    region: oregon # Use Oregon for better performance and cost
+    plan: starter # Production plan with guaranteed resources
+    buildCommand: |
+      npm ci --only=production --silent
+      npm run build:production || echo "No build script found"
     startCommand: node start.js
     healthCheckPath: /health
+    # Enhanced health check configuration
+    healthCheckTimeout: 30s
+    healthCheckInterval: 30s
+    healthCheckGracePeriod: 60s
+    # Auto-deploy settings
+    autoDeploy: true
+    # Resource limits
+    numInstances: 2 # For high availability
+    # Environment variables with proper categorization
     envVars:
-      - key: OPENROUTER_API_KEY
-        sync: false
+      # Core service configuration
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY
+        value: "1"
+      
+      # Frontend URLs
+      - key: FRONTEND_URL
+        value: https://repspheres.com
+      
+      # Database connections (sensitive - sync from dashboard)
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      
+      # Authentication services
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: NODE_ENV
-        value: production
-      - key: FRONTEND_URL
-        value: https://repspheres.com
+      - key: JWT_SECRET
+        sync: false
+      
+      # AI/ML Services
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      
+      # External APIs
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      
+      # Communication services
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WEBHOOK_SECRET
+        sync: false
+      
+      # Payment processing
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      
+      # Monitoring and analytics
+      - key: SENTRY_DSN
+        sync: false
+      
+      # Session and security
+      - key: SESSION_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      
+      # File upload limits
+      - key: MAX_FILE_SIZE
+        value: "50000000"
+      - key: ALLOWED_FILE_TYPES
+        value: "audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg"

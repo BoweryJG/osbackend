@@ -5,8 +5,9 @@
  * with existing services in the OS Backend system
  */
 
-import { collectHarveyMetrics } from './metricsAggregator.js';
 import logger from '../utils/logger.js';
+
+import { collectHarveyMetrics } from './metricsAggregator.js';
 
 /**
  * Example 1: Integrate with Harvey Voice Service

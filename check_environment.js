@@ -1,9 +1,11 @@
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import fs from 'fs';
+
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -256,5 +258,5 @@ SUPABASE_STORAGE_BUCKET=audio_recordings
 // Run the diagnostics
 runDiagnostics().catch(err => {
   console.error('Error running diagnostics:', err);
-  process.exit(1);
+  throw err;
 });

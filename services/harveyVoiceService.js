@@ -1,9 +1,14 @@
-import OpenAI from 'openai';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { Readable } from 'stream';
+
+import dotenv from 'dotenv';
+import OpenAI from 'openai';
+
+
+import logger from '../utils/logger.js';
+
 import { ElevenLabsTTS } from './elevenLabsTTS.js';
 
 // Get directory name
@@ -45,7 +50,7 @@ class HarveyVoiceService {
   initializeOpenAI() {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.warn('Harvey Voice: OpenAI API key not configured');
+      logger.warn('Harvey Voice: OpenAI API key not configured');
       return;
     }
 
@@ -62,9 +67,9 @@ class HarveyVoiceService {
         style: 0.2, // Slight style for personality
         outputFormat: 'mp3_44100_128' // High quality for Harvey
       });
-      console.log('Harvey Voice: ElevenLabs TTS initialized with Antoni voice');
+      logger.info('Harvey Voice: ElevenLabs TTS initialized with Antoni voice');
     } catch (error) {
-      console.error('Harvey Voice: Failed to initialize ElevenLabs:', error);
+      logger.error('Harvey Voice: Failed to initialize ElevenLabs:', error);
     }
   }
 
@@ -232,7 +237,7 @@ class HarveyVoiceService {
           voice: 'antoni'
         };
       } catch (elevenLabsError) {
-        console.error('ElevenLabs TTS failed, falling back to OpenAI:', elevenLabsError);
+        logger.error('ElevenLabs TTS failed, falling back to OpenAI:', elevenLabsError);
       }
     }
 
@@ -271,7 +276,7 @@ class HarveyVoiceService {
         voice: this.voiceSettings.voice
       };
     } catch (error) {
-      console.error('Error synthesizing Harvey voice:', error);
+      logger.error('Error synthesizing Harvey voice:', error);
       return {
         audio: null,
         text,
@@ -412,7 +417,7 @@ class HarveyVoiceService {
         }));
       }
     } catch (error) {
-      console.error('Error streaming audio:', error);
+      logger.error('Error streaming audio:', error);
     }
   }
 

@@ -1,9 +1,10 @@
-import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 
@@ -159,9 +160,6 @@ async function transcribeAudio(fileUrl) {
       const pathParts = urlParts.pathname.split('/');
       const bucketName = pathParts[pathParts.length - 2];
       const filePath = pathParts[pathParts.length - 1];
-      
-      // Download the file to a temporary location
-      tempFilePath = path.join(__dirname, 'temp', `${uuidv4()}.audio`);
       
       // Ensure temp directory exists
       if (!fs.existsSync(path.join(__dirname, 'temp'))) {

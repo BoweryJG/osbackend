@@ -1,13 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+
+import { createClient } from '@supabase/supabase-js';
+
 import logger from '../utils/logger.js';
+import { getRequiredEnv } from '../utils/envValidator.js';
 
-// Initialize Supabase client for server-side use
-const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.REACT_APP_SUPABASE_SERVICE_KEY || '';
-
-if (!supabaseUrl || !supabaseKey) {
-  logger.warn('Supabase credentials not found in environment variables. Auth features will be disabled.');
+// Initialize Supabase client for server-side use - NO FALLBACKS
+let supabaseUrl, supabaseKey;
+try {
+  supabaseUrl = getRequiredEnv('SUPABASE_URL', 'Supabase project URL');
+  
+  // Try different environment variable names for the key
+  supabaseKey = process.env.SUPABASE_SERVICE_KEY || 
+                process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                process.env.SUPABASE_KEY;
+  
+  if (!supabaseKey) {
+    throw new Error('No Supabase key found. Set one of: SUPABASE_SERVICE_KEY, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_KEY');
+  }
+} catch (error) {
+  logger.error('Failed to load required Supabase credentials:', error.message);
+  throw error;
 }
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;

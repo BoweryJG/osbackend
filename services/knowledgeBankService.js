@@ -1,11 +1,11 @@
+import path, { dirname } from 'path';
+import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
+
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import axios from 'axios';
 // These will be dynamically imported when needed to avoid startup errors
 let pdfParse, mammoth, cheerio;

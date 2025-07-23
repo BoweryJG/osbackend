@@ -6,6 +6,7 @@
 import express from 'express';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import logger from './utils/logger.js';
 
 const router = express.Router();
 
@@ -114,7 +115,7 @@ async function findDoctorWebsite(doctor) {
         }
       }
     } catch (error) {
-      console.error('Website search error:', error.message);
+      logger.error('Website search error:', error.message);
     }
   }
 
@@ -153,7 +154,7 @@ async function analyzeWebsite(url) {
       philosophy: extractPhilosophy(content)
     };
   } catch (error) {
-    console.error('Website analysis error:', error.message);
+    logger.error('Website analysis error:', error.message);
     return { url, crawled: false };
   }
 }
@@ -264,7 +265,7 @@ async function findCompetitors(doctor) {
       address: r.address
     }));
   } catch (error) {
-    console.error('Competitor search error:', error.message);
+    logger.error('Competitor search error:', error.message);
     return [];
   }
 }
@@ -331,7 +332,7 @@ BE SPECIFIC. NO GENERIC STATEMENTS.`;
       };
     }
   } catch (error) {
-    console.error('Synthesis generation error:', error.message);
+    logger.error('Synthesis generation error:', error.message);
     return {
       executiveSummary: `${doctor.displayName} in ${doctor.city} presents a strong opportunity for ${product}.`,
       buyingSignals: [{
@@ -392,7 +393,7 @@ async function conductResearch(doctor, product, jobId, updateProgress) {
     
     return result;
   } catch (error) {
-    console.error('Research error:', error);
+    logger.error('Research error:', error);
     throw error;
   }
 }
@@ -598,7 +599,7 @@ router.post('/brave-search', async (req, res) => {
 
     // Debug: Check if API key is set
     if (!process.env.BRAVE_API_KEY) {
-      console.error('BRAVE_API_KEY not set in environment');
+      logger.error('BRAVE_API_KEY not set in environment');
       return res.status(500).json({ error: 'Brave API key not configured' });
     }
 
@@ -615,7 +616,7 @@ router.post('/brave-search', async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error('Brave search error:', error.response?.data || error.message);
+    logger.error('Brave search error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Brave search failed', 
       message: error.message,
@@ -636,11 +637,11 @@ router.post('/firecrawl-scrape', async (req, res) => {
 
     // Debug: Check if API key is set
     if (!process.env.FIRECRAWL_API_KEY) {
-      console.error('FIRECRAWL_API_KEY not set in environment');
+      logger.error('FIRECRAWL_API_KEY not set in environment');
       return res.status(500).json({ error: 'Firecrawl API key not configured' });
     }
 
-    console.log(`🌐 Scraping website with Firecrawl: ${url}`);
+    logger.info(`🌐 Scraping website with Firecrawl: ${url}`);
 
     const response = await axios.post(
       'https://api.firecrawl.dev/v0/scrape',
@@ -662,7 +663,7 @@ router.post('/firecrawl-scrape', async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error('Firecrawl scraping error:', error.response?.data || error.message);
+    logger.error('Firecrawl scraping error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Website scrape failed', 
       message: error.message,
@@ -680,11 +681,11 @@ router.post('/private-practice-intelligence', async (req, res) => {
       return res.status(400).json({ error: 'Doctor with NPI is required' });
     }
 
-    console.log(`🧠 Starting Private Practice Intelligence for: ${doctor.displayName}`);
+    logger.info(`🧠 Starting Private Practice Intelligence for: ${doctor.displayName}`);
     const startTime = Date.now();
 
     // STAGE 1: Parallel Intelligence Collection (6 agents running simultaneously)
-    console.log('🔍 Stage 1: Launching parallel intelligence agents...');
+    logger.info('🔍 Stage 1: Launching parallel intelligence agents...');
     const [
       practiceResult, 
       techStackResult, 
@@ -711,25 +712,25 @@ router.post('/private-practice-intelligence', async (req, res) => {
     // ENHANCED: If website found, scrape it with Puppeteer for deeper intelligence
     let websiteIntelligence = {};
     if (practiceData.websiteUrl) {
-      console.log('🤖 STAGE 1.5: Deep website scraping with Puppeteer...');
+      logger.info('🤖 STAGE 1.5: Deep website scraping with Puppeteer...');
       try {
         websiteIntelligence = await puppeteerWebsiteAnalyzer(practiceData.websiteUrl, doctor);
-        console.log(`✅ Puppeteer analysis complete: ${Object.keys(websiteIntelligence).length} data points extracted`);
+        logger.info(`✅ Puppeteer analysis complete: ${Object.keys(websiteIntelligence);.length} data points extracted`);
       } catch (error) {
-        console.error('⚠️ Puppeteer analysis failed:', error.message);
+        logger.error('⚠️ Puppeteer analysis failed:', error.message);
         websiteIntelligence = {};
       }
     }
 
-    console.log(`📊 Website found: ${practiceData.websiteUrl || 'No'}`);
-    console.log(`🔬 Tech stack items: ${techStackData.equipment?.length || 0}`);
-    console.log(`😤 Pain points found: ${painPointsData.painPoints?.length || 0}`);
-    console.log(`📰 Recent news items: ${newsData.newsItems?.length || 0}`);
-    console.log(`👥 Team members: ${teamData.teamSize || 'Unknown'}`);
-    console.log(`⚡ Service gaps: ${gapData.gaps?.length || 0}`);
+    logger.info(`📊 Website found: ${practiceData.websiteUrl || 'No'}`);
+    logger.info(`🔬 Tech stack items: ${techStackData.equipment?.length || 0}`);
+    logger.info(`😤 Pain points found: ${painPointsData.painPoints?.length || 0}`);
+    logger.info(`📰 Recent news items: ${newsData.newsItems?.length || 0}`);
+    logger.info(`👥 Team members: ${teamData.teamSize || 'Unknown'}`);
+    logger.info(`⚡ Service gaps: ${gapData.gaps?.length || 0}`);
 
     // STAGE 2: Social Media + Sentiment Analysis
-    console.log('📱 Stage 2: Social media and sentiment analysis...');
+    logger.info('📱 Stage 2: Social media and sentiment analysis...');
     const [socialData, sentimentData] = await Promise.allSettled([
       practiceData.websiteUrl ? socialMediaAgent(doctor, practiceData) : Promise.resolve({ instagram: null, followers: 0, recentPosts: 0 }),
       practiceData.websiteUrl ? practiceSentimentAgent(practiceData) : Promise.resolve({ sentiment: 'neutral', positioning: 'unknown' })
@@ -739,7 +740,7 @@ router.post('/private-practice-intelligence', async (req, res) => {
     const sentiment = sentimentData.status === 'fulfilled' ? sentimentData.value : { sentiment: 'neutral', positioning: 'unknown' };
 
     // STAGE 3: Generate Comprehensive Sales Rep Brief (with all intelligence)
-    console.log('📝 Stage 3: Generating game-changing sales rep brief...');
+    logger.info('📝 Stage 3: Generating game-changing sales rep brief...');
     const salesRepBrief = await generateSalesRepBrief(doctor, product, {
       practice: practiceData,
       techStack: techStackData,
@@ -752,7 +753,7 @@ router.post('/private-practice-intelligence', async (req, res) => {
     });
 
     // STAGE 5: Background Intelligence (runs in parallel, not critical for rep brief)
-    console.log('🔍 Stage 5: Background market intelligence...');
+    logger.info('🔍 Stage 5: Background market intelligence...');
     const marketIntelligence = await marketIntelligenceAgent(doctor);
 
     const intelligence = {
@@ -791,11 +792,11 @@ router.post('/private-practice-intelligence', async (req, res) => {
       }
     };
 
-    console.log(`✅ Intelligence complete in ${intelligence.processingTime}ms`);
+    logger.info(`✅ Intelligence complete in ${intelligence.processingTime}ms`);
     res.json(intelligence);
 
   } catch (error) {
-    console.error('Intelligence orchestration error:', error);
+    logger.error('Intelligence orchestration error:', error);
     res.status(500).json({ 
       error: 'Intelligence generation failed', 
       message: error.message 
@@ -812,7 +813,7 @@ router.post('/openrouter', async (req, res) => {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    console.log(`Claude API request - Model: ${model}, Prompt length: ${prompt.length}`);
+    logger.info(`Claude API request - Model: ${model}, Prompt length: ${prompt.length}`);
 
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
@@ -831,7 +832,7 @@ router.post('/openrouter', async (req, res) => {
       }
     );
 
-    console.log('Claude API response received successfully');
+    logger.info('Claude API response received successfully');
     
     // Convert Anthropic response format to OpenAI-compatible format for frontend
     const openaiResponse = {
@@ -957,7 +958,7 @@ router.get('/npi-lookup', async (req, res) => {
     res.json({ results: doctors }); // Return all filtered results
     
   } catch (error) {
-    console.error('NPI lookup error:', error);
+    logger.error('NPI lookup error:', error);
     res.status(500).json({ 
       error: 'Failed to search NPI registry',
       message: error.message 
@@ -975,7 +976,7 @@ router.post('/apify-actor', async (req, res) => {
   
   const APIFY_API_KEY = process.env.APIFY_API_KEY;
   if (!APIFY_API_KEY) {
-    console.error('APIFY_API_KEY not configured');
+    logger.error('APIFY_API_KEY not configured');
     return res.status(500).json({ error: 'Apify not configured' });
   }
   
@@ -1018,7 +1019,7 @@ router.post('/apify-actor', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Apify error:', error.response?.data || error.message);
+    logger.error('Apify error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Apify API failed', message: error.message });
   }
 });
@@ -1033,7 +1034,7 @@ router.post('/anthropic', async (req, res) => {
   
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY not configured');
+    logger.error('ANTHROPIC_API_KEY not configured');
     return res.status(500).json({ error: 'Anthropic not configured' });
   }
   
@@ -1041,7 +1042,7 @@ router.post('/anthropic', async (req, res) => {
   const apiModel = model;
   
   try {
-    console.log(`🤖 Anthropic API call: ${model} (using ${apiModel})`);
+    logger.info(`🤖 Anthropic API call: ${model} (using ${apiModel});`);
     
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
@@ -1074,9 +1075,9 @@ router.post('/anthropic', async (req, res) => {
       usage: response.data.usage
     });
     
-    console.log(`✅ Anthropic API call completed`);
+    logger.info(`✅ Anthropic API call completed`);
   } catch (error) {
-    console.error('Anthropic API error:', error.response?.data || error.message);
+    logger.error('Anthropic API error:', error.response?.data || error.message);
     res.status(500).json({ 
       error: 'Anthropic API failed', 
       message: error.response?.data?.error?.message || error.message 
@@ -1094,7 +1095,7 @@ router.post('/perplexity-research', async (req, res) => {
   
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY not configured');
+    logger.error('ANTHROPIC_API_KEY not configured');
     return res.status(500).json({ error: 'Anthropic not configured' });
   }
   
@@ -1116,7 +1117,7 @@ router.post('/perplexity-research', async (req, res) => {
           `${r.title}: ${r.description}`
         ).join('\n\n');
       } catch (searchError) {
-        console.error('Brave search error:', searchError.message);
+        logger.error('Brave search error:', searchError.message);
       }
     }
     
@@ -1161,7 +1162,7 @@ Format your response to be clear and well-structured.`;
       model: 'claude-3-opus (direct)'
     });
   } catch (error) {
-    console.error('Research error:', error.response?.data || error.message);
+    logger.error('Research error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Research API failed', message: error.message });
   }
 });
@@ -1188,7 +1189,7 @@ router.get('/health', (req, res) => {
 
 async function puppeteerWebsiteAnalyzer(websiteUrl, doctor) {
   try {
-    console.log(`🔍 Puppeteer: Analyzing ${websiteUrl}...`);
+    logger.info(`🔍 Puppeteer: Analyzing ${websiteUrl}...`);
     
     const puppeteer = await import('puppeteer');
     const browser = await puppeteer.default.launch({ 
@@ -1288,12 +1289,12 @@ async function puppeteerWebsiteAnalyzer(websiteUrl, doctor) {
     
     await browser.close();
     
-    console.log(`✅ Puppeteer extracted: ${websiteData.servicesOffered.length} services, ${websiteData.technologyMentioned.length} tech items`);
+    logger.info(`✅ Puppeteer extracted: ${websiteData.servicesOffered.length} services, ${websiteData.technologyMentioned.length} tech items`);
     
     return websiteData;
     
   } catch (error) {
-    console.error('Puppeteer website analysis error:', error.message);
+    logger.error('Puppeteer website analysis error:', error.message);
     return {};
   }
 }
@@ -1303,7 +1304,7 @@ async function puppeteerWebsiteAnalyzer(websiteUrl, doctor) {
 // Agent 1: Practice Discovery Agent (Website + Contact Info)
 async function practiceDiscoveryAgent(doctor) {
   try {
-    console.log(`🔍 Searching for: ${doctor.firstName} ${doctor.lastName} in ${doctor.city}, ${doctor.state}`);
+    logger.info(`🔍 Searching for: ${doctor.firstName} ${doctor.lastName} in ${doctor.city}, ${doctor.state}`);
     
     // Generic search queries using only NPI data
     const searchQueries = [
@@ -1318,7 +1319,7 @@ async function practiceDiscoveryAgent(doctor) {
     
     for (const query of searchQueries) {
       try {
-        console.log(`🔍 Trying: "${query}"`);
+        logger.info(`🔍 Trying: "${query}"`);
         
         const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
           headers: {
@@ -1333,13 +1334,13 @@ async function practiceDiscoveryAgent(doctor) {
         });
 
         const results = response.data.web?.results || [];
-        console.log(`📊 Found ${results.length} results for "${query}"`);
+        logger.info(`📊 Found ${results.length} results for "${query}"`);
         
         // Debug: show all results for first query
         if (query.includes('Gregory White')) {
-          console.log('🔍 DEBUG - All search results:');
+          logger.info('🔍 DEBUG - All search results:');
           results.slice(0, 5).forEach((r, i) => {
-            console.log(`   ${i+1}. ${r.title} | ${r.url}`);
+            logger.info(`   ${i+1}. ${r.title} | ${r.url}`);
           });
         }
         
@@ -1420,9 +1421,9 @@ async function practiceDiscoveryAgent(doctor) {
           const isDentalPractice = websiteScore >= 25; // Threshold for quality practice website
           
           if (isDentalPractice) {
-            console.log(`✅ FOUND PRACTICE WEBSITE: ${result.url} (Score: ${websiteScore})`);
-            console.log(`   Title: ${result.title}`);
-            console.log(`   Description: ${result.description?.substring(0, 100)}...`);
+            logger.info(`✅ FOUND PRACTICE WEBSITE: ${result.url} (Score: ${websiteScore});`);
+            logger.info(`   Title: ${result.title}`);
+            logger.info(`   Description: ${result.description?.substring(0, 100);}...`);
             
             bestResult = {
               websiteUrl: result.url,
@@ -1440,7 +1441,7 @@ async function practiceDiscoveryAgent(doctor) {
         if (bestResult) break; // Stop searching once we find a practice website
         
       } catch (searchError) {
-        console.log(`⚠️ Search failed for "${query}": ${searchError.message}`);
+        logger.info(`⚠️ Search failed for "${query}": ${searchError.message}`);
         continue;
       }
     }
@@ -1449,7 +1450,7 @@ async function practiceDiscoveryAgent(doctor) {
       return bestResult;
     }
 
-    console.log('⚠️ No practice website found in any search');
+    logger.info('⚠️ No practice website found in any search');
     return {
       websiteUrl: null,
       websiteTitle: null,
@@ -1459,7 +1460,7 @@ async function practiceDiscoveryAgent(doctor) {
     };
     
   } catch (error) {
-    console.error('Practice discovery error:', error.message);
+    logger.error('Practice discovery error:', error.message);
     return { websiteUrl: null, isPrivatePractice: false };
   }
 }
@@ -1505,7 +1506,7 @@ async function medicalTechStackAgent(doctor) {
       totalBrandsChecked: medicalBrands.length
     };
   } catch (error) {
-    console.error('Tech stack analysis error:', error.message);
+    logger.error('Tech stack analysis error:', error.message);
     return { equipment: [], searchResults: [], totalBrandsChecked: 0 };
   }
 }
@@ -1537,7 +1538,7 @@ async function socialMediaAgent(doctor, practiceData) {
       hasInstagram: !!instagramResult
     };
   } catch (error) {
-    console.error('Social media analysis error:', error.message);
+    logger.error('Social media analysis error:', error.message);
     return { instagram: null, followers: 0, recentPosts: 0 };
   }
 }
@@ -1561,7 +1562,7 @@ async function marketIntelligenceAgent(doctor) {
 
     return { competitors, marketDensity: competitors.length };
   } catch (error) {
-    console.error('Market intelligence error:', error.message);
+    logger.error('Market intelligence error:', error.message);
     return { competitors: [], marketDensity: 0 };
   }
 }
@@ -1679,7 +1680,7 @@ Return JSON format:
     };
 
   } catch (error) {
-    console.error('Psychological profiling error:', error.message);
+    logger.error('Psychological profiling error:', error.message);
     return {
       primaryMotivators: ["achievement", "financial"],
       riskTolerance: "moderate",
@@ -1722,7 +1723,7 @@ async function patientPainPointAgent(doctor) {
 
     return { painPoints: foundPainPoints, reviewContent: reviewContent.substring(0, 1000) };
   } catch (error) {
-    console.error('Pain points analysis error:', error.message);
+    logger.error('Pain points analysis error:', error.message);
     return { painPoints: [], reviewContent: '' };
   }
 }
@@ -1759,7 +1760,7 @@ async function recentNewsAgent(doctor) {
       }))
     };
   } catch (error) {
-    console.error('News analysis error:', error.message);
+    logger.error('News analysis error:', error.message);
     return { newsItems: [] };
   }
 }
@@ -1796,7 +1797,7 @@ async function teamAnalysisAgent(doctor) {
       teamContent: teamContent.substring(0, 500)
     };
   } catch (error) {
-    console.error('Team analysis error:', error.message);
+    logger.error('Team analysis error:', error.message);
     return { teamSize: 'Unknown', credentials: [], teamContent: '' };
   }
 }
@@ -1837,7 +1838,7 @@ async function serviceGapAgent(doctor) {
       servicesContent: servicesContent.substring(0, 500)
     };
   } catch (error) {
-    console.error('Service gap analysis error:', error.message);
+    logger.error('Service gap analysis error:', error.message);
     return { currentServices: [], gaps: [], servicesContent: '' };
   }
 }
@@ -1885,7 +1886,7 @@ Return JSON: {"sentiment": "...", "positioning": "...", "tone": "..."}`;
       return { sentiment: 'professional', positioning: 'general practice', tone: 'professional' };
     }
   } catch (error) {
-    console.error('Sentiment analysis error:', error.message);
+    logger.error('Sentiment analysis error:', error.message);
     return { sentiment: 'neutral', positioning: 'unknown', tone: 'professional' };
   }
 }
@@ -1952,7 +1953,7 @@ Focus on ACTIONABLE INTELLIGENCE that gives this sales rep a massive advantage. 
 
     return response.data.content[0].text;
   } catch (error) {
-    console.error('Sales rep brief generation error:', error.message);
+    logger.error('Sales rep brief generation error:', error.message);
     return `Enhanced Sales Brief for ${doctor.displayName}: Game-changing intelligence analysis pending due to technical issue.`;
   }
 }
@@ -1975,7 +1976,7 @@ async function puppeteerWebsiteSearch(doctor) {
     const searchQuery = `${searchName} ${doctor.city} ${doctor.state} dentist`;
     const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
     
-    console.log(`🔍 Puppeteer searching: ${searchQuery}`);
+    logger.info(`🔍 Puppeteer searching: ${searchQuery}`);
     
     await page.goto(googleUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     
@@ -2020,7 +2021,7 @@ async function puppeteerWebsiteSearch(doctor) {
     };
     
   } catch (error) {
-    console.error('Puppeteer website search error:', error.message);
+    logger.error('Puppeteer website search error:', error.message);
     return { websiteUrl: null, isPrivatePractice: false, foundVia: 'puppeteer-failed' };
   }
 }

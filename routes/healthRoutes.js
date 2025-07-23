@@ -1,8 +1,13 @@
 import express from 'express';
-import { monitoringService } from '../services/monitoring.js';
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
+
+import { monitoringService } from '../services/monitoring.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import logger from '../utils/logger.js';
+import gracefulShutdown from '../utils/gracefulShutdown.js';
+import { SystemMetrics, getPrometheusMetrics, trackExternalService } from '../config/monitoring.js';
+
 
 const router = express.Router();
 
@@ -21,12 +26,21 @@ if (process.env.SUPABASE_URL && supabaseKey) {
  * Basic health check endpoint
  */
 router.get('/health', (req, res) => {
+  // Return unhealthy if shutting down
+  if (gracefulShutdown.isShuttingDownNow()) {
+    return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Server shutting down', {
+      status: 'shutting_down',
+      timestamp: new Date().toISOString()
+    }, 503));
+  }
+
   res.json(successResponse({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'RepConnect Backend',
+    service: 'RepSpheres OS Backend',
     version: process.env.npm_package_version || '1.0.0',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    uptime: Math.floor(process.uptime())
   }));
 });
 
@@ -138,11 +152,10 @@ router.get('/health/startup', (req, res) => {
  */
 router.get('/health/metrics', async (req, res) => {
   try {
-    const { SystemMetrics } = await import('../config/monitoring.js');
     const { performanceMonitor } = await import('../middleware/responseTime.js');
     
     const metrics = {
-      system: SystemMetrics.getMetrics(),
+      system: await SystemMetrics.getEnhancedMetrics(),
       performance: performanceMonitor.getSummary(),
       timestamp: new Date().toISOString()
     };
@@ -151,6 +164,20 @@ router.get('/health/metrics', async (req, res) => {
   } catch (error) {
     logger.error('Failed to get metrics:', error);
     res.status(500).json(errorResponse('METRICS_ERROR', 'Failed to retrieve metrics', error.message, 500));
+  }
+});
+
+/**
+ * Prometheus metrics endpoint
+ */
+router.get('/health/prometheus', async (req, res) => {
+  try {
+    const prometheusMetrics = await getPrometheusMetrics();
+    res.set('Content-Type', 'text/plain');
+    res.send(prometheusMetrics);
+  } catch (error) {
+    logger.error('Failed to get Prometheus metrics:', error);
+    res.status(500).json(errorResponse('PROMETHEUS_ERROR', 'Failed to retrieve Prometheus metrics', error.message, 500));
   }
 });
 
@@ -190,30 +217,40 @@ router.get('/health/database', async (req, res) => {
 });
 
 /**
- * Dependencies health check
+ * Dependencies health check with enhanced external services
  */
 router.get('/health/dependencies', async (req, res) => {
   const dependencies = {
-    supabase: { status: 'unknown', responseTime: null },
-    deepgram: { status: 'unknown', responseTime: null },
-    twilio: { status: 'unknown', responseTime: null },
-    openai: { status: 'unknown', responseTime: null }
+    supabase: { status: 'unknown', responseTime: null, details: null },
+    anthropic: { status: 'unknown', responseTime: null, details: null },
+    stripe: { status: 'unknown', responseTime: null, details: null },
+    firecrawl: { status: 'unknown', responseTime: null, details: null },
+    brave_search: { status: 'unknown', responseTime: null, details: null }
   };
   
   // Check Supabase
   if (supabase) {
     try {
-      const start = Date.now();
-      const { error } = await supabase.from('users').select('count').limit(1);
+      const result = await trackExternalService('supabase', async () => {
+        const start = Date.now();
+        const { data, error } = await supabase.from('users').select('count').limit(1);
+        const responseTime = Date.now() - start;
+        
+        if (error) throw error;
+        
+        return { responseTime, data };
+      });
+      
       dependencies.supabase = {
-        status: error ? 'unhealthy' : 'healthy',
-        responseTime: `${Date.now() - start}ms`,
-        error: error?.message
+        status: 'healthy',
+        responseTime: `${result.responseTime}ms`,
+        details: { connected: true, tablesAccessible: true }
       };
     } catch (error) {
       dependencies.supabase = {
         status: 'unhealthy',
-        error: error.message
+        error: error.message,
+        details: { connected: false }
       };
     }
   } else {
@@ -223,21 +260,173 @@ router.get('/health/dependencies', async (req, res) => {
     };
   }
   
-  // Add checks for other dependencies as needed
-  // This is a placeholder - implement actual checks based on your dependencies
+  // Check Anthropic API
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const result = await trackExternalService('anthropic', async () => {
+        const start = Date.now();
+        // Simple ping to Anthropic API
+        const response = await axios.get('https://api.anthropic.com/', {
+          timeout: 5000,
+          headers: {
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
+          }
+        });
+        const responseTime = Date.now() - start;
+        return { responseTime, status: response.status };
+      });
+      
+      dependencies.anthropic = {
+        status: 'healthy',
+        responseTime: `${result.responseTime}ms`,
+        details: { apiKeyValid: true }
+      };
+    } catch (error) {
+      dependencies.anthropic = {
+        status: error.code === 'ECONNABORTED' ? 'timeout' : 'unhealthy',
+        error: error.message,
+        details: { apiKeyValid: false }
+      };
+    }
+  } else {
+    dependencies.anthropic = {
+      status: 'not_configured',
+      error: 'Anthropic API key not provided'
+    };
+  }
   
-  const allHealthy = Object.values(dependencies).every(
-    dep => dep.status === 'healthy' || dep.status === 'unknown'
-  );
+  // Check Stripe
+  if (process.env.STRIPE_SECRET_KEY) {
+    try {
+      const result = await trackExternalService('stripe', async () => {
+        const start = Date.now();
+        // Simple ping to Stripe API
+        const response = await axios.get('https://api.stripe.com/v1/account', {
+          timeout: 5000,
+          headers: {
+            'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`
+          }
+        });
+        const responseTime = Date.now() - start;
+        return { responseTime, status: response.status };
+      });
+      
+      dependencies.stripe = {
+        status: 'healthy',
+        responseTime: `${result.responseTime}ms`,
+        details: { connected: true }
+      };
+    } catch (error) {
+      dependencies.stripe = {
+        status: error.code === 'ECONNABORTED' ? 'timeout' : 'unhealthy',
+        error: error.message,
+        details: { connected: false }
+      };
+    }
+  } else {
+    dependencies.stripe = {
+      status: 'not_configured',
+      error: 'Stripe credentials not provided'
+    };
+  }
   
-  const statusCode = allHealthy ? 200 : 503;
+  // Check Firecrawl
+  if (process.env.FIRECRAWL_API_KEY) {
+    try {
+      const result = await trackExternalService('firecrawl', async () => {
+        const start = Date.now();
+        const response = await axios.get('https://api.firecrawl.dev/v0/status', {
+          timeout: 5000,
+          headers: {
+            'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`
+          }
+        });
+        const responseTime = Date.now() - start;
+        return { responseTime, status: response.status };
+      });
+      
+      dependencies.firecrawl = {
+        status: 'healthy',
+        responseTime: `${result.responseTime}ms`,
+        details: { apiKeyValid: true }
+      };
+    } catch (error) {
+      dependencies.firecrawl = {
+        status: error.code === 'ECONNABORTED' ? 'timeout' : 'unhealthy',
+        error: error.message,
+        details: { apiKeyValid: false }
+      };
+    }
+  } else {
+    dependencies.firecrawl = {
+      status: 'not_configured',
+      error: 'Firecrawl API key not provided'
+    };
+  }
+  
+  // Check Brave Search
+  if (process.env.BRAVE_SEARCH_API_KEY) {
+    try {
+      const result = await trackExternalService('brave_search', async () => {
+        const start = Date.now();
+        const response = await axios.get('https://api.search.brave.com/res/v1/web/search?q=test', {
+          timeout: 5000,
+          headers: {
+            'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY
+          }
+        });
+        const responseTime = Date.now() - start;
+        return { responseTime, status: response.status };
+      });
+      
+      dependencies.brave_search = {
+        status: 'healthy',
+        responseTime: `${result.responseTime}ms`,
+        details: { apiKeyValid: true }
+      };
+    } catch (error) {
+      dependencies.brave_search = {
+        status: error.code === 'ECONNABORTED' ? 'timeout' : 'unhealthy',
+        error: error.message,
+        details: { apiKeyValid: false }
+      };
+    }
+  } else {
+    dependencies.brave_search = {
+      status: 'not_configured',
+      error: 'Brave Search API key not provided'
+    };
+  }
+  
+  // Calculate overall health
+  const healthyCount = Object.values(dependencies).filter(dep => dep.status === 'healthy').length;
+  const totalConfigured = Object.values(dependencies).filter(dep => dep.status !== 'not_configured').length;
+  const criticalUnhealthy = Object.values(dependencies).filter(dep => dep.status === 'unhealthy').length;
+  
+  let overallStatus = 'healthy';
+  if (criticalUnhealthy > 0) {
+    overallStatus = 'degraded';
+  }
+  if (totalConfigured === 0) {
+    overallStatus = 'not_configured';
+  }
+  
+  const statusCode = overallStatus === 'healthy' ? 200 : 503;
   const responseData = {
-    status: allHealthy ? 'healthy' : 'degraded',
+    status: overallStatus,
     dependencies,
+    summary: {
+      total: Object.keys(dependencies).length,
+      healthy: healthyCount,
+      unhealthy: criticalUnhealthy,
+      configured: totalConfigured,
+      healthRatio: totalConfigured > 0 ? (healthyCount / totalConfigured * 100).toFixed(1) + '%' : '0%'
+    },
     timestamp: new Date().toISOString()
   };
   
-  if (allHealthy) {
+  if (overallStatus === 'healthy') {
     res.status(statusCode).json(successResponse(responseData));
   } else {
     res.status(statusCode).json(errorResponse('DEPENDENCIES_DEGRADED', 'Some dependencies are unhealthy', responseData, statusCode));

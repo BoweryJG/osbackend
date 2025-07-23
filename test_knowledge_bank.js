@@ -1,6 +1,7 @@
-import knowledgeBankService from './services/knowledgeBankService.js';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+
+import knowledgeBankService from './services/knowledgeBankService.js';
 
 dotenv.config();
 

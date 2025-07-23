@@ -1,7 +1,9 @@
+import os from 'os';
+
+import * as Sentry from '@sentry/node';
+
 import logger from '../utils/logger.js';
 import { performanceMonitor } from '../middleware/responseTime.js';
-import * as Sentry from '@sentry/node';
-import os from 'os';
 
 // Stub function for captureMetric until Sentry is properly configured
 const captureMetric = (name, value, unit, tags) => {

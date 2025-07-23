@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+
 import { sendEmail, getEmailStats } from './services/emailService.js';
 
 dotenv.config();

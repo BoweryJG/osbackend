@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
+
 import logger from '../utils/logger.js';
 
 /**
@@ -21,7 +22,10 @@ class WebSocketAuthMiddleware {
       this.supabase = null;
     }
     
-    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET environment variable is required');
+    }
+    this.jwtSecret = process.env.JWT_SECRET;
   }
   
   /**

@@ -1,5 +1,6 @@
-import { emitAgentStatusChange } from './websocketManager.js';
 import logger from '../utils/logger.js';
+
+import { emitAgentStatusChange } from './websocketManager.js';
 
 /**
  * Example integration for agent status changes

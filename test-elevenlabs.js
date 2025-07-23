@@ -1,9 +1,11 @@
-import express from 'express';
-import { ElevenLabsTTS } from './services/elevenLabsTTS.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import express from 'express';
 import dotenv from 'dotenv';
+
+import { ElevenLabsTTS } from './services/elevenLabsTTS.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

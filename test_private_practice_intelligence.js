@@ -1,7 +1,8 @@
-import dotenv from 'dotenv';
-import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import dotenv from 'dotenv';
+import axios from 'axios';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);

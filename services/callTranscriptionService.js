@@ -1,11 +1,16 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
 import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
-import fs from 'fs';
+
+
+import logger from '../utils/logger.js';
+
 import { audioProcessor } from './audioProcessor.js';
 
 // Get the directory name of the current module
@@ -20,16 +25,16 @@ const openAiApiKey = process.env.OPENAI_API_KEY;
 let openai = null;
 
 if (!openAiApiKey) {
-  console.warn('No OpenAI API key configured. Call transcription will be disabled.');
-  console.warn('Note: OpenRouter does not support Whisper API. You need a direct OpenAI API key.');
+  logger.warn('No OpenAI API key configured. Call transcription will be disabled.');
+  logger.warn('Note: OpenRouter does not support Whisper API. You need a direct OpenAI API key.');
 } else {
-  console.log('[CallTranscriptionService] Initializing OpenAI client for Whisper...');
+  logger.info('[CallTranscriptionService] Initializing OpenAI client for Whisper...');
   openai = new OpenAI({ 
     apiKey: openAiApiKey,
     // Ensure we're using OpenAI directly, not OpenRouter
     baseURL: 'https://api.openai.com/v1'
   });
-  console.log('[CallTranscriptionService] OpenAI client initialized successfully');
+  logger.info('[CallTranscriptionService] OpenAI client initialized successfully');
 }
 
 // Initialize Supabase client
@@ -39,21 +44,21 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_KEY
 
 class CallTranscriptionService {
   constructor(io) {
-    console.log('[CallTranscriptionService] Initializing with Socket.IO instance');
+    logger.info('[CallTranscriptionService] Initializing with Socket.IO instance');
     this.io = io;
     this.activeTranscriptions = new Map(); // Map of callSid to transcription session
     this.twilioStreams = new Map(); // Map of streamSid to WebSocket connection
     
     // Set up the namespace for call transcription
-    console.log('[CallTranscriptionService] Creating namespace: /call-transcription-ws');
+    logger.info('[CallTranscriptionService] Creating namespace: /call-transcription-ws');
     this.namespace = this.io.of('/call-transcription-ws');
-    console.log('[CallTranscriptionService] Namespace created:', !!this.namespace);
+    logger.info('[CallTranscriptionService] Namespace created:', !!this.namespace);
     this.setupEventHandlers();
   }
 
   setupEventHandlers() {
     this.namespace.on('connection', (socket) => {
-      console.log(`Client connected to call transcription: ${socket.id}`);
+      logger.info(`Client connected to call transcription: ${socket.id}`);
       
       // Handle client subscribing to a specific call
       socket.on('subscribe:call', async (callSid) => {
@@ -71,7 +76,7 @@ class CallTranscriptionService {
             });
           }
         } catch (error) {
-          console.error('Error subscribing to call:', error);
+          logger.error('Error subscribing to call:', error);
           socket.emit('error', {
             message: 'Failed to subscribe to call',
             code: 'SUBSCRIBE_ERROR'
@@ -84,7 +89,7 @@ class CallTranscriptionService {
       });
       
       socket.on('disconnect', () => {
-        console.log(`Client disconnected from call transcription: ${socket.id}`);
+        logger.info(`Client disconnected from call transcription: ${socket.id}`);
       });
     });
   }
@@ -104,7 +109,7 @@ class CallTranscriptionService {
         
         switch (msg.event) {
           case 'connected':
-            console.log('Twilio Media Stream connected');
+            logger.info('Twilio Media Stream connected');
             break;
             
           case 'start':
@@ -121,7 +126,7 @@ class CallTranscriptionService {
               tracks: msg.start.tracks
             });
             
-            console.log(`Started media stream for call ${callSid}`);
+            logger.info(`Started media stream for call ${callSid}`);
             break;
             
           case 'media':
@@ -140,7 +145,7 @@ class CallTranscriptionService {
                 
                 // Process in background to not block incoming audio
                 this.processAudioChunk(callSid, bufferToProcess).catch(error => {
-                  console.error('Error processing audio chunk:', error);
+                  logger.error('Error processing audio chunk:', error);
                 });
               }
             }
@@ -156,16 +161,16 @@ class CallTranscriptionService {
             this.twilioStreams.delete(streamSid);
             await this.stopTranscriptionSession(callSid);
             
-            console.log(`Stopped media stream for call ${callSid}`);
+            logger.info(`Stopped media stream for call ${callSid}`);
             break;
         }
       } catch (error) {
-        console.error('Error handling Twilio media stream:', error);
+        logger.error('Error handling Twilio media stream:', error);
       }
     });
     
     ws.on('close', () => {
-      console.log('Twilio Media Stream disconnected');
+      logger.info('Twilio Media Stream disconnected');
       if (streamSid) {
         this.twilioStreams.delete(streamSid);
       }
@@ -175,7 +180,7 @@ class CallTranscriptionService {
     });
     
     ws.on('error', (error) => {
-      console.error('Twilio Media Stream error:', error);
+      logger.error('Twilio Media Stream error:', error);
     });
   }
 
@@ -208,7 +213,7 @@ class CallTranscriptionService {
           .select();
         
         if (error) {
-          console.error('Error creating transcription record:', error);
+          logger.error('Error creating transcription record:', error);
         } else if (data && data[0]) {
           session.dbId = data[0].id;
         }
@@ -222,7 +227,7 @@ class CallTranscriptionService {
       });
       
     } catch (error) {
-      console.error('Error starting transcription session:', error);
+      logger.error('Error starting transcription session:', error);
       throw error;
     }
   }
@@ -280,7 +285,7 @@ class CallTranscriptionService {
       }
       
     } catch (error) {
-      console.error('Error processing audio chunk:', error);
+      logger.error('Error processing audio chunk:', error);
       
       // Notify clients of error
       this.namespace.to(`call:${callSid}`).emit('transcription:error', {
@@ -305,7 +310,7 @@ class CallTranscriptionService {
       const sessionId = `chunk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Convert μ-law to WAV format
-      console.log('[Transcription] Converting audio buffer to WAV...');
+      logger.info('[Transcription] Converting audio buffer to WAV...');
       const wavPath = await audioProcessor.convertMulawToWav(audioBuffer, sessionId);
       
       try {
@@ -313,7 +318,7 @@ class CallTranscriptionService {
         const audioFile = fs.createReadStream(wavPath);
         
         // Send to OpenAI Whisper
-        console.log('[Transcription] Sending to OpenAI Whisper...');
+        logger.info('[Transcription] Sending to OpenAI Whisper...');
         const transcription = await openai.audio.transcriptions.create({
           file: audioFile,
           model: 'whisper-1',
@@ -321,7 +326,7 @@ class CallTranscriptionService {
           response_format: 'json'
         });
         
-        console.log('[Transcription] Received transcription:', transcription.text);
+        logger.info('[Transcription] Received transcription:', transcription.text);
         
         // Clean up the temporary file
         await audioProcessor.cleanup(wavPath);
@@ -338,7 +343,7 @@ class CallTranscriptionService {
       }
       
     } catch (error) {
-      console.error('Error transcribing audio buffer:', error);
+      logger.error('Error transcribing audio buffer:', error);
       
       // Return a fallback message
       return {
@@ -356,9 +361,9 @@ class CallTranscriptionService {
     for (let i = 0; i < mulawBuffer.length; i++) {
       const mulaw = mulawBuffer[i];
       // μ-law to PCM conversion algorithm
-      let sign = (mulaw & 0x80) >> 7;
-      let exponent = (mulaw & 0x70) >> 4;
-      let mantissa = mulaw & 0x0F;
+      const sign = (mulaw & 0x80) >> 7;
+      const exponent = (mulaw & 0x70) >> 4;
+      const mantissa = mulaw & 0x0F;
       let sample = (mantissa << (exponent + 3)) + (1 << (exponent + 2));
       
       if (sign === 0) {
@@ -405,7 +410,7 @@ class CallTranscriptionService {
       this.activeTranscriptions.delete(callSid);
       
     } catch (error) {
-      console.error('Error stopping transcription session:', error);
+      logger.error('Error stopping transcription session:', error);
     }
   }
 
@@ -483,7 +488,7 @@ class CallTranscriptionService {
             return aiSentiment;
           }
         } catch (error) {
-          console.error('AI sentiment analysis failed:', error);
+          logger.error('AI sentiment analysis failed:', error);
         }
       }
       
@@ -497,7 +502,7 @@ class CallTranscriptionService {
       }
       
     } catch (error) {
-      console.error('Error analyzing sentiment:', error);
+      logger.error('Error analyzing sentiment:', error);
       return 'neutral';
     }
   }

@@ -1,10 +1,11 @@
-import express from 'express';
-import { createClient } from '@supabase/supabase-js';
-// Use built-in fetch in Node 18+
-import { processAudioWithAI } from './ai_service.js';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+import { processAudioWithAI } from './ai_service.js';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);

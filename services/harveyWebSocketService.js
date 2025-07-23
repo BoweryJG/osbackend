@@ -1,4 +1,5 @@
 import { WebSocketServer } from 'ws';
+
 import HarveyVoiceService from './harveyVoiceService.js';
 
 class HarveyWebSocketService {
@@ -177,7 +178,7 @@ class HarveyWebSocketService {
 
   processVoiceCommand(command, userId, ws) {
     const lowerCommand = command.toLowerCase();
-    let response = {
+    const response = {
       type: 'voice-response',
       command,
       processed: true

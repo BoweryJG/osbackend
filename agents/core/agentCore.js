@@ -64,7 +64,7 @@ export class AgentCore {
     }
 
     // Try unified_agents table first
-    let { data: agents, error } = await this.supabase
+    const { data: agents, error } = await this.supabase
       .from('unified_agents')
       .select('*')
       .contains('available_in_apps', [this.appName])
@@ -215,7 +215,7 @@ You have access to:
 Always be helpful, accurate, and focused on driving sales success. When you don't have specific information, guide the user on how to find it using Canvas's research tools.`;
   }
 
-  async streamResponse(agentId, message, context, userId) {
+  async streamResponse(agentId, message, context, _userId) {
     const agent = await this.getAgent(agentId);
     const systemPrompt = this.buildSystemPrompt(agent, context);
 
@@ -273,7 +273,7 @@ Always be helpful, accurate, and focused on driving sales success. When you don'
     }
   }
 
-  async checkProactiveInsights(conversationId, userId) {
+  async checkProactiveInsights(conversationId, _userId) {
     // Analyze conversation for opportunities to provide proactive insights
     const insights = [];
 
@@ -333,7 +333,7 @@ Always be helpful, accurate, and focused on driving sales success. When you don'
     return insights;
   }
 
-  async generateVoiceResponse(text, agentId) {
+  async generateVoiceResponse(_text, _agentId) {
     // This would integrate with a TTS service
     // For now, return null to indicate text-only response
     return null;

@@ -1,9 +1,12 @@
+import { Buffer } from 'buffer';
+
 import WebSocket from 'ws';
 import axios from 'axios';
 import FormData from 'form-data';
-import { Buffer } from 'buffer';
-import { ElevenLabsTTS } from './elevenLabsTTS.js';
 import OpenAI from 'openai';
+
+import { ElevenLabsTTS } from './elevenLabsTTS.js';
+
 
 // Audio conversion utilities
 const mulawToLinear16 = (mulaw) => {
@@ -12,10 +15,10 @@ const mulawToLinear16 = (mulaw) => {
   const pcm16 = new Int16Array(mulaw.length);
   
   for (let i = 0; i < mulaw.length; i++) {
-    let byte = ~mulaw[i];
-    let sign = byte & 0x80;
-    let exponent = (byte & 0x70) >> 4;
-    let mantissa = byte & 0x0F;
+    const byte = ~mulaw[i];
+    const sign = byte & 0x80;
+    const exponent = (byte & 0x70) >> 4;
+    const mantissa = byte & 0x0F;
     let sample = mantissa << (exponent + 3);
     sample += MULAW_BIAS << (exponent + 2);
     if (sign === 0) sample = -sample;
@@ -32,13 +35,13 @@ const linear16ToMulaw = (pcm16) => {
   
   for (let i = 0; i < pcm16.length; i++) {
     let sample = pcm16[i];
-    let sign = (sample >> 8) & 0x80;
+    const sign = (sample >> 8) & 0x80;
     if (sign !== 0) sample = -sample;
     if (sample > MULAW_MAX) sample = MULAW_MAX;
     sample += MULAW_BIAS;
-    let exponent = Math.floor(Math.log2(sample) - 7);
-    let mantissa = (sample >> (exponent + 3)) & 0x0F;
-    let byte = sign | (exponent << 4) | mantissa;
+    const exponent = Math.floor(Math.log2(sample) - 7);
+    const mantissa = (sample >> (exponent + 3)) & 0x0F;
+    const byte = sign | (exponent << 4) | mantissa;
     mulaw[i] = ~byte;
   }
   

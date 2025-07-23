@@ -1,10 +1,12 @@
-import express from 'express';
-import { requireAuth } from '../middleware/authMiddleware.js';
-import logger from '../utils/logger.js';
-import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import express from 'express';
+
+import { requireAuth } from '../middleware/authMiddleware.js';
+import logger from '../utils/logger.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);

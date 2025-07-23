@@ -1,7 +1,7 @@
-import fs from 'fs';
+import fs, { createWriteStream, createReadStream } from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import { createWriteStream, createReadStream } from 'fs';
+
 import wav from 'wav';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';

@@ -1,7 +1,9 @@
+import { EventEmitter } from 'events';
+
 import { WebSocketServer } from 'ws';
 import { createClient } from '@supabase/supabase-js';
-import { EventEmitter } from 'events';
 import jwt from 'jsonwebtoken';
+
 import logger from '../utils/logger.js';
 
 /**
@@ -267,7 +269,10 @@ class WebSocketManager extends EventEmitter {
         client.metadata.userEmail = user.email;
       } else {
         // Fallback to JWT verification
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        if (!process.env.JWT_SECRET) {
+          throw new Error('JWT_SECRET environment variable is required');
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         userId = decoded.userId || decoded.sub;
       }
       

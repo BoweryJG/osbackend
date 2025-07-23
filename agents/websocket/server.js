@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
+
 import { AgentCore } from '../core/agentCore.js';
 import { ConversationManager } from '../core/conversationManager.js';
 

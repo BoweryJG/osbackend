@@ -1,6 +1,7 @@
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import dotenv from 'dotenv';
 
 // Get the directory name and load environment variables first
 const __filename = fileURLToPath(import.meta.url);

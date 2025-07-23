@@ -1,10 +1,13 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import axios from 'axios';
+
 import transcriptionService from './transcription_service.js';
+
 const { processAudioFile, transcribeAudio, analyzeTranscription } = transcriptionService;
 
 // Get the directory name of the current module

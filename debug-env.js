@@ -1,7 +1,8 @@
 // Debug script to check environment variables on Render
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,5 +32,4 @@ if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.log('SUPABASE_SERVICE_ROLE_KEY preview:', process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20) + '...');
 }
 
-// Exit after logging
-process.exit(0);
+// Debug complete

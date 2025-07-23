@@ -77,7 +77,7 @@ export function storeReturnUrl(url = window.location.href) {
  * Get and clear the stored return URL
  */
 export function getAndClearReturnUrl() {
-  let returnUrl = sessionStorage.getItem('authReturnUrl') || 
+  const returnUrl = sessionStorage.getItem('authReturnUrl') || 
                   localStorage.getItem('authReturnUrl');
   
   sessionStorage.removeItem('authReturnUrl');

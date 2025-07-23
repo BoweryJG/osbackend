@@ -1,6 +1,8 @@
 import express from 'express';
 import Stripe from 'stripe';
+
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -173,7 +175,7 @@ router.get('/repx/plans', async (req, res) => {
 
     res.json(successResponse('RepX plans retrieved successfully', plansWithFeatures));
   } catch (error) {
-    console.error('Error fetching RepX plans:', error);
+    logger.error('Error fetching RepX plans:', error);
     res.status(500).json(errorResponse('INTERNAL_ERROR', 'Failed to fetch RepX plans', error.message, 500));
   }
 });
@@ -186,7 +188,7 @@ router.post('/create-checkout-session', async (req, res) => {
   try {
     const { tier, billingCycle, priceId, customerEmail, successUrl, cancelUrl } = req.body;
 
-    console.log('🔥 Creating RepX checkout session:', { tier, billingCycle, priceId, customerEmail });
+    logger.info('🔥 Creating RepX checkout session:', { tier, billingCycle, priceId, customerEmail });
 
     // Validate Stripe configuration
     if (!stripe || !process.env.STRIPE_SECRET_KEY) {
@@ -262,7 +264,7 @@ router.post('/create-checkout-session', async (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error creating RepX checkout session:', error);
+    logger.error('❌ Error creating RepX checkout session:', error);
     return res.status(500).json(errorResponse('CHECKOUT_ERROR', 'Failed to create checkout session', error.message, 500));
   }
 });
@@ -283,7 +285,7 @@ router.post('/subscription', async (req, res) => {
       return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Customer email is required', null, 400));
     }
 
-    console.log('🔍 Looking up subscription for:', customer_email);
+    logger.info('🔍 Looking up subscription for:', customer_email);
 
     // Find customer by email
     const customers = await stripe.customers.list({
@@ -345,7 +347,7 @@ router.post('/subscription', async (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error fetching subscription:', error);
+    logger.error('❌ Error fetching subscription:', error);
     return res.status(500).json(errorResponse('SUBSCRIPTION_ERROR', 'Failed to fetch subscription', error.message, 500));
   }
 });
@@ -379,7 +381,7 @@ router.get('/pricing', (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error fetching RepX pricing:', error);
+    logger.error('❌ Error fetching RepX pricing:', error);
     return res.status(500).json(errorResponse('PRICING_ERROR', 'Failed to fetch pricing', error.message, 500));
   }
 });
@@ -445,7 +447,7 @@ router.post('/cancel-subscription', async (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error canceling subscription:', error);
+    logger.error('❌ Error canceling subscription:', error);
     return res.status(500).json(errorResponse('CANCELLATION_ERROR', 'Failed to cancel subscription', error.message, 500));
   }
 });
@@ -458,7 +460,7 @@ router.post('/validate-access', async (req, res) => {
   try {
     const { userTier, feature, usage } = req.body;
 
-    console.log('🔍 Validating RepX access:', { userTier, feature, usage });
+    logger.info('🔍 Validating RepX access:', { userTier, feature, usage });
 
     // Validate required parameters
     if (!userTier || !feature || !usage) {
@@ -516,7 +518,7 @@ router.post('/validate-access', async (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error validating RepX access:', error);
+    logger.error('❌ Error validating RepX access:', error);
     return res.status(500).json(errorResponse('VALIDATION_ERROR', 'Failed to validate feature access', error.message, 500));
   }
 });
@@ -554,7 +556,7 @@ router.get('/status', async (req, res) => {
 
     return res.json(defaultSubscription);
   } catch (error) {
-    console.error('❌ Error getting subscription status:', error);
+    logger.error('❌ Error getting subscription status:', error);
     return res.status(500).json(errorResponse('SUBSCRIPTION_ERROR', 'Failed to get subscription status', error.message, 500));
   }
 });
@@ -571,7 +573,7 @@ router.post('/track-usage', async (req, res) => {
       return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Feature is required', null, 400));
     }
 
-    console.log('📊 Tracking usage:', { feature, quantity });
+    logger.info('📊 Tracking usage:', { feature, quantity });
     
     // TODO: Implement actual usage tracking in database
     // For now, just return success
@@ -581,7 +583,7 @@ router.post('/track-usage', async (req, res) => {
       quantity 
     }));
   } catch (error) {
-    console.error('❌ Error tracking usage:', error);
+    logger.error('❌ Error tracking usage:', error);
     return res.status(500).json(errorResponse('TRACKING_ERROR', 'Failed to track usage', error.message, 500));
   }
 });
@@ -598,7 +600,7 @@ router.post('/purchase-addon', async (req, res) => {
       return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Addon is required', null, 400));
     }
 
-    console.log('💳 Processing addon purchase:', { addon, quantity });
+    logger.info('💳 Processing addon purchase:', { addon, quantity });
     
     // TODO: Implement actual addon purchase logic
     return res.json(successResponse({ 
@@ -608,7 +610,7 @@ router.post('/purchase-addon', async (req, res) => {
       transactionId: `txn_${Date.now()}`
     }));
   } catch (error) {
-    console.error('❌ Error purchasing addon:', error);
+    logger.error('❌ Error purchasing addon:', error);
     return res.status(500).json(errorResponse('PURCHASE_ERROR', 'Failed to purchase addon', error.message, 500));
   }
 });
@@ -631,7 +633,7 @@ router.get('/usage', async (req, res) => {
 
     return res.json(usageStats);
   } catch (error) {
-    console.error('❌ Error getting usage:', error);
+    logger.error('❌ Error getting usage:', error);
     return res.status(500).json(errorResponse('USAGE_ERROR', 'Failed to get usage statistics', error.message, 500));
   }
 });
@@ -663,7 +665,7 @@ router.get('/billing-history', async (req, res) => {
 
     return res.json(billingHistory);
   } catch (error) {
-    console.error('❌ Error getting billing history:', error);
+    logger.error('❌ Error getting billing history:', error);
     return res.status(500).json(errorResponse('BILLING_ERROR', 'Failed to get billing history', error.message, 500));
   }
 });
@@ -712,14 +714,14 @@ router.post('/create-checkout', async (req, res) => {
       }
     });
 
-    console.log('✅ Market Data checkout session created:', { sessionId: session.id, planId });
+    logger.info('✅ Market Data checkout session created:', { sessionId: session.id, planId });
 
     return res.json(successResponse({ 
       url: session.url,
       sessionId: session.id 
     }));
   } catch (error) {
-    console.error('❌ Error creating checkout session:', error);
+    logger.error('❌ Error creating checkout session:', error);
     return res.status(500).json(errorResponse('CHECKOUT_ERROR', 'Failed to create checkout session', error.message, 500));
   }
 });
@@ -744,7 +746,7 @@ router.post('/create-portal-session', async (req, res) => {
 
     return res.json(successResponse({ url: session.url }));
   } catch (error) {
-    console.error('❌ Error creating portal session:', error);
+    logger.error('❌ Error creating portal session:', error);
     return res.status(500).json(errorResponse('PORTAL_ERROR', 'Failed to create portal session', error.message, 500));
   }
 });
@@ -769,7 +771,7 @@ router.post('/portal', async (req, res) => {
 
     return res.json(successResponse({ url: session.url }));
   } catch (error) {
-    console.error('❌ Error creating portal session:', error);
+    logger.error('❌ Error creating portal session:', error);
     return res.status(500).json(errorResponse('PORTAL_ERROR', 'Failed to create portal session', error.message, 500));
   }
 });
@@ -782,7 +784,7 @@ router.post('/subscription', async (req, res) => {
   try {
     const { customer_email, subscription_id } = req.body;
 
-    console.log('🔍 Getting subscription status:', { customer_email, subscription_id });
+    logger.info('🔍 Getting subscription status:', { customer_email, subscription_id });
 
     if (!stripe || !process.env.STRIPE_SECRET_KEY) {
       return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
@@ -860,7 +862,7 @@ router.post('/subscription', async (req, res) => {
     }));
 
   } catch (error) {
-    console.error('❌ Error getting subscription:', error);
+    logger.error('❌ Error getting subscription:', error);
     return res.status(500).json(errorResponse('SUBSCRIPTION_ERROR', 'Failed to get subscription', error.message, 500));
   }
 });

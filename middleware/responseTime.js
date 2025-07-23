@@ -1,4 +1,5 @@
 import responseTime from 'response-time';
+
 import logger from '../utils/logger.js';
 
 // Stub function for captureMetric until Sentry is properly configured

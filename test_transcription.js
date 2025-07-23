@@ -1,8 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
 import dotenv from 'dotenv';
-import { transcribeAudio, analyzeTranscription } from './transcription_service.js';
+
+import transcriptionService from './transcription_service.js';
+
+const { transcribeAudio, analyzeTranscription } = transcriptionService;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

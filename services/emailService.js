@@ -3,6 +3,8 @@ import cron from 'node-cron';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
+import logger from '../utils/logger.js';
+
 dotenv.config();
 
 // Initialize Supabase
@@ -34,12 +36,12 @@ class EmailOrchestrator {
       
       if (email && password && !email.includes('your-email')) {
         accountConfigs.push({ email, password });
-        console.log(`✅ Loaded email account ${i}: ${email}`);
+        logger.info(`✅ Loaded email account ${i}: ${email}`);
       }
     }
     
     if (accountConfigs.length === 0) {
-      console.warn('⚠️  No email accounts configured! Add Gmail credentials to .env');
+      logger.warn('⚠️  No email accounts configured! Add Gmail credentials to .env');
       return;
     }
 
@@ -81,9 +83,9 @@ class EmailOrchestrator {
           }
         });
         this.postalEnabled = true;
-        console.log('✅ Postal email server connected - UNLIMITED emails!');
+        logger.info('✅ Postal email server connected - UNLIMITED emails!');
       } catch (error) {
-        console.log('Postal not configured, using Gmail accounts only');
+        logger.info('Postal not configured, using Gmail accounts only');
       }
     }
   }
@@ -91,7 +93,7 @@ class EmailOrchestrator {
   startDailyReset() {
     // Reset counts at midnight
     cron.schedule('0 0 * * *', () => {
-      console.log('Resetting daily email counts');
+      logger.info('Resetting daily email counts');
       this.accounts.forEach(acc => {
         acc.sentToday = 0;
         this.dailySendCounts.set(acc.email, 0);
@@ -177,7 +179,7 @@ class EmailOrchestrator {
       };
 
     } catch (error) {
-      console.error('Email send error:', error);
+      logger.error('Email send error:', error);
       
       // Log failure
       await this.logEmail({
@@ -237,7 +239,7 @@ class EmailOrchestrator {
       const cronExpression = `${sendDate.getMinutes()} ${sendDate.getHours()} ${sendDate.getDate()} ${sendDate.getMonth() + 1} *`;
       
       cron.schedule(cronExpression, async () => {
-        console.log(`Executing campaign step ${index + 1} for ${campaign.name}`);
+        logger.info(`Executing campaign step ${index + 1} for ${campaign.name}`);
         
         for (const recipient of campaign.recipients) {
           try {
@@ -257,7 +259,7 @@ class EmailOrchestrator {
             // Add delay between sends
             await this.delay(Math.random() * 5000 + 2000); // 2-7 seconds
           } catch (error) {
-            console.error(`Failed to send to ${recipient.email}:`, error);
+            logger.error(`Failed to send to ${recipient.email}:`, error);
           }
         }
       });
@@ -327,7 +329,7 @@ class EmailOrchestrator {
         .from('email_logs')
         .insert(emailData);
     } catch (error) {
-      console.error('Failed to log email:', error);
+      logger.error('Failed to log email:', error);
     }
   }
 

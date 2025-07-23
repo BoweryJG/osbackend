@@ -1,9 +1,10 @@
 import express from 'express';
 import fetch from 'node-fetch';
+import { createClient } from '@supabase/supabase-js';
+
 import { AgentCore } from '../../agents/core/agentCore.js';
 import { ConversationManager } from '../../agents/core/conversationManager.js';
 import { ProcedureService } from '../../agents/services/procedureService.js';
-import { createClient } from '@supabase/supabase-js';
 import { successResponse, errorResponse } from '../../utils/responseHelpers.js';
 
 const router = express.Router();

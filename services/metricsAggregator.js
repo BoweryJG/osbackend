@@ -1,8 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
-import logger from '../utils/logger.js';
-import NodeCache from 'node-cache';
 import { EventEmitter } from 'events';
+
+import { createClient } from '@supabase/supabase-js';
+import NodeCache from 'node-cache';
 import cron from 'node-cron';
+
+import logger from '../utils/logger.js';
+
 import websocketManager, { emitMetricUpdate } from './websocketManager.js';
 
 /**

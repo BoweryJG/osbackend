@@ -1,7 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
-import VoiceService from './voiceService.js';
 import twilio from 'twilio';
+
+import logger from '../utils/logger.js';
+
+import VoiceService from './voiceService.js';
 
 // WebRTC Voice Service - No phone numbers needed!
 class WebRTCVoiceService extends VoiceService {
@@ -16,7 +19,7 @@ class WebRTCVoiceService extends VoiceService {
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey);
     } else {
-      console.warn('Supabase credentials not found - transcripts will not be saved');
+      logger.warn('Supabase credentials not found - transcripts will not be saved');
     }
     
     // Initialize Twilio client for SMS
@@ -27,7 +30,7 @@ class WebRTCVoiceService extends VoiceService {
     if (twilioAccountSid && twilioAuthToken) {
       this.twilioClient = twilio(twilioAccountSid, twilioAuthToken);
     } else {
-      console.warn('Twilio credentials not found - SMS confirmations will not be sent');
+      logger.warn('Twilio credentials not found - SMS confirmations will not be sent');
     }
   }
 
@@ -87,9 +90,9 @@ class WebRTCVoiceService extends VoiceService {
         if (data) {
           connection.dbRecordId = data.id;
         }
-        if (error) console.error('Error creating voice call record:', error);
+        if (error) logger.error('Error creating voice call record:', error);
       } catch (err) {
-        console.error('Supabase error:', err);
+        logger.error('Supabase error:', err);
       }
     }
     
@@ -106,7 +109,7 @@ class WebRTCVoiceService extends VoiceService {
       await this.sendAudioResponse(connection, greeting);
     }, 500);
     
-    console.log(`WebRTC voice session started: ${connection.sessionId}`);
+    logger.info(`WebRTC voice session started: ${connection.sessionId}`);
   }
 
   // Process incoming audio data from browser
@@ -136,7 +139,7 @@ class WebRTCVoiceService extends VoiceService {
         connection.audioBuffer = connection.audioBuffer.slice(-80000);
       }
     } catch (error) {
-      console.error('Audio processing error:', error);
+      logger.error('Audio processing error:', error);
     }
   }
 
@@ -155,7 +158,7 @@ class WebRTCVoiceService extends VoiceService {
       
       // Speech to text
       const transcript = await this.speechToText(audioData);
-      console.log('Transcript:', transcript);
+      logger.info('Transcript:', transcript);
       
       if (transcript && transcript.trim().length > 0) {
         // Send transcript to frontend for display
@@ -187,7 +190,7 @@ class WebRTCVoiceService extends VoiceService {
         await this.sendAudioResponse(connection, response);
       }
     } catch (error) {
-      console.error('Processing error:', error);
+      logger.error('Processing error:', error);
     } finally {
       connection.isProcessing = false;
     }
@@ -221,7 +224,7 @@ class WebRTCVoiceService extends VoiceService {
           })
           .eq('id', connection.dbRecordId);
       } catch (err) {
-        console.error('Error updating transcript:', err);
+        logger.error('Error updating transcript:', err);
       }
     }
   }
@@ -247,7 +250,7 @@ class WebRTCVoiceService extends VoiceService {
         }));
       }
     } catch (error) {
-      console.error('Send audio error:', error);
+      logger.error('Send audio error:', error);
     }
   }
 
@@ -256,7 +259,7 @@ class WebRTCVoiceService extends VoiceService {
     const connection = this.webrtcConnections.get(sessionId);
     if (connection) {
       const duration = Math.floor((Date.now() - connection.startTime) / 1000);
-      console.log(`Call ended. Session: ${sessionId}, Duration: ${duration}s`);
+      logger.info(`Call ended. Session: ${sessionId}, Duration: ${duration}s`);
       
       // Update database with final info
       if (this.supabase && connection.dbRecordId) {
@@ -277,7 +280,7 @@ class WebRTCVoiceService extends VoiceService {
             })
             .eq('id', connection.dbRecordId);
         } catch (err) {
-          console.error('Error updating final call record:', err);
+          logger.error('Error updating final call record:', err);
         }
       }
       
@@ -486,10 +489,10 @@ For appointment booking:
     const pcm16 = new Int16Array(mulaw.length);
     
     for (let i = 0; i < mulaw.length; i++) {
-      let byte = ~mulaw[i];
-      let sign = byte & 0x80;
-      let exponent = (byte & 0x70) >> 4;
-      let mantissa = byte & 0x0F;
+      const byte = ~mulaw[i];
+      const sign = byte & 0x80;
+      const exponent = (byte & 0x70) >> 4;
+      const mantissa = byte & 0x0F;
       let sample = mantissa << (exponent + 3);
       sample += MULAW_BIAS << (exponent + 2);
       if (sign === 0) sample = -sample;
@@ -503,7 +506,7 @@ For appointment booking:
   async bookAppointment(connection) {
     const details = connection.conversationManager.state.appointmentDetails;
     if (!details || !details.patientName || !details.phoneNumber) {
-      console.error('Missing appointment details');
+      logger.error('Missing appointment details');
       return;
     }
     
@@ -538,7 +541,7 @@ For appointment booking:
           .single();
         
         if (patientError) {
-          console.error('Error creating patient:', patientError);
+          logger.error('Error creating patient:', patientError);
           return;
         }
         patientId = newPatient.id;
@@ -568,7 +571,7 @@ For appointment booking:
         .single();
       
       if (appointmentError) {
-        console.error('Error creating appointment:', appointmentError);
+        logger.error('Error creating appointment:', appointmentError);
         return;
       }
       
@@ -579,16 +582,16 @@ For appointment booking:
       // Send SMS confirmation
       await this.sendSMSConfirmation(details, appointmentDate, appointmentTime);
       
-      console.log(`Appointment booked: ${appointment.id}`);
+      logger.info(`Appointment booked: ${appointment.id}`);
     } catch (error) {
-      console.error('Error booking appointment:', error);
+      logger.error('Error booking appointment:', error);
     }
   }
   
   // Send SMS confirmation
   async sendSMSConfirmation(details, date, time) {
     if (!this.twilioClient) {
-      console.warn('Twilio not configured - SMS not sent');
+      logger.warn('Twilio not configured - SMS not sent');
       return;
     }
     
@@ -602,9 +605,9 @@ For appointment booking:
         to: `+1${details.phoneNumber}`
       });
       
-      console.log(`SMS confirmation sent to ${details.phoneNumber}`);
+      logger.info(`SMS confirmation sent to ${details.phoneNumber}`);
     } catch (error) {
-      console.error('Error sending SMS:', error);
+      logger.error('Error sending SMS:', error);
     }
   }
   
