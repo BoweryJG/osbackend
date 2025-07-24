@@ -1,13 +1,9 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 
-import { 
-  generateCSRFToken, 
-  storeCSRFToken,
-  requireAuth 
-} from '../middleware/authMiddleware.js';
+import { generateCSRFToken, storeCSRFToken, requireAuth } from '../middleware/authMiddleware.js';
 import logger from '../utils/logger.js';
-import { successResponse, errorResponse, commonErrors } from '../utils/responseHelpers.js';
+import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -33,15 +29,22 @@ router.post('/login', async (req, res) => {
     const { access_token } = req.body;
 
     if (!access_token) {
-      return res.status(400).json(errorResponse('MISSING_TOKEN', 'Access token required', null, 400));
+      return res
+        .status(400)
+        .json(errorResponse('MISSING_TOKEN', 'Access token required', null, 400));
     }
 
     // Verify the Supabase token
-    const { data: { user }, error } = await supabase.auth.getUser(access_token);
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(access_token);
 
     if (error || !user) {
       logger.error('Invalid Supabase token:', error);
-      return res.status(401).json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
     }
 
     // Generate CSRF token
@@ -49,7 +52,7 @@ router.post('/login', async (req, res) => {
     storeCSRFToken(access_token, csrfToken);
 
     // Set cookies
-    res.cookie('session_token', access_token, COOKIE_OPTIONS);
+    res.cookie('session', access_token, COOKIE_OPTIONS);
     res.cookie('csrf_token', csrfToken, {
       ...COOKIE_OPTIONS,
       httpOnly: false // Client needs to read this
@@ -61,14 +64,19 @@ router.post('/login', async (req, res) => {
 
     logger.info('User logged in:', user.id);
 
-    res.json(successResponse({
-      user: { 
-        id: user.id, 
-        email: user.email,
-        user_metadata: user.user_metadata 
-      },
-      csrfToken 
-    }, 'Login successful'));
+    res.json(
+      successResponse(
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            user_metadata: user.user_metadata
+          },
+          csrfToken
+        },
+        'Login successful'
+      )
+    );
   } catch (error) {
     logger.error('Login error:', error);
     res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
@@ -77,33 +85,38 @@ router.post('/login', async (req, res) => {
 
 // Logout
 router.post('/logout', requireAuth, (req, res) => {
-  res.clearCookie('session_token');
+  res.clearCookie('session');
   res.clearCookie('csrf_token');
   res.clearCookie('last_activity');
-  
+
   logger.info('User logged out:', req.user?.id);
-  
+
   res.json(successResponse(null, 'Logout successful'));
 });
 
 // Refresh session
 router.post('/refresh', async (req, res) => {
   try {
-    const sessionToken = req.cookies?.session_token;
+    const sessionToken = req.cookies?.session;
 
     if (!sessionToken) {
       return res.status(401).json(errorResponse('NO_SESSION', 'No session token found', null, 401));
     }
 
     // Verify current token
-    const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
 
     // Refresh cookies
-    res.cookie('session_token', sessionToken, COOKIE_OPTIONS);
+    res.cookie('session', sessionToken, COOKIE_OPTIONS);
     res.cookie('last_activity', Date.now().toString(), {
       ...COOKIE_OPTIONS,
       httpOnly: false
@@ -119,25 +132,34 @@ router.post('/refresh', async (req, res) => {
 // Get current user
 router.get('/me', async (req, res) => {
   try {
-    const sessionToken = req.cookies?.session_token;
+    const sessionToken = req.cookies?.session;
 
     if (!sessionToken) {
-      return res.status(401).json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
     }
 
-    const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
-    
-    res.json(successResponse({
-      user: { 
-        id: user.id, 
-        email: user.email,
-        user_metadata: user.user_metadata
-      } 
-    }));
+
+    res.json(
+      successResponse({
+        user: {
+          id: user.id,
+          email: user.email,
+          user_metadata: user.user_metadata
+        }
+      })
+    );
   } catch (error) {
     logger.error('Get user error:', error);
     res.status(500).json(errorResponse('SERVER_ERROR', 'Internal server error', null, 500));
@@ -147,18 +169,25 @@ router.get('/me', async (req, res) => {
 // Get new CSRF token
 router.get('/csrf', async (req, res) => {
   try {
-    const sessionToken = req.cookies?.session_token;
+    const sessionToken = req.cookies?.session;
 
     if (!sessionToken) {
-      return res.status(401).json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('NOT_AUTHENTICATED', 'Authentication required', null, 401));
     }
 
-    const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(sessionToken);
 
     if (error || !user) {
-      return res.status(401).json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('INVALID_SESSION', 'Session expired or invalid', null, 401));
     }
-    
+
     const csrfToken = generateCSRFToken();
     storeCSRFToken(sessionToken, csrfToken);
 
