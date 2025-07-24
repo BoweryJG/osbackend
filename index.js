@@ -24,15 +24,15 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 // Internal utilities
 import gracefulShutdown from './utils/gracefulShutdown.js';
-import EnvValidator from './utils/envValidator.js';
+import { validateCommonEnvironment } from './utils/envValidator.js';
 import logger from './utils/logger.js';
 // Validate environment variables in production
 if (process.env.NODE_ENV === 'production') {
-  const validator = new EnvValidator();
-  const validation = validator.validateAll();
-  
-  if (!validation.isValid) {
-    console.error('Environment validation failed. Exiting...');
+  try {
+    const validatedEnv = validateCommonEnvironment();
+    console.log('Environment validation passed');
+  } catch (error) {
+    console.error('Environment validation failed:', error.message);
     throw new Error('Environment validation failed');
   }
 }
