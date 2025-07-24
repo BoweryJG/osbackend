@@ -715,7 +715,7 @@ router.post('/private-practice-intelligence', async (req, res) => {
       logger.info('🤖 STAGE 1.5: Deep website scraping with Puppeteer...');
       try {
         websiteIntelligence = await puppeteerWebsiteAnalyzer(practiceData.websiteUrl, doctor);
-        logger.info(`✅ Puppeteer analysis complete: ${Object.keys(websiteIntelligence);.length} data points extracted`);
+        logger.info(`✅ Puppeteer analysis complete: ${Object.keys(websiteIntelligence).length} data points extracted`);
       } catch (error) {
         logger.error('⚠️ Puppeteer analysis failed:', error.message);
         websiteIntelligence = {};
@@ -1042,7 +1042,7 @@ router.post('/anthropic', async (req, res) => {
   const apiModel = model;
   
   try {
-    logger.info(`🤖 Anthropic API call: ${model} (using ${apiModel});`);
+    logger.info(`🤖 Anthropic API call: ${model} (using ${apiModel})`);
     
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
@@ -1421,9 +1421,9 @@ async function practiceDiscoveryAgent(doctor) {
           const isDentalPractice = websiteScore >= 25; // Threshold for quality practice website
           
           if (isDentalPractice) {
-            logger.info(`✅ FOUND PRACTICE WEBSITE: ${result.url} (Score: ${websiteScore});`);
+            logger.info(`✅ FOUND PRACTICE WEBSITE: ${result.url} (Score: ${websiteScore})`);
             logger.info(`   Title: ${result.title}`);
-            logger.info(`   Description: ${result.description?.substring(0, 100);}...`);
+            logger.info(`   Description: ${result.description?.substring(0, 100)}...`);
             
             bestResult = {
               websiteUrl: result.url,
