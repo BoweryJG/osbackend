@@ -23,7 +23,7 @@
     "format:check": "prettier --check .",
     "code:check": "npm run lint && npm run format:check",
     "code:fix": "npm run lint:fix && npm run format",
-    "prepare": "husky"
+    "prepare": "husky || echo 'Husky not available, skipping git hooks setup'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
