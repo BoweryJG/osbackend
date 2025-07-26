@@ -194,8 +194,8 @@ app.set('trust proxy', 1); // Trust first proxy - important for Render
 // Make supabase client available to routes
 app.locals.supabase = null; // Will be set after connection
 
-// Stripe webhook needs raw body
-app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+// Stripe webhook needs raw body - MOVED TO SEPARATE PATH TO NOT BREAK OTHER POSTS
+app.post('/stripe-webhook-endpoint', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
     return res.status(503).json(errorResponse('SERVICE_UNAVAILABLE', 'Stripe not configured', null, 503));
   }
