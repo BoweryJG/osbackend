@@ -825,6 +825,9 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
 router.post('/chat/public/message', async (req, res) => {
   console.log('[CRITICAL] Public message endpoint called');
+  console.log('Request body:', req.body);
+  console.log('Request method:', req.method);
+  console.log('Request headers:', req.headers);
   
   try {
     const { agentId, message, conversationId } = req.body;
