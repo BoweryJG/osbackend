@@ -800,20 +800,30 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
     // Create guest session
     const sessionId = `guest_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    const { data: session, error: sessionError } = await supabase
+    const { error: sessionError } = await supabase
       .from('guest_voice_sessions')
       .insert({
         session_id: sessionId,
         agent_id: agentId,
         client_identifier: clientIdentifier,
         max_duration_seconds: Math.min(remainingSeconds, 300) // Max 5 minutes or remaining time
-      })
-      .select()
-      .single();
+      });
     
     if (sessionError) {
       console.error('Error creating guest session:', sessionError);
       throw new Error('Failed to create voice session');
+    }
+    
+    // Fetch the created session
+    const { data: session, error: fetchError } = await supabase
+      .from('guest_voice_sessions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .single();
+    
+    if (fetchError || !session) {
+      console.error('Error fetching guest session:', fetchError);
+      throw new Error('Failed to fetch created session');
     }
     
     // Return session info WITHOUT API keys
