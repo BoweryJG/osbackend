@@ -872,6 +872,14 @@ router.post('/chat/public/message', checkChatServices, async (req, res) => {
       }
     ];
 
+    // Check if Anthropic is initialized
+    if (!anthropic) {
+      console.error('[RepConnect] Anthropic client not initialized - missing API key');
+      return res.status(503).json(
+        errorResponse('SERVICE_UNAVAILABLE', 'Chat service not available - AI provider not configured', null, 503)
+      );
+    }
+
     // Use direct Anthropic call for public users
     const completion = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
