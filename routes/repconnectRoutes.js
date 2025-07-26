@@ -861,11 +861,8 @@ router.post('/chat/public/message', checkChatServices, async (req, res) => {
       userId: publicUserId
     };
 
-    // Get system prompt with knowledge domains
-    const systemPrompt = await personalityEngine.buildRepConnectSystemPrompt(
-      agent,
-      repconnectContext
-    );
+    // Build system prompt for the agent
+    const systemPrompt = agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`;
 
     // Create messages array
     const messages = [
