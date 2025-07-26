@@ -1,6 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import crypto from 'crypto';
 
 import { AgentCore } from '../agents/core/agentCore.js';
 import { ConversationManager } from '../agents/core/conversationManager.js';
@@ -621,7 +622,6 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
     // Create client identifier from IP and User-Agent
     const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
-    const crypto = await import('crypto');
     const clientIdentifier = crypto
       .createHash('sha256')
       .update(`${clientIp}:${userAgent}`)
