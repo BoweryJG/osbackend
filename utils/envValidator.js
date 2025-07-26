@@ -189,9 +189,16 @@ export const validateCommonEnvironment = () => {
   const validated = validateEnvironment(commonEnvConfig);
   
   // Custom validation: Ensure at least one Supabase key is present
-  if (!process.env.SUPABASE_SERVICE_KEY && 
-      !process.env.SUPABASE_SERVICE_ROLE_KEY && 
-      !process.env.SUPABASE_KEY) {
+  const hasSupabaseKey = process.env.SUPABASE_SERVICE_KEY || 
+                        process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                        process.env.SUPABASE_KEY;
+  
+  if (!hasSupabaseKey) {
+    logger.error('Supabase key validation failed', {
+      SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_KEY: !!process.env.SUPABASE_KEY
+    });
     throw new Error('At least one of SUPABASE_SERVICE_KEY, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_KEY must be set');
   }
   

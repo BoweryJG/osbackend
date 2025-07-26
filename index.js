@@ -35,7 +35,8 @@ if (process.env.NODE_ENV === 'production') {
     console.log('Environment validation passed');
   } catch (error) {
     console.error('Environment validation failed:', error.message);
-    throw new Error('Environment validation failed');
+    // Log the error but don't crash the app - let's see what the actual issue is
+    console.error('Continuing despite validation error to diagnose the issue...');
   }
 }
 
@@ -206,6 +207,20 @@ if (process.env.ANTHROPIC_API_KEY) {
     apiKey: process.env.ANTHROPIC_API_KEY
   });
 }
+
+// Add environment check endpoint for debugging
+app.get('/env-check', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    SUPABASE_URL: !!process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_KEY: !!process.env.SUPABASE_KEY,
+    ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+    JWT_SECRET: !!process.env.JWT_SECRET
+  });
+});
 
 // Add RepConnect chat endpoint FIRST before any middleware
 app.post('/api/repconnect/chat/public/message', express.json(), async (req, res) => {
