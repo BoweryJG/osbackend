@@ -840,8 +840,7 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
           name: agent.name,
           voice_id: voiceId,
           voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
-          voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config,
-          personality: agent.personality_profile
+          voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config
         },
         provider: 'webrtc',
         is_trial: true
