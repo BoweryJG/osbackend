@@ -823,7 +823,7 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 });
 
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
-router.post('/chat/public/message', checkChatServices, async (req, res) => {
+router.post('/chat/public/message', checkSupabase, async (req, res) => {
   console.log('[RepConnect] Public chat endpoint hit:', { body: req.body });
   console.log('[RepConnect] Build version: 2025-01-26-v1'); // Version for debugging
   
