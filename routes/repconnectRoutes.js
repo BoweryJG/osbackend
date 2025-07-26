@@ -10,21 +10,26 @@ import { PersonalityEngine } from '../services/personalityEngine.js';
 
 const router = express.Router();
 
-// Add request logging middleware just for RepConnect routes
+// Add CORS headers to ALL RepConnect routes
 router.use((req, res, next) => {
   console.log(`[RepConnect Router] ${req.method} ${req.path}`);
   console.log('[RepConnect Router] Body:', req.body);
+  
+  // Add CORS headers for all requests
+  res.header('Access-Control-Allow-Origin', 'https://repconnect.repspheres.com');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
   next();
 });
 
-// Handle OPTIONS requests for CORS preflight
-router.options('/agents/:agentId/start-voice-session', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'https://repconnect.repspheres.com');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.sendStatus(200);
-});
+// OPTIONS handler now handled by middleware above
 
 // Initialize Supabase for RepConnect
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
@@ -749,12 +754,6 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
 
 // POST /api/repconnect/agents/:agentId/start-voice-session - Start a voice session (authenticated or trial)
 router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, res) => {
-  // Add CORS headers for unauthenticated requests
-  res.header('Access-Control-Allow-Origin', 'https://repconnect.repspheres.com');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
   try {
     const { provider = 'webrtc' } = req.body;
     const { agentId } = req.params;
