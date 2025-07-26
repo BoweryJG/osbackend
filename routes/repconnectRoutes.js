@@ -1,9 +1,11 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import Anthropic from '@anthropic-ai/sdk';
 
 import { AgentCore } from '../agents/core/agentCore.js';
 import { ConversationManager } from '../agents/core/conversationManager.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
+import { PersonalityEngine } from '../services/personalityEngine.js';
 
 const router = express.Router();
 
@@ -12,14 +14,26 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
 let supabase = null;
 let agentCore = null;
 let conversationManager = null;
+let anthropic = null;
+let personalityEngine = null;
 
 if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
   agentCore = new AgentCore('repconnect');
   conversationManager = new ConversationManager(supabase);
+  personalityEngine = new PersonalityEngine(supabase);
   console.log('RepConnect Agents: Supabase and AgentCore initialized');
 } else {
   console.warn('RepConnect Agents: Missing Supabase credentials');
+}
+
+if (process.env.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
+  });
+  console.log('RepConnect Agents: Anthropic initialized');
+} else {
+  console.warn('RepConnect Agents: Missing Anthropic API key');
 }
 
 // Middleware to check if Supabase is initialized
@@ -796,6 +810,93 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
   } catch (error) {
     console.error('Error in RepConnect chat message:', error);
     res
+      .status(500)
+      .json(
+        errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500)
+      );
+  }
+});
+
+// POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
+router.post('/chat/public/message', checkChatServices, async (req, res) => {
+  try {
+    const { agentId, message, conversationId } = req.body;
+
+    if (!agentId || !message) {
+      return res
+        .status(400)
+        .json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+    }
+
+    // Verify agent exists and is available for RepConnect
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*')
+      .eq('id', agentId)
+      .contains('available_in_apps', ['repconnect'])
+      .eq('is_active', true)
+      .single();
+
+    if (agentError || !agent) {
+      return res
+        .status(404)
+        .json(
+          errorResponse(
+            'AGENT_NOT_FOUND',
+            'Agent not found or not available for RepConnect',
+            null,
+            404
+          )
+        );
+    }
+
+    // Create anonymous user ID for public users
+    const publicUserId = `public_${req.ip}_${Date.now()}`;
+
+    // Build context for RepConnect agents
+    const repconnectContext = {
+      appName: 'repconnect',
+      app: 'repconnect',
+      isPublicUser: true,
+      userId: publicUserId
+    };
+
+    // Get system prompt with knowledge domains
+    const systemPrompt = await personalityEngine.buildRepConnectSystemPrompt(
+      agent,
+      repconnectContext
+    );
+
+    // Create messages array
+    const messages = [
+      {
+        role: 'user',
+        content: message
+      }
+    ];
+
+    // Use direct Anthropic call for public users
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1000,
+      temperature: agent.temperature || 0.7,
+      system: systemPrompt,
+      messages: messages
+    });
+
+    const responseText = completion.content[0].text;
+
+    // Return successful response
+    res.json({
+      success: true,
+      message: responseText,
+      agentId: agentId,
+      sessionId: conversationId || `public_session_${Date.now()}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[RepConnect] Public chat error:', error);
+    return res
       .status(500)
       .json(
         errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500)
