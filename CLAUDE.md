@@ -64,9 +64,10 @@ node run-supabase-migrations.js
 ### Unified Agent System (Single Source of Truth)
 
 - **Primary Table**: `unified_agents` in Supabase project `cbopynuvhcymbumjnvay` (Sphere1a)
-- **22 Total Agents**: Strategists, coaches, medical specialists, elite closers, voice representatives
+- **35 Total Agents**: Strategists, coaches, medical specialists, elite closers, voice representatives, procedure experts
 - **Multi-App Support**: Agents available across Canvas, RepConnect, or Pedro via `available_in_apps[]` field
 - **App-Agnostic Design**: Dynamic filtering based on application context
+- **B2B Knowledge Integration**: 6 medical device sales knowledge domains linked via `agent_knowledge_domains`
 
 ### Core Components Architecture
 
@@ -99,8 +100,10 @@ node run-supabase-migrations.js
 unified_agents              -- Master agent table (SINGLE SOURCE OF TRUTH)
 agent_voice_profiles        -- Voice configurations per agent
 agent_conversation_styles   -- Chat behavior and personality
-agent_conversations        -- Chat history and sessions
-agent_voice_sessions       -- Voice call tracking
+agent_conversations         -- Chat history and sessions
+agent_voice_sessions        -- Voice call tracking
+knowledge_domains           -- B2B medical device sales knowledge (6 domains)
+agent_knowledge_domains     -- Links agents to their expertise areas
 ```
 
 **Legacy Tables (DO NOT USE)**
@@ -186,7 +189,7 @@ SITE_URL=https://osbackend-zl1h.onrender.com
 
 Run `npm run check:env` or `node check_environment.js` to validate all required environment variables are present.
 
-## Agent Categories and Specialties
+## Agent Categories and Specialties (35 Total)
 
 ### 🧠 Strategists (4 agents) - Canvas + RepConnect
 
@@ -214,10 +217,57 @@ Run `npm run check:env` or `node check_environment.js` to validate all required 
 - **Jake Thompson**: Sports medicine and rehabilitation
 - **Marcus Rodriguez**: Emergency medicine and trauma
 
+### 💉 Procedure Experts (13 agents) - Aesthetic and Dental
+
+- **Aesthetic**: Toxi (Botox), Fillmore (Fillers), Dewey (Skincare), Blazer (Laser), Chilly (Body Contouring)
+- **Dental**: Steely (Implants), Straightz (Orthodontics), Shimmer (Cosmetic)
+- **Plus 5 additional procedure specialists**
+
 ### 🎤 Voice Representatives (5 agents) - App-specific
 
 - **Marcus, Sarah**: RepConnect exclusive voice representatives
 - **Brian, Julie, Maria**: Pedro platform specialists
+
+## B2B Medical Device Sales Knowledge Domains
+
+The system includes 6 comprehensive knowledge domains for B2B medical device sales training:
+
+### 1. **Neurotoxin Sales** (Botox/Dysport/Daxxify)
+
+- Market size: $8.2B global, 14.5% CAGR
+- Linked to 19 agents with expertise levels 7-10
+- Focus: ROI models, injection mapping, patient volume calculations
+
+### 2. **All-on-4 Dental Implant Systems**
+
+- Market size: $980M US, 22% growth
+- Linked to 18 agents, especially dental specialists
+- Focus: Edentulous patient demographics, $50K+ case values
+
+### 3. **Fraxel Laser Systems**
+
+- Market size: $2.4B resurfacing market
+- Linked to 19 agents with laser expertise
+- Focus: $150K system cost, treatment pricing strategies
+
+### 4. **RF Microneedling** (Morpheus8, Vivace, Secret)
+
+- Market size: $1.8B, 18.5% CAGR
+- Linked to 18 agents with aesthetic focus
+- Focus: Combination treatments, minimal downtime benefits
+
+### 5. **Body Contouring** (CoolSculpting, EmSculpt)
+
+- Market size: $3.2B non-invasive market
+- Linked to 23 agents including fitness-focused coaches
+- Focus: Package pricing, membership models
+
+### 6. **Yomi Robotic Dental Surgery**
+
+- Price: $220K (negotiable to $100K with membership)
+- Membership: $4K/month standard, $6K/month premium
+- Linked to 9 dental surgery experts
+- Focus: First FDA-cleared dental robot, haptic guidance
 
 ## Development Practices
 
@@ -339,6 +389,27 @@ Run `npm run check:env` or `node check_environment.js` to validate all required 
 - **Error Handling**: Secure error responses without data leaks
 
 ## Production Fixes and Deployment History
+
+### January 2025 - B2B Knowledge Domain Integration
+
+**Status**: ✅ DEPLOYED - Knowledge domains integrated into agent responses
+
+#### Features Added:
+
+1. **Knowledge Domain Tables**:
+   - Created `knowledge_domains` table with 35 columns for comprehensive B2B sales data
+   - Created `agent_knowledge_domains` junction table for many-to-many relationships
+   - Populated 6 B2B medical device sales domains with 2025 market data
+
+2. **API Enhancements**:
+   - Updated `/api/repconnect/agents` to include knowledge domain joins
+   - Agent responses now include `knowledge_domains` array with expertise levels
+   - Harvey endpoint enhanced with knowledge domain information
+
+3. **Frontend Integration**:
+   - Removed all local agent definitions from RepConnect
+   - Frontend loads agents exclusively from osbackend with knowledge domains
+   - Clean separation of personality (agents) and knowledge (domains)
 
 ### January 2025 - Production Lint Fixes and Deployment
 
