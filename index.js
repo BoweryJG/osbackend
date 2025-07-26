@@ -434,7 +434,7 @@ app.get('/health', (req, res) => {
 });
 
 // Database connection setup using connection pool
-let supabase;
+// supabase is already declared above at line 198
 let supabaseConnected = false;
 
 async function initializeDatabase() {
@@ -444,10 +444,13 @@ async function initializeDatabase() {
     // Initialize the database pool (handles connection management internally)
     await databasePool.healthCheck();
     
-    // Get a connection from the pool to create the legacy supabase client
-    const connection = await databasePool.getConnection('main', 10000);
-    supabase = connection.client;
-    connection.release();
+    // If supabase wasn't already initialized (e.g., for RepConnect chat), initialize it now
+    if (!supabase) {
+      // Get a connection from the pool to create the legacy supabase client
+      const connection = await databasePool.getConnection('main', 10000);
+      supabase = connection.client;
+      connection.release();
+    }
     
     // Make supabase available to routes for backwards compatibility
     app.locals.supabase = supabase;
