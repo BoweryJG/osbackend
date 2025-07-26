@@ -819,6 +819,9 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
 router.post('/chat/public/message', checkChatServices, async (req, res) => {
+  console.log('[RepConnect] Public chat endpoint hit:', { body: req.body });
+  console.log('[RepConnect] Build version: 2025-01-26-v1'); // Version for debugging
+  
   try {
     const { agentId, message, conversationId } = req.body;
 
@@ -828,10 +831,20 @@ router.post('/chat/public/message', checkChatServices, async (req, res) => {
         .json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
     }
 
-    // Verify agent exists and is available for RepConnect
+    // Verify agent exists and is available for RepConnect with knowledge domains
     const { data: agent, error: agentError } = await supabase
       .from('unified_agents')
-      .select('*')
+      .select(`
+        *,
+        agent_knowledge_domains (
+          expertise_level,
+          domain:domain_id (
+            domain_name,
+            domain_category,
+            product_lines
+          )
+        )
+      `)
       .eq('id', agentId)
       .contains('available_in_apps', ['repconnect'])
       .eq('is_active', true)
@@ -861,8 +874,20 @@ router.post('/chat/public/message', checkChatServices, async (req, res) => {
       userId: publicUserId
     };
 
-    // Build system prompt for the agent
-    const systemPrompt = agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`;
+    // Build system prompt for the agent with knowledge domains
+    let systemPrompt = agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`;
+    
+    // Add knowledge domains to system prompt
+    if (agent.agent_knowledge_domains?.length > 0) {
+      const domains = agent.agent_knowledge_domains
+        .map(kd => kd.domain?.domain_name)
+        .filter(Boolean)
+        .join(', ');
+      
+      if (domains) {
+        systemPrompt += `\n\nYou have expertise in the following B2B medical device sales areas: ${domains}. Use this knowledge to provide expert guidance on selling these products to healthcare providers.`;
+      }
+    }
 
     // Create messages array
     const messages = [
