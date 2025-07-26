@@ -686,7 +686,9 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
       return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found', null, 404));
     }
     
-    if (!agent.voice_id) {
+    // Check for voice capabilities - voice_id can be in main agent or voice profile
+    const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
+    if (!voiceId) {
       return res
         .status(400)
         .json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
@@ -723,9 +725,9 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
         agent: {
           id: agent.id,
           name: agent.name,
-          voice_id: agent.voice_id,
-          voice_name: agent.voice_name,
-          voice_settings: agent.voice_settings,
+          voice_id: voiceId,
+          voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
+          voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config,
           personality: agent.personality_profile
         },
         provider: 'webrtc',
