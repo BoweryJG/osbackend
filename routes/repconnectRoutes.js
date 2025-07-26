@@ -9,6 +9,13 @@ import { PersonalityEngine } from '../services/personalityEngine.js';
 
 const router = express.Router();
 
+// Add request logging middleware just for RepConnect routes
+router.use((req, res, next) => {
+  console.log(`[RepConnect Router] ${req.method} ${req.path}`);
+  console.log('[RepConnect Router] Body:', req.body);
+  next();
+});
+
 // Initialize Supabase for RepConnect
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 let supabase = null;

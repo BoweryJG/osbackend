@@ -433,4 +433,16 @@ router.get('/health/dependencies', async (req, res) => {
   }
 });
 
+// POST /health/test - Test POST functionality
+router.post('/health/test', (req, res) => {
+  console.log('[Health] POST test endpoint hit');
+  console.log('[Health] Request body:', req.body);
+  res.json({ 
+    success: true, 
+    message: 'POST test successful',
+    body: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
 export default router;
