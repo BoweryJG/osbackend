@@ -20,7 +20,7 @@ const COOKIE_OPTIONS = {
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin in production
   maxAge: 30 * 60 * 1000, // 30 minutes
   path: '/',
-  domain: process.env.NODE_ENV === 'production' ? '.repspheres.com' : undefined // Allow subdomain sharing
+  domain: '.repspheres.com' // Always set for .repspheres.com to allow subdomain sharing
 };
 
 // Exchange Supabase token for httpOnly cookies
