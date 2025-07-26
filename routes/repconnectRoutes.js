@@ -135,6 +135,66 @@ router.get('/test', (req, res) => {
   res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v2' });
 });
 
+// GET /api/repconnect/test-voice-trial-detailed - Detailed test of voice trial steps
+router.get('/test-voice-trial-detailed', async (req, res) => {
+  const results = {};
+  const agentId = '00ed4a18-12f9-4ab0-9c94-2915ad94a9b1';
+  
+  try {
+    // Test 1: RPC function
+    results.rpc = {};
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc('get_remaining_trial_seconds', { p_client_identifier: 'test-detailed' });
+    results.rpc.success = !rpcError;
+    results.rpc.data = rpcData;
+    results.rpc.error = rpcError;
+    
+    // Test 2: Fetch agent
+    results.agent = {};
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+    results.agent.success = !agentError;
+    results.agent.data = agent ? { id: agent.id, name: agent.name, voice_id: agent.voice_id } : null;
+    results.agent.error = agentError;
+    
+    // Test 3: Insert into guest_voice_sessions
+    results.insert = {};
+    const sessionId = `test_detailed_${Date.now()}`;
+    const { data: session, error: insertError } = await supabase
+      .from('guest_voice_sessions')
+      .insert({
+        session_id: sessionId,
+        agent_id: agentId,
+        client_identifier: 'test-detailed',
+        max_duration_seconds: 300
+      })
+      .select()
+      .single();
+    results.insert.success = !insertError;
+    results.insert.data = session;
+    results.insert.error = insertError;
+    
+    res.json({
+      success: Object.values(results).every(r => r.success),
+      results,
+      summary: {
+        rpc: results.rpc.success ? 'PASS' : 'FAIL',
+        agent: results.agent.success ? 'PASS' : 'FAIL',
+        insert: results.insert.success ? 'PASS' : 'FAIL'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      results
+    });
+  }
+});
+
 // GET /api/repconnect/test-rpc - Test RPC function directly
 router.get('/test-rpc', async (req, res) => {
   try {
