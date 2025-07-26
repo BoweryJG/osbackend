@@ -16,6 +16,8 @@ import NodeCache from 'node-cache';
 import Parser from 'rss-parser';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer } from 'ws';
+import { createClient } from '@supabase/supabase-js';
+import Anthropic from '@anthropic-ai/sdk';
 
 // Get the directory name and load environment variables first
 const __filename = fileURLToPath(import.meta.url);
@@ -189,8 +191,6 @@ const usageProducts = {
 const app = express();
 
 // Initialize Supabase and Anthropic for RepConnect chat
-import { createClient } from '@supabase/supabase-js';
-import Anthropic from '@anthropic-ai/sdk';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
