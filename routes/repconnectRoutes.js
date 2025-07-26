@@ -56,6 +56,25 @@ const checkSupabase = (req, res, next) => {
   next();
 };
 
+// Debug endpoint for Supabase configuration (public)
+router.get('/debug/supabase-config', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      supabaseInitialized: !!supabase,
+      hasRpcMethod: !!supabase?.rpc,
+      hasFromMethod: !!supabase?.from,
+      supabaseKeyUsed: supabaseKey ? supabaseKey.substring(0, 20) + '...' : 'none',
+      envVarsSet: {
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+        SUPABASE_KEY: !!process.env.SUPABASE_KEY
+      }
+    }
+  });
+});
+
 // Middleware to check if chat services are initialized
 const checkChatServices = (req, res, next) => {
   if (!supabase || !agentCore || !conversationManager) {
@@ -619,6 +638,13 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
   try {
     console.log('[Trial Voice] Starting trial session for agent:', req.params.agentId);
     console.log('[Trial Voice] Supabase initialized:', !!supabase);
+    console.log('[Trial Voice] Supabase has rpc method:', typeof supabase?.rpc);
+    
+    // Check if Supabase is properly configured
+    if (!supabase) {
+      throw new Error('Supabase client not initialized');
+    }
+    
     const { agentId } = req.params;
     
     // Create client identifier from IP and User-Agent
