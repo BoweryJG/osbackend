@@ -132,7 +132,79 @@ const requireAuth = async (req, res, next) => {
 
 // GET /api/repconnect/test - Simple test endpoint
 router.get('/test', (req, res) => {
-  res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v2' });
+  res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v3' });
+});
+
+// GET /api/repconnect/test-response-structure - Test the exact response structure
+router.get('/test-response-structure', async (req, res) => {
+  try {
+    const agentId = '00ed4a18-12f9-4ab0-9c94-2915ad94a9b1';
+    
+    // Fetch agent exactly like the trial endpoint
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+    
+    if (agentError) {
+      return res.json({ error: 'Agent fetch failed', details: agentError });
+    }
+    
+    // Test building the response structure
+    const response = {
+      test1_basic: {
+        id: agent.id,
+        name: agent.name
+      }
+    };
+    
+    // Test voice_id
+    try {
+      const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
+      response.test2_voiceId = voiceId;
+    } catch (e) {
+      response.test2_voiceId_error = e.message;
+    }
+    
+    // Test voice_name
+    try {
+      const voiceName = agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name;
+      response.test3_voiceName = voiceName;
+    } catch (e) {
+      response.test3_voiceName_error = e.message;
+    }
+    
+    // Test voice_settings
+    try {
+      const voiceSettings = agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config;
+      response.test4_voiceSettings = voiceSettings;
+    } catch (e) {
+      response.test4_voiceSettings_error = e.message;
+    }
+    
+    // Test building full agent object
+    try {
+      const fullAgent = {
+        id: agent.id,
+        name: agent.name,
+        voice_id: agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id,
+        voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
+        voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config
+      };
+      response.test5_fullAgent = fullAgent;
+    } catch (e) {
+      response.test5_fullAgent_error = e.message;
+    }
+    
+    res.json({ success: true, ...response });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    });
+  }
 });
 
 // GET /api/repconnect/test-voice-trial-detailed - Detailed test of voice trial steps
