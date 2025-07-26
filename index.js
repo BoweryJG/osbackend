@@ -2265,6 +2265,14 @@ app.use('/', zapierRoutes);
 app.use('/api/canvas', agentRoutes);
 
 // SIMPLIFIED: Just one fucking route that works
+app.get('/api/repconnect/chat/test', (req, res) => {
+  res.json({ success: true, message: 'GET works' });
+});
+
+app.post('/api/repconnect/chat/test', (req, res) => {
+  res.json({ success: true, message: 'POST works' });
+});
+
 app.post('/api/repconnect/chat/public/message', (req, res) => {
   console.log('DIRECT ROUTE HIT - PUBLIC CHAT');
   res.json({
@@ -2277,7 +2285,7 @@ app.post('/api/repconnect/chat/public/message', (req, res) => {
 });
 
 // Add RepConnect Agent routes  
-// app.use('/api/repconnect', repconnectRoutes); // COMMENTED OUT FOR NOW
+app.use('/api/repconnect', repconnectRoutes);
 
 // Add Call Transcription routes
 app.use('/api', callTranscriptionRoutes);
