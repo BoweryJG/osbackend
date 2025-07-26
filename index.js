@@ -332,27 +332,12 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Length', 'X-Request-Id'],
-  maxAge: 86400 // 24 hours
+  credentials: true
 }));
-
-// Handle preflight requests
-app.options('*', (req, res) => {
-  res.sendStatus(200);
-});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json(successResponse({ status: 'ok' }));
-});
-
-// Simple test endpoint for RepConnect
-app.post('/api/repconnect/test', (req, res) => {
-  console.log('Test endpoint hit:', req.body);
-  res.json({ success: true, message: 'Test endpoint working', received: req.body });
 });
 
 // Database connection setup using connection pool
