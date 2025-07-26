@@ -135,6 +135,49 @@ router.get('/test', (req, res) => {
   res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v2' });
 });
 
+// GET /api/repconnect/test-rpc - Test RPC function directly
+router.get('/test-rpc', async (req, res) => {
+  try {
+    console.log('[TEST-RPC] Testing RPC function...');
+    console.log('[TEST-RPC] Supabase exists:', !!supabase);
+    console.log('[TEST-RPC] RPC method exists:', typeof supabase?.rpc);
+    
+    const { data, error } = await supabase
+      .rpc('get_remaining_trial_seconds', { 
+        p_client_identifier: 'test-client-direct' 
+      });
+    
+    if (error) {
+      console.error('[TEST-RPC] RPC Error:', error);
+      console.error('[TEST-RPC] Error details:', JSON.stringify(error, null, 2));
+      return res.status(500).json({
+        success: false,
+        error: {
+          message: 'RPC failed',
+          details: error
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        remainingSeconds: data,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[TEST-RPC] Catch error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+  }
+});
+
 // POST /api/repconnect/test - Simple POST test endpoint  
 router.post('/test', (req, res) => {
   console.log('[Test] POST endpoint hit');
