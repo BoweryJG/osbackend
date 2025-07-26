@@ -823,11 +823,16 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 });
 
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
-router.post('/chat/public/message', checkSupabase, async (req, res) => {
-  console.log('[RepConnect] Public chat endpoint hit:', { body: req.body });
-  console.log('[RepConnect] Build version: 2025-01-26-v1'); // Version for debugging
-  
+router.post('/chat/public/message', async (req, res) => {
   try {
+    // TEMPORARY: Just return a simple response to verify the endpoint works
+    return res.json({
+      success: true,
+      message: "Hello! The chat endpoint is working. This is a test response.",
+      agentId: req.body.agentId,
+      sessionId: "test_" + Date.now(),
+      timestamp: new Date().toISOString()
+    });
     const { agentId, message, conversationId } = req.body;
 
     if (!agentId || !message) {
