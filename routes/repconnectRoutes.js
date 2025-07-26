@@ -617,6 +617,8 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
 // POST /api/repconnect/agents/:agentId/start-trial-voice-session - Public 5-minute trial
 router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (req, res) => {
   try {
+    console.log('[Trial Voice] Starting trial session for agent:', req.params.agentId);
+    console.log('[Trial Voice] Supabase initialized:', !!supabase);
     const { agentId } = req.params;
     
     // Create client identifier from IP and User-Agent
@@ -706,7 +708,9 @@ router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (
       })
     );
   } catch (error) {
-    console.error('Error starting trial voice session:', error);
+    console.error('[Trial Voice] Error starting trial voice session:', error);
+    console.error('[Trial Voice] Error stack:', error.stack);
+    console.error('[Trial Voice] Error details:', JSON.stringify(error, null, 2));
     res
       .status(500)
       .json(errorResponse('SESSION_ERROR', 'Failed to start trial session', error.message, 500));
