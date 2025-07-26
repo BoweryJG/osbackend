@@ -222,7 +222,66 @@ app.get('/env-check', (req, res) => {
   });
 });
 
-// Add RepConnect chat endpoint FIRST before any middleware
+// Configure CORS (must be before ALL routes for error handling)
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow any origin in development
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+      return;
+    }
+    
+    // In production, check against allowed origins
+    const allowedOrigins = [];
+    if (process.env.FRONTEND_URL) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+    allowedOrigins.push(
+      'https://repconnect.repspheres.com', // RepConnect production domain
+      'https://repconnect1.netlify.app', // RepConnect1 app
+      'https://repspheres.netlify.app',
+      'https://globalrepspheres.netlify.app', // Main app on Netlify
+      'https://repspheres.com',
+      'https://www.repspheres.com', // www version
+      'https://workspace.repspheres.com', 
+      'https://linguistics.repspheres.com', 
+      'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
+      'https://canvas.repspheres.com', // Canvas sales intelligence
+      'https://marketdata.repspheres.com', // Added MarketData frontend URL
+      'https://auth.repspheres.com', // Auth subdomain if needed
+      'https://agent-command-center.netlify.app', // Agent Command Center
+      'https://feature-lightning-strike-homepage--repspheres22.netlify.app', // Lightning Strike Homepage feature branch
+      'http://localhost:5173', // Common Vite dev port
+      'http://localhost:5174', // Alternative Vite port
+      'http://localhost:5175', // Alternative Vite port
+      'http://localhost:5176',
+      'https://localhost:5173',
+      'https://localhost:5174',
+      'https://localhost:5175',
+      'https://localhost:5176',
+      'http://localhost:3000', // Common React dev port
+      'http://localhost:3001'  // Alternative port
+    );
+    
+    // Check if origin matches any allowed pattern
+    const isAllowed = !origin || allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*');
+        return new RegExp(pattern).test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// Add RepConnect chat endpoint AFTER CORS middleware
 app.post('/api/repconnect/chat/public/message', express.json(), async (req, res) => {
   try {
     const { agentId, message, conversationId } = req.body;
@@ -369,64 +428,6 @@ const upload = multer({
   }
 });
 
-// Configure CORS
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow any origin in development
-    if (process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-      return;
-    }
-    
-    // In production, check against allowed origins
-    const allowedOrigins = [];
-    if (process.env.FRONTEND_URL) {
-      allowedOrigins.push(process.env.FRONTEND_URL);
-    }
-    allowedOrigins.push(
-      'https://repconnect.repspheres.com', // RepConnect production domain
-      'https://repconnect1.netlify.app', // RepConnect1 app
-      'https://repspheres.netlify.app',
-      'https://globalrepspheres.netlify.app', // Main app on Netlify
-      'https://repspheres.com',
-      'https://www.repspheres.com', // www version
-      'https://workspace.repspheres.com', 
-      'https://linguistics.repspheres.com', 
-      'https://crm.repspheres.com', // Added SphereOsCrM frontend URL
-      'https://canvas.repspheres.com', // Canvas sales intelligence
-      'https://marketdata.repspheres.com', // Added MarketData frontend URL
-      'https://auth.repspheres.com', // Auth subdomain if needed
-      'https://agent-command-center.netlify.app', // Agent Command Center
-      'https://feature-lightning-strike-homepage--repspheres22.netlify.app', // Lightning Strike Homepage feature branch
-      'http://localhost:5173', // Common Vite dev port
-      'http://localhost:5174', // Alternative Vite port
-      'http://localhost:5175', // Alternative Vite port
-      'http://localhost:5176',
-      'https://localhost:5173',
-      'https://localhost:5174',
-      'https://localhost:5175',
-      'https://localhost:5176',
-      'http://localhost:3000', // Common React dev port
-      'http://localhost:3001'  // Alternative port
-    );
-    
-    // Check if origin matches any allowed pattern
-    const isAllowed = !origin || allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        const pattern = allowed.replace('*', '.*');
-        return new RegExp(pattern).test(origin);
-      }
-      return allowed === origin;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
