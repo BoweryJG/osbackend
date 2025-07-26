@@ -108,6 +108,18 @@ router.get('/test', (req, res) => {
   res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v2' });
 });
 
+// POST /api/repconnect/test - Simple POST test endpoint  
+router.post('/test', (req, res) => {
+  console.log('[Test] POST endpoint hit');
+  res.json({ success: true, message: 'POST works', body: req.body });
+});
+
+// POST /api/repconnect/chat/simple - Simplest possible public endpoint
+router.post('/chat/simple', (req, res) => {
+  console.log('[Simple] Endpoint hit');
+  res.json({ success: true });
+});
+
 // GET /api/repconnect/agents - List all agents from unified system with voice support
 router.get('/agents', checkSupabase, async (req, res) => {
   try {
@@ -823,7 +835,7 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 });
 
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
-router.post('/chat/public/message', async (req, res) => {
+router.post('/chat/public/message', async (req, res, next) => {
   console.log('[CRITICAL] Public message endpoint called');
   console.log('Request body:', req.body);
   console.log('Request method:', req.method);
@@ -943,11 +955,10 @@ router.post('/chat/public/message', async (req, res) => {
     });
   } catch (error) {
     console.error('[RepConnect] Public chat error:', error);
-    return res
-      .status(500)
-      .json(
-        errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500)
-      );
+    console.error('[RepConnect] Error stack:', error.stack);
+    
+    // Pass to error middleware to handle
+    next(error);
   }
 });
 
