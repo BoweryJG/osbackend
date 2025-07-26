@@ -103,6 +103,11 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
+// GET /api/repconnect/test - Simple test endpoint
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'RepConnect routes are loaded', version: '2025-01-26-v2' });
+});
+
 // GET /api/repconnect/agents - List all agents from unified system with voice support
 router.get('/agents', checkSupabase, async (req, res) => {
   try {
