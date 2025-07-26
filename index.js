@@ -188,6 +188,18 @@ const usageProducts = {
 // Create Express app
 const app = express();
 
+// Add RepConnect chat endpoint FIRST before any middleware
+app.post('/api/repconnect/chat/public/message', express.json(), (req, res) => {
+  const { agentId, message, conversationId } = req.body;
+  res.json({
+    success: true,
+    message: "Hello! I'm here to help with B2B medical device sales. How can I assist you today?",
+    agentId: agentId || "test",
+    sessionId: conversationId || `session_${Date.now()}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Configure middleware
 app.set('trust proxy', 1); // Trust first proxy - important for Render
 
