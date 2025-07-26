@@ -738,68 +738,158 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/repconnect/agents/:agentId/start-voice-session - Start a voice session with an agent
-router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res) => {
+// POST /api/repconnect/agents/:agentId/start-voice-session - Start a voice session (authenticated or trial)
+router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, res) => {
   try {
     const { provider = 'webrtc' } = req.body;
+    const { agentId } = req.params;
+    
+    // Check if user is authenticated
+    const isAuthenticated = !!(req.user && req.headers.authorization);
 
-    // Get agent details
+    // Get agent details (same for both authenticated and trial)
     const { data: agent, error: agentError } = await supabase
       .from('unified_agents')
       .select('*, agent_voice_profiles(*)')
-      .eq('id', req.params.agentId)
+      .eq('id', agentId)
       .single();
 
     if (agentError || !agent) {
       return res.status(404).json(errorResponse('NOT_FOUND', 'Agent not found', null, 404));
     }
 
-    if (!agent.voice_id) {
+    // Check voice capabilities
+    const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
+    if (!voiceId) {
       return res
         .status(400)
         .json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
     }
 
-    // Get user's voice provider config
-    const { data: voiceConfig } = await supabase
-      .from('voice_provider_configs')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .single();
+    if (isAuthenticated) {
+      // AUTHENTICATED USER FLOW
+      // Get user's voice provider config
+      const { data: voiceConfig } = await supabase
+        .from('voice_provider_configs')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .single();
 
-    // Create voice session
-    const sessionId = `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Create voice session
+      const sessionId = `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    const { data: session, error: sessionError } = await supabase
-      .from('agent_voice_sessions')
-      .insert({
-        agent_id: req.params.agentId,
-        user_id: req.user.id,
-        provider: voiceConfig?.preferred_provider || provider,
-        session_id: sessionId,
-        whisper_enabled: voiceConfig?.whisper_enabled || false
-      })
-      .select()
-      .single();
+      const { data: session, error: sessionError } = await supabase
+        .from('agent_voice_sessions')
+        .insert({
+          agent_id: agentId,
+          user_id: req.user.id,
+          provider: voiceConfig?.preferred_provider || provider,
+          session_id: sessionId,
+          whisper_enabled: voiceConfig?.whisper_enabled || false
+        })
+        .select()
+        .single();
 
-    if (sessionError) throw sessionError;
+      if (sessionError) throw sessionError;
 
-    res.json(
-      successResponse({
-        session,
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          voice_id: agent.voice_id,
-          voice_name: agent.voice_name,
-          voice_settings: agent.voice_settings,
-          personality: agent.personality_profile,
-          whisper_enabled: agent.whisper_config?.supports_whisper && voiceConfig?.whisper_enabled
-        },
-        provider: voiceConfig?.preferred_provider || provider,
-        elevenlabs_api_key: process.env.ELEVENLABS_API_KEY // Only for authorized users
-      })
-    );
+      res.json(
+        successResponse({
+          session,
+          agent: {
+            id: agent.id,
+            name: agent.name,
+            voice_id: voiceId,
+            voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
+            voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config,
+            personality: agent.personality_profile,
+            whisper_enabled: agent.whisper_config?.supports_whisper && voiceConfig?.whisper_enabled
+          },
+          provider: voiceConfig?.preferred_provider || provider,
+          elevenlabs_api_key: process.env.ELEVENLABS_API_KEY,
+          is_trial: false
+        })
+      );
+    } else {
+      // TRIAL/GUEST USER FLOW
+      // Create client identifier from IP and User-Agent
+      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+      const userAgent = req.headers['user-agent'] || 'unknown';
+      const clientIdentifier = crypto
+        .createHash('sha256')
+        .update(`${clientIp}:${userAgent}`)
+        .digest('hex');
+      
+      // Check remaining trial time
+      const { data: remainingSeconds, error: checkError } = await supabase
+        .rpc('get_remaining_trial_seconds', { p_client_identifier: clientIdentifier });
+      
+      if (checkError) {
+        console.error('Error checking trial time:', checkError);
+        throw new Error('Failed to check trial availability');
+      }
+      
+      if (remainingSeconds <= 0) {
+        return res.status(403).json(
+          errorResponse(
+            'TRIAL_EXPIRED',
+            'Your free 5-minute trial has been used today. Please sign up for unlimited access.',
+            null,
+            403
+          )
+        );
+      }
+      
+      // Create guest session
+      const sessionId = `guest_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const { error: sessionError } = await supabase
+        .from('guest_voice_sessions')
+        .insert({
+          session_id: sessionId,
+          agent_id: agentId,
+          client_identifier: clientIdentifier,
+          max_duration_seconds: Math.min(remainingSeconds, 300)
+        });
+      
+      if (sessionError) {
+        console.error('Error creating guest session:', sessionError);
+        throw new Error('Failed to create voice session');
+      }
+      
+      // Fetch the created session
+      const { data: session, error: fetchError } = await supabase
+        .from('guest_voice_sessions')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single();
+      
+      if (fetchError || !session) {
+        console.error('Error fetching guest session:', fetchError);
+        throw new Error('Failed to fetch created session');
+      }
+      
+      // Return session info WITHOUT API keys for guests
+      res.json(
+        successResponse({
+          session: {
+            id: session.id,
+            session_id: session.session_id,
+            max_duration_seconds: session.max_duration_seconds,
+            remaining_seconds: remainingSeconds
+          },
+          agent: {
+            id: agent.id,
+            name: agent.name,
+            voice_id: voiceId,
+            voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
+            voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config
+          },
+          provider: 'webrtc',
+          is_trial: true
+          // NO API keys exposed for guest sessions
+        })
+      );
+    }
   } catch (error) {
     console.error('Error starting voice session:', error);
     res
@@ -808,126 +898,7 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
   }
 });
 
-// POST /api/repconnect/agents/:agentId/start-trial-voice-session - Public 5-minute trial
-router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (req, res) => {
-  try {
-    console.log('[Trial Voice] Starting trial session for agent:', req.params.agentId);
-    console.log('[Trial Voice] Supabase initialized:', !!supabase);
-    console.log('[Trial Voice] Supabase has rpc method:', typeof supabase?.rpc);
-    
-    // Check if Supabase is properly configured
-    if (!supabase) {
-      throw new Error('Supabase client not initialized');
-    }
-    
-    const { agentId } = req.params;
-    
-    // Create client identifier from IP and User-Agent
-    const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    const clientIdentifier = crypto
-      .createHash('sha256')
-      .update(`${clientIp}:${userAgent}`)
-      .digest('hex');
-    
-    // Check remaining trial time
-    const { data: remainingSeconds, error: checkError } = await supabase
-      .rpc('get_remaining_trial_seconds', { p_client_identifier: clientIdentifier });
-    
-    if (checkError) {
-      console.error('Error checking trial time:', checkError);
-      throw new Error('Failed to check trial availability');
-    }
-    
-    if (remainingSeconds <= 0) {
-      return res.status(403).json(
-        errorResponse(
-          'TRIAL_EXPIRED',
-          'Your free 5-minute trial has been used today. Please sign up for unlimited access.',
-          null,
-          403
-        )
-      );
-    }
-    
-    // Get agent details
-    const { data: agent, error: agentError } = await supabase
-      .from('unified_agents')
-      .select('*, agent_voice_profiles(*)')
-      .eq('id', agentId)
-      .single();
-    
-    if (agentError || !agent) {
-      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found', null, 404));
-    }
-    
-    // Check for voice capabilities - voice_id can be in main agent or voice profile
-    const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
-    if (!voiceId) {
-      return res
-        .status(400)
-        .json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
-    }
-    
-    // Create guest session
-    const sessionId = `guest_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    const { error: sessionError } = await supabase
-      .from('guest_voice_sessions')
-      .insert({
-        session_id: sessionId,
-        agent_id: agentId,
-        client_identifier: clientIdentifier,
-        max_duration_seconds: Math.min(remainingSeconds, 300) // Max 5 minutes or remaining time
-      });
-    
-    if (sessionError) {
-      console.error('Error creating guest session:', sessionError);
-      throw new Error('Failed to create voice session');
-    }
-    
-    // Fetch the created session
-    const { data: session, error: fetchError } = await supabase
-      .from('guest_voice_sessions')
-      .select('*')
-      .eq('session_id', sessionId)
-      .single();
-    
-    if (fetchError || !session) {
-      console.error('Error fetching guest session:', fetchError);
-      throw new Error('Failed to fetch created session');
-    }
-    
-    // Return session info WITHOUT API keys
-    res.json(
-      successResponse({
-        session: {
-          id: session.id,
-          session_id: session.session_id,
-          max_duration_seconds: session.max_duration_seconds,
-          remaining_seconds: remainingSeconds
-        },
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          voice_id: voiceId,
-          voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
-          voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config
-        },
-        provider: 'webrtc',
-        is_trial: true
-        // NO API keys exposed for guest sessions
-      })
-    );
-  } catch (error) {
-    console.error('[Trial Voice] Error starting trial voice session:', error);
-    console.error('[Trial Voice] Error stack:', error.stack);
-    console.error('[Trial Voice] Error details:', JSON.stringify(error, null, 2));
-    res
-      .status(500)
-      .json(errorResponse('SESSION_ERROR', 'Failed to start trial session', error.message, 500));
-  }
-});
+// DELETED: Trial endpoint moved into main voice endpoint
 
 // POST /api/repconnect/voice/heartbeat - Update session duration
 router.post('/voice/heartbeat', checkSupabase, async (req, res) => {
