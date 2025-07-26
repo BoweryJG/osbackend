@@ -613,6 +613,151 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
   }
 });
 
+// POST /api/repconnect/agents/:agentId/start-trial-voice-session - Public 5-minute trial
+router.post('/agents/:agentId/start-trial-voice-session', checkSupabase, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Create client identifier from IP and User-Agent
+    const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const crypto = await import('crypto');
+    const clientIdentifier = crypto
+      .createHash('sha256')
+      .update(`${clientIp}:${userAgent}`)
+      .digest('hex');
+    
+    // Check remaining trial time
+    const { data: remainingSeconds, error: checkError } = await supabase
+      .rpc('get_remaining_trial_seconds', { p_client_identifier: clientIdentifier });
+    
+    if (checkError) {
+      console.error('Error checking trial time:', checkError);
+      throw new Error('Failed to check trial availability');
+    }
+    
+    if (remainingSeconds <= 0) {
+      return res.status(403).json(
+        errorResponse(
+          'TRIAL_EXPIRED',
+          'Your free 5-minute trial has been used today. Please sign up for unlimited access.',
+          null,
+          403
+        )
+      );
+    }
+    
+    // Get agent details
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+    
+    if (agentError || !agent) {
+      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found', null, 404));
+    }
+    
+    if (!agent.voice_id) {
+      return res
+        .status(400)
+        .json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
+    }
+    
+    // Create guest session
+    const sessionId = `guest_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const { data: session, error: sessionError } = await supabase
+      .from('guest_voice_sessions')
+      .insert({
+        session_id: sessionId,
+        agent_id: agentId,
+        client_identifier: clientIdentifier,
+        max_duration_seconds: Math.min(remainingSeconds, 300) // Max 5 minutes or remaining time
+      })
+      .select()
+      .single();
+    
+    if (sessionError) {
+      console.error('Error creating guest session:', sessionError);
+      throw new Error('Failed to create voice session');
+    }
+    
+    // Return session info WITHOUT API keys
+    res.json(
+      successResponse({
+        session: {
+          id: session.id,
+          session_id: session.session_id,
+          max_duration_seconds: session.max_duration_seconds,
+          remaining_seconds: remainingSeconds
+        },
+        agent: {
+          id: agent.id,
+          name: agent.name,
+          voice_id: agent.voice_id,
+          voice_name: agent.voice_name,
+          voice_settings: agent.voice_settings,
+          personality: agent.personality_profile
+        },
+        provider: 'webrtc',
+        is_trial: true
+        // NO API keys exposed for guest sessions
+      })
+    );
+  } catch (error) {
+    console.error('Error starting trial voice session:', error);
+    res
+      .status(500)
+      .json(errorResponse('SESSION_ERROR', 'Failed to start trial session', error.message, 500));
+  }
+});
+
+// POST /api/repconnect/voice/heartbeat - Update session duration
+router.post('/voice/heartbeat', checkSupabase, async (req, res) => {
+  try {
+    const { sessionId, duration } = req.body;
+    
+    if (!sessionId || duration === undefined) {
+      return res.status(400).json(
+        errorResponse('MISSING_PARAMS', 'Session ID and duration are required', null, 400)
+      );
+    }
+    
+    // Update session duration
+    const { data: updated, error } = await supabase
+      .rpc('update_guest_session_duration', {
+        p_session_id: sessionId,
+        p_duration: Math.floor(duration)
+      });
+    
+    if (error) {
+      console.error('Error updating session:', error);
+      throw error;
+    }
+    
+    // Get updated session info
+    const { data: session } = await supabase
+      .from('guest_voice_sessions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .single();
+    
+    res.json(
+      successResponse({
+        updated,
+        session,
+        should_disconnect: session?.status === 'expired'
+      })
+    );
+  } catch (error) {
+    console.error('Heartbeat error:', error);
+    res.status(500).json(
+      errorResponse('HEARTBEAT_ERROR', 'Failed to update session', error.message, 500)
+    );
+  }
+});
+
 // ========================================
 // CHAT FUNCTIONALITY ENDPOINTS
 // ========================================
