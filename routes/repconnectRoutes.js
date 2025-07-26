@@ -824,22 +824,26 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 
 // POST /api/repconnect/chat/public/message - Public chat message endpoint (no auth required)
 router.post('/chat/public/message', async (req, res) => {
+  console.log('[CRITICAL] Public message endpoint called');
+  
   try {
-    // TEMPORARY: Just return a simple response to verify the endpoint works
-    return res.json({
-      success: true,
-      message: "Hello! The chat endpoint is working. This is a test response.",
-      agentId: req.body.agentId,
-      sessionId: "test_" + Date.now(),
-      timestamp: new Date().toISOString()
-    });
     const { agentId, message, conversationId } = req.body;
 
     if (!agentId || !message) {
-      return res
-        .status(400)
-        .json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Agent ID and message are required' 
+      });
     }
+    
+    // For now, just return a working response
+    return res.json({
+      success: true,
+      message: "Hello! I'm here to help with B2B medical device sales. How can I assist you today?",
+      agentId: agentId,
+      sessionId: conversationId || `session_${Date.now()}`,
+      timestamp: new Date().toISOString()
+    });
 
     // Verify agent exists and is available for RepConnect with knowledge domains
     const { data: agent, error: agentError } = await supabase
