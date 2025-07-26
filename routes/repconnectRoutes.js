@@ -14,10 +14,7 @@ let agentCore = null;
 let conversationManager = null;
 
 if (process.env.SUPABASE_URL && supabaseKey) {
-  supabase = createClient(
-    process.env.SUPABASE_URL,
-    supabaseKey
-  );
+  supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
   agentCore = new AgentCore('repconnect');
   conversationManager = new ConversationManager(supabase);
   console.log('RepConnect Agents: Supabase and AgentCore initialized');
@@ -28,12 +25,11 @@ if (process.env.SUPABASE_URL && supabaseKey) {
 // Middleware to check if Supabase is initialized
 const checkSupabase = (req, res, next) => {
   if (!supabase) {
-    return res.status(503).json(errorResponse(
-      'SERVICE_UNAVAILABLE', 
-      'RepConnect agent service not available', 
-      null, 
-      503
-    ));
+    return res
+      .status(503)
+      .json(
+        errorResponse('SERVICE_UNAVAILABLE', 'RepConnect agent service not available', null, 503)
+      );
   }
   next();
 };
@@ -41,12 +37,16 @@ const checkSupabase = (req, res, next) => {
 // Middleware to check if chat services are initialized
 const checkChatServices = (req, res, next) => {
   if (!supabase || !agentCore || !conversationManager) {
-    return res.status(503).json(errorResponse(
-      'SERVICE_UNAVAILABLE', 
-      'RepConnect chat services not available - missing required configuration', 
-      null, 
-      503
-    ));
+    return res
+      .status(503)
+      .json(
+        errorResponse(
+          'SERVICE_UNAVAILABLE',
+          'RepConnect chat services not available - missing required configuration',
+          null,
+          503
+        )
+      );
   }
   next();
 };
@@ -54,20 +54,31 @@ const checkChatServices = (req, res, next) => {
 // Middleware for authentication
 const requireAuth = async (req, res, next) => {
   if (!supabase) {
-    return res.status(503).json(errorResponse('AUTH_SERVICE_UNAVAILABLE', 'Authentication service not available', null, 503));
+    return res
+      .status(503)
+      .json(
+        errorResponse('AUTH_SERVICE_UNAVAILABLE', 'Authentication service not available', null, 503)
+      );
   }
 
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
-    return res.status(401).json(errorResponse('MISSING_TOKEN', 'Authentication token required', null, 401));
+    return res
+      .status(401)
+      .json(errorResponse('MISSING_TOKEN', 'Authentication token required', null, 401));
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(token);
+
     if (error || !user) {
-      return res.status(401).json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
+      return res
+        .status(401)
+        .json(errorResponse('INVALID_TOKEN', 'Invalid or expired token', null, 401));
     }
 
     req.user = user;
@@ -82,11 +93,12 @@ const requireAuth = async (req, res, next) => {
 router.get('/agents', checkSupabase, async (req, res) => {
   try {
     const { category } = req.query;
-    
+
     // Build query for unified agents
     let query = supabase
       .from('unified_agents')
-      .select(`
+      .select(
+        `
         *,
         agent_voice_profiles (
           voice_id,
@@ -98,23 +110,33 @@ router.get('/agents', checkSupabase, async (req, res) => {
           greeting_style,
           closing_style,
           objection_handling_approach
+        ),
+        agent_knowledge_domains!inner (
+          expertise_level,
+          customizations,
+          domain:domain_id (
+            domain_name,
+            domain_category,
+            product_lines
+          )
         )
-      `)
+      `
+      )
       .contains('available_in_apps', ['repconnect'])
       .eq('is_active', true);
-    
+
     // Filter by category if provided
     if (category) {
       query = query.eq('agent_category', category);
     }
-    
+
     const { data: agents, error } = await query
       .order('agent_category', { ascending: true })
       .order('name', { ascending: true });
 
     if (error) throw error;
 
-    // Transform agents to include voice info
+    // Transform agents to include voice info and knowledge domains
     const transformedAgents = (agents || []).map(agent => ({
       ...agent,
       voice_enabled: !!agent.voice_id,
@@ -122,14 +144,24 @@ router.get('/agents', checkSupabase, async (req, res) => {
       whisper_supported: agent.whisper_config?.supports_whisper || false,
       // Flatten voice profile if exists
       voice_config: agent.agent_voice_profiles?.[0]?.voice_config || agent.voice_settings,
-      conversation_style: agent.agent_conversation_styles?.[0] || null
+      conversation_style: agent.agent_conversation_styles?.[0] || null,
+      // Include knowledge domains
+      knowledge_domains:
+        agent.agent_knowledge_domains?.map(akd => ({
+          domain_name: akd.domain?.domain_name,
+          domain_category: akd.domain?.domain_category,
+          expertise_level: akd.expertise_level,
+          product_lines: akd.domain?.product_lines || []
+        })) || []
     }));
 
-    res.json(successResponse({ 
-      agents: transformedAgents,
-      total: transformedAgents.length,
-      voice_enabled_count: transformedAgents.filter(a => a.voice_enabled).length
-    }));
+    res.json(
+      successResponse({
+        agents: transformedAgents,
+        total: transformedAgents.length,
+        voice_enabled_count: transformedAgents.filter(a => a.voice_enabled).length
+      })
+    );
   } catch (error) {
     console.error('Error listing RepConnect agents:', error);
     res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to list agents', error.message, 500));
@@ -141,7 +173,8 @@ router.get('/agents/voice-enabled', checkSupabase, async (req, res) => {
   try {
     const { data: agents, error } = await supabase
       .from('unified_agents')
-      .select(`
+      .select(
+        `
         *,
         agent_voice_profiles (
           voice_id,
@@ -155,7 +188,8 @@ router.get('/agents/voice-enabled', checkSupabase, async (req, res) => {
           closing_style,
           objection_handling_approach
         )
-      `)
+      `
+      )
       .contains('available_in_apps', ['repconnect'])
       .not('voice_id', 'is', null)
       .eq('is_active', true)
@@ -163,13 +197,19 @@ router.get('/agents/voice-enabled', checkSupabase, async (req, res) => {
 
     if (error) throw error;
 
-    res.json(successResponse({ 
-      agents: agents || [],
-      count: (agents || []).length 
-    }));
+    res.json(
+      successResponse({
+        agents: agents || [],
+        count: (agents || []).length
+      })
+    );
   } catch (error) {
     console.error('Error fetching voice-enabled agents:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch voice-enabled agents', error.message, 500));
+    res
+      .status(500)
+      .json(
+        errorResponse('FETCH_ERROR', 'Failed to fetch voice-enabled agents', error.message, 500)
+      );
   }
 });
 
@@ -178,7 +218,8 @@ router.get('/agents/harvey', checkSupabase, async (req, res) => {
   try {
     const { data: harvey, error } = await supabase
       .from('unified_agents')
-      .select(`
+      .select(
+        `
         *,
         agent_voice_profiles (
           voice_id,
@@ -192,20 +233,32 @@ router.get('/agents/harvey', checkSupabase, async (req, res) => {
           objection_handling_approach,
           question_asking_style
         ),
+        agent_knowledge_domains (
+          expertise_level,
+          customizations,
+          domain:domain_id (
+            domain_name,
+            domain_category,
+            product_lines
+          )
+        ),
         whisper_prompts (
           prompt_category,
           trigger_phrase,
           whisper_text,
           whisper_timing
         )
-      `)
+      `
+      )
       .eq('name', 'Harvey Specter')
       .single();
 
     if (error) throw error;
 
     if (!harvey) {
-      return res.status(404).json(errorResponse('NOT_FOUND', 'Harvey Specter not found', null, 404));
+      return res
+        .status(404)
+        .json(errorResponse('NOT_FOUND', 'Harvey Specter not found', null, 404));
     }
 
     // Add special Harvey features
@@ -218,13 +271,22 @@ router.get('/agents/harvey', checkSupabase, async (req, res) => {
       signature_move: 'The Harvey Close - Break them down, build them up stronger',
       voice_profile: harvey.agent_voice_profiles?.[0] || null,
       conversation_style: harvey.agent_conversation_styles?.[0] || null,
-      whisper_arsenal: harvey.whisper_prompts || []
+      whisper_arsenal: harvey.whisper_prompts || [],
+      knowledge_domains:
+        harvey.agent_knowledge_domains?.map(akd => ({
+          domain_name: akd.domain?.domain_name,
+          domain_category: akd.domain?.domain_category,
+          expertise_level: akd.expertise_level,
+          product_lines: akd.domain?.product_lines || []
+        })) || []
     };
 
     res.json(successResponse({ agent: harveyEnhanced }));
   } catch (error) {
     console.error('Error fetching Harvey:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch Harvey', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('FETCH_ERROR', 'Failed to fetch Harvey', error.message, 500));
   }
 });
 
@@ -248,18 +310,23 @@ router.get('/agents/categories', checkSupabase, async (req, res) => {
     const categoryList = Object.entries(categoryCounts).map(([category, count]) => ({
       category,
       count,
-      label: category.split('_').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-      ).join(' ')
+      label: category
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
     }));
 
-    res.json(successResponse({ 
-      categories: categoryList,
-      total: categoryList.length 
-    }));
+    res.json(
+      successResponse({
+        categories: categoryList,
+        total: categoryList.length
+      })
+    );
   } catch (error) {
     console.error('Error fetching agent categories:', error);
-    res.status(500).json(errorResponse('FETCH_ERROR', 'Failed to fetch categories', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('FETCH_ERROR', 'Failed to fetch categories', error.message, 500));
   }
 });
 
@@ -268,7 +335,8 @@ router.get('/agents/:agentId', checkSupabase, async (req, res) => {
   try {
     const { data: agent, error } = await supabase
       .from('unified_agents')
-      .select(`
+      .select(
+        `
         *,
         agent_voice_profiles (
           voice_id,
@@ -276,6 +344,15 @@ router.get('/agents/:agentId', checkSupabase, async (req, res) => {
           voice_config,
           voice_attributes,
           sample_audio_url
+        ),
+        agent_knowledge_domains (
+          expertise_level,
+          customizations,
+          domain:domain_id (
+            domain_name,
+            domain_category,
+            product_lines
+          )
         ),
         agent_conversation_styles (
           greeting_style,
@@ -290,7 +367,8 @@ router.get('/agents/:agentId', checkSupabase, async (req, res) => {
           whisper_text,
           whisper_timing
         )
-      `)
+      `
+      )
       .eq('id', req.params.agentId)
       .contains('available_in_apps', ['repconnect'])
       .single();
@@ -339,7 +417,9 @@ router.post('/agents', requireAuth, async (req, res) => {
     res.status(201).json(successResponse({ agent }, 'Agent created successfully'));
   } catch (error) {
     console.error('Error creating RepConnect agent:', error);
-    res.status(500).json(errorResponse('CREATE_ERROR', 'Failed to create agent', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('CREATE_ERROR', 'Failed to create agent', error.message, 500));
   }
 });
 
@@ -370,7 +450,9 @@ router.put('/agents/:agentId', requireAuth, async (req, res) => {
     res.json(successResponse({ agent }, 'Agent updated successfully'));
   } catch (error) {
     console.error('Error updating RepConnect agent:', error);
-    res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update agent', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('UPDATE_ERROR', 'Failed to update agent', error.message, 500));
   }
 });
 
@@ -381,7 +463,7 @@ router.patch('/agents/:agentId', requireAuth, async (req, res) => {
 
     const { data: agent, error } = await supabase
       .from('repconnect_agents')
-      .update({ 
+      .update({
         active,
         updated_at: new Date().toISOString()
       })
@@ -398,7 +480,9 @@ router.patch('/agents/:agentId', requireAuth, async (req, res) => {
     res.json(successResponse({ agent }, 'Agent status updated successfully'));
   } catch (error) {
     console.error('Error updating RepConnect agent status:', error);
-    res.status(500).json(errorResponse('UPDATE_ERROR', 'Failed to update agent status', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('UPDATE_ERROR', 'Failed to update agent status', error.message, 500));
   }
 });
 
@@ -415,7 +499,9 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
     res.json(successResponse(null, 'Agent deleted successfully'));
   } catch (error) {
     console.error('Error deleting RepConnect agent:', error);
-    res.status(500).json(errorResponse('DELETE_ERROR', 'Failed to delete agent', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('DELETE_ERROR', 'Failed to delete agent', error.message, 500));
   }
 });
 
@@ -423,7 +509,7 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
 router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res) => {
   try {
     const { provider = 'webrtc' } = req.body;
-    
+
     // Get agent details
     const { data: agent, error: agentError } = await supabase
       .from('unified_agents')
@@ -436,7 +522,9 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
     }
 
     if (!agent.voice_id) {
-      return res.status(400).json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
+      return res
+        .status(400)
+        .json(errorResponse('NO_VOICE', 'Agent does not have voice capabilities', null, 400));
     }
 
     // Get user's voice provider config
@@ -448,7 +536,7 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
 
     // Create voice session
     const sessionId = `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const { data: session, error: sessionError } = await supabase
       .from('agent_voice_sessions')
       .insert({
@@ -463,23 +551,27 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
 
     if (sessionError) throw sessionError;
 
-    res.json(successResponse({
-      session,
-      agent: {
-        id: agent.id,
-        name: agent.name,
-        voice_id: agent.voice_id,
-        voice_name: agent.voice_name,
-        voice_settings: agent.voice_settings,
-        personality: agent.personality_profile,
-        whisper_enabled: agent.whisper_config?.supports_whisper && voiceConfig?.whisper_enabled
-      },
-      provider: voiceConfig?.preferred_provider || provider,
-      elevenlabs_api_key: process.env.ELEVENLABS_API_KEY // Only for authorized users
-    }));
+    res.json(
+      successResponse({
+        session,
+        agent: {
+          id: agent.id,
+          name: agent.name,
+          voice_id: agent.voice_id,
+          voice_name: agent.voice_name,
+          voice_settings: agent.voice_settings,
+          personality: agent.personality_profile,
+          whisper_enabled: agent.whisper_config?.supports_whisper && voiceConfig?.whisper_enabled
+        },
+        provider: voiceConfig?.preferred_provider || provider,
+        elevenlabs_api_key: process.env.ELEVENLABS_API_KEY // Only for authorized users
+      })
+    );
   } catch (error) {
     console.error('Error starting voice session:', error);
-    res.status(500).json(errorResponse('SESSION_ERROR', 'Failed to start voice session', error.message, 500));
+    res
+      .status(500)
+      .json(errorResponse('SESSION_ERROR', 'Failed to start voice session', error.message, 500));
   }
 });
 
@@ -491,9 +583,11 @@ router.post('/agents/:agentId/start-voice-session', requireAuth, async (req, res
 router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => {
   try {
     const { agentId, message, conversationId, context } = req.body;
-    
+
     if (!agentId || !message) {
-      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+      return res
+        .status(400)
+        .json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
     }
 
     // Verify agent exists and is available for RepConnect
@@ -506,13 +600,22 @@ router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => 
       .single();
 
     if (agentError || !agent) {
-      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+      return res
+        .status(404)
+        .json(
+          errorResponse(
+            'AGENT_NOT_FOUND',
+            'Agent not found or not available for RepConnect',
+            null,
+            404
+          )
+        );
     }
 
     // Load conversation history if conversationId provided
     let conversation = null;
     let previousMessages = [];
-    
+
     if (conversationId) {
       conversation = await conversationManager.loadConversation(conversationId, req.user.id);
       if (conversation && conversation.messages) {
@@ -533,7 +636,7 @@ router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => 
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
@@ -564,7 +667,7 @@ router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => 
 
         await supabase
           .from('agent_conversations')
-          .update({ 
+          .update({
             messages: newMessages,
             metadata: {
               ...conversation?.metadata,
@@ -584,7 +687,11 @@ router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => 
     }
   } catch (error) {
     console.error('Error in RepConnect chat stream:', error);
-    res.status(500).json(errorResponse('CHAT_STREAM_ERROR', 'Failed to stream chat response', error.message, 500));
+    res
+      .status(500)
+      .json(
+        errorResponse('CHAT_STREAM_ERROR', 'Failed to stream chat response', error.message, 500)
+      );
   }
 });
 
@@ -592,9 +699,11 @@ router.post('/chat/stream', checkChatServices, requireAuth, async (req, res) => 
 router.post('/chat/message', checkChatServices, requireAuth, async (req, res) => {
   try {
     const { agentId, message, conversationId, context } = req.body;
-    
+
     if (!agentId || !message) {
-      return res.status(400).json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
+      return res
+        .status(400)
+        .json(errorResponse('MISSING_PARAMETERS', 'Agent ID and message are required', null, 400));
     }
 
     // Verify agent exists and is available for RepConnect
@@ -607,13 +716,22 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
       .single();
 
     if (agentError || !agent) {
-      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+      return res
+        .status(404)
+        .json(
+          errorResponse(
+            'AGENT_NOT_FOUND',
+            'Agent not found or not available for RepConnect',
+            null,
+            404
+          )
+        );
     }
 
     // Load conversation history if conversationId provided
     let conversation = null;
     let previousMessages = [];
-    
+
     if (conversationId) {
       conversation = await conversationManager.loadConversation(conversationId, req.user.id);
       if (conversation && conversation.messages) {
@@ -651,7 +769,7 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 
       await supabase
         .from('agent_conversations')
-        .update({ 
+        .update({
           messages: newMessages,
           metadata: {
             ...conversation?.metadata,
@@ -662,20 +780,26 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
         .eq('user_id', req.user.id);
     }
 
-    res.json(successResponse({
-      response: fullResponse,
-      agent: {
-        id: agent.id,
-        name: agent.name,
-        avatar_url: agent.avatar_url,
-        personality_type: agent.personality_profile?.type
-      },
-      conversationId,
-      timestamp: new Date().toISOString()
-    }));
+    res.json(
+      successResponse({
+        response: fullResponse,
+        agent: {
+          id: agent.id,
+          name: agent.name,
+          avatar_url: agent.avatar_url,
+          personality_type: agent.personality_profile?.type
+        },
+        conversationId,
+        timestamp: new Date().toISOString()
+      })
+    );
   } catch (error) {
     console.error('Error in RepConnect chat message:', error);
-    res.status(500).json(errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500));
+    res
+      .status(500)
+      .json(
+        errorResponse('CHAT_MESSAGE_ERROR', 'Failed to process chat message', error.message, 500)
+      );
   }
 });
 
@@ -683,9 +807,11 @@ router.post('/chat/message', checkChatServices, requireAuth, async (req, res) =>
 router.post('/chat/conversations', checkChatServices, requireAuth, async (req, res) => {
   try {
     const { agentId, title, context } = req.body;
-    
+
     if (!agentId) {
-      return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Agent ID is required', null, 400));
+      return res
+        .status(400)
+        .json(errorResponse('MISSING_PARAMETER', 'Agent ID is required', null, 400));
     }
 
     // Verify agent exists and is available for RepConnect
@@ -698,7 +824,16 @@ router.post('/chat/conversations', checkChatServices, requireAuth, async (req, r
       .single();
 
     if (agentError || !agent) {
-      return res.status(404).json(errorResponse('AGENT_NOT_FOUND', 'Agent not found or not available for RepConnect', null, 404));
+      return res
+        .status(404)
+        .json(
+          errorResponse(
+            'AGENT_NOT_FOUND',
+            'Agent not found or not available for RepConnect',
+            null,
+            404
+          )
+        );
     }
 
     // Create conversation with RepConnect context
@@ -717,7 +852,16 @@ router.post('/chat/conversations', checkChatServices, requireAuth, async (req, r
     res.json(successResponse({ conversation }, 'RepConnect conversation created successfully'));
   } catch (error) {
     console.error('Error creating RepConnect conversation:', error);
-    res.status(500).json(errorResponse('CONVERSATION_CREATE_ERROR', 'Failed to create conversation', error.message, 500));
+    res
+      .status(500)
+      .json(
+        errorResponse(
+          'CONVERSATION_CREATE_ERROR',
+          'Failed to create conversation',
+          error.message,
+          500
+        )
+      );
   }
 });
 
@@ -727,7 +871,8 @@ router.get('/chat/conversations', checkChatServices, requireAuth, async (req, re
     // Get conversations with RepConnect agents only
     const { data: conversations, error } = await supabase
       .from('agent_conversations')
-      .select(`
+      .select(
+        `
         id,
         title,
         agent_id,
@@ -740,7 +885,8 @@ router.get('/chat/conversations', checkChatServices, requireAuth, async (req, re
           avatar_url,
           agent_category
         )
-      `)
+      `
+      )
       .eq('user_id', req.user.id)
       .contains('unified_agents.available_in_apps', ['repconnect'])
       .order('updated_at', { ascending: false });
@@ -757,50 +903,88 @@ router.get('/chat/conversations', checkChatServices, requireAuth, async (req, re
       message_count: conv.metadata?.message_count || 0
     }));
 
-    res.json(successResponse({ 
-      conversations: transformedConversations,
-      count: transformedConversations.length
-    }));
+    res.json(
+      successResponse({
+        conversations: transformedConversations,
+        count: transformedConversations.length
+      })
+    );
   } catch (error) {
     console.error('Error listing RepConnect conversations:', error);
-    res.status(500).json(errorResponse('CONVERSATIONS_LIST_ERROR', 'Failed to list conversations', error.message, 500));
+    res
+      .status(500)
+      .json(
+        errorResponse(
+          'CONVERSATIONS_LIST_ERROR',
+          'Failed to list conversations',
+          error.message,
+          500
+        )
+      );
   }
 });
 
 // GET /api/repconnect/chat/conversations/:conversationId - Get specific conversation
-router.get('/chat/conversations/:conversationId', checkChatServices, requireAuth, async (req, res) => {
-  try {
-    const conversation = await conversationManager.loadConversation(
-      req.params.conversationId,
-      req.user.id
-    );
+router.get(
+  '/chat/conversations/:conversationId',
+  checkChatServices,
+  requireAuth,
+  async (req, res) => {
+    try {
+      const conversation = await conversationManager.loadConversation(
+        req.params.conversationId,
+        req.user.id
+      );
 
-    if (!conversation) {
-      return res.status(404).json(errorResponse('NOT_FOUND', 'Conversation not found', null, 404));
-    }
-
-    // Verify this conversation is with a RepConnect agent
-    const { data: agent, error: agentError } = await supabase
-      .from('unified_agents')
-      .select('name, avatar_url, agent_category')
-      .eq('id', conversation.agent_id)
-      .contains('available_in_apps', ['repconnect'])
-      .single();
-
-    if (agentError || !agent) {
-      return res.status(404).json(errorResponse('INVALID_CONVERSATION', 'Conversation not found or not accessible via RepConnect', null, 404));
-    }
-
-    res.json(successResponse({ 
-      conversation: {
-        ...conversation,
-        agent
+      if (!conversation) {
+        return res
+          .status(404)
+          .json(errorResponse('NOT_FOUND', 'Conversation not found', null, 404));
       }
-    }));
-  } catch (error) {
-    console.error('Error loading RepConnect conversation:', error);
-    res.status(500).json(errorResponse('CONVERSATION_LOAD_ERROR', 'Failed to load conversation', error.message, 500));
+
+      // Verify this conversation is with a RepConnect agent
+      const { data: agent, error: agentError } = await supabase
+        .from('unified_agents')
+        .select('name, avatar_url, agent_category')
+        .eq('id', conversation.agent_id)
+        .contains('available_in_apps', ['repconnect'])
+        .single();
+
+      if (agentError || !agent) {
+        return res
+          .status(404)
+          .json(
+            errorResponse(
+              'INVALID_CONVERSATION',
+              'Conversation not found or not accessible via RepConnect',
+              null,
+              404
+            )
+          );
+      }
+
+      res.json(
+        successResponse({
+          conversation: {
+            ...conversation,
+            agent
+          }
+        })
+      );
+    } catch (error) {
+      console.error('Error loading RepConnect conversation:', error);
+      res
+        .status(500)
+        .json(
+          errorResponse(
+            'CONVERSATION_LOAD_ERROR',
+            'Failed to load conversation',
+            error.message,
+            500
+          )
+        );
+    }
   }
-});
+);
 
 export default router;
