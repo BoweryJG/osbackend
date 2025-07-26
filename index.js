@@ -188,16 +188,82 @@ const usageProducts = {
 // Create Express app
 const app = express();
 
-// Add RepConnect chat endpoint FIRST before any middleware
-app.post('/api/repconnect/chat/public/message', express.json(), (req, res) => {
-  const { agentId, message, conversationId } = req.body;
-  res.json({
-    success: true,
-    message: "Hello! I'm here to help with B2B medical device sales. How can I assist you today?",
-    agentId: agentId || "test",
-    sessionId: conversationId || `session_${Date.now()}`,
-    timestamp: new Date().toISOString()
+// Initialize Supabase and Anthropic for RepConnect chat
+import { createClient } from '@supabase/supabase-js';
+import Anthropic from '@anthropic-ai/sdk';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+let supabase = null;
+let anthropic = null;
+
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+}
+
+if (process.env.ANTHROPIC_API_KEY) {
+  anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
   });
+}
+
+// Add RepConnect chat endpoint FIRST before any middleware
+app.post('/api/repconnect/chat/public/message', express.json(), async (req, res) => {
+  try {
+    const { agentId, message, conversationId } = req.body;
+    
+    if (!agentId || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Agent ID and message are required'
+      });
+    }
+    
+    if (!supabase || !anthropic) {
+      return res.status(503).json({
+        success: false,
+        error: 'Chat service temporarily unavailable'
+      });
+    }
+    
+    // Get agent from Supabase
+    const { data: agent, error } = await supabase
+      .from('unified_agents')
+      .select('*')
+      .eq('id', agentId)
+      .single();
+    
+    if (error || !agent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Agent not found'
+      });
+    }
+    
+    // Call Anthropic with agent's personality
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1000,
+      system: agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`,
+      messages: [{ role: 'user', content: message }]
+    });
+    
+    // Return real AI response
+    res.json({
+      success: true,
+      message: response.content[0].text,
+      agentId: agentId,
+      sessionId: conversationId || `session_${Date.now()}`,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[RepConnect Chat Error]:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to process chat message'
+    });
+  }
 });
 
 // Configure middleware
