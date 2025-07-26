@@ -138,8 +138,16 @@ export const commonEnvConfig = {
     description: 'Supabase project URL' 
   },
   SUPABASE_SERVICE_KEY: { 
-    required: true,
+    required: false,
     description: 'Supabase service role key' 
+  },
+  SUPABASE_SERVICE_ROLE_KEY: { 
+    required: false,
+    description: 'Supabase service role key (alternative name)' 
+  },
+  SUPABASE_KEY: { 
+    required: false,
+    description: 'Supabase key (legacy name)' 
   },
   
   // External Services
@@ -178,5 +186,14 @@ export const commonEnvConfig = {
  * Validate common environment variables at application startup
  */
 export const validateCommonEnvironment = () => {
-  return validateEnvironment(commonEnvConfig);
+  const validated = validateEnvironment(commonEnvConfig);
+  
+  // Custom validation: Ensure at least one Supabase key is present
+  if (!process.env.SUPABASE_SERVICE_KEY && 
+      !process.env.SUPABASE_SERVICE_ROLE_KEY && 
+      !process.env.SUPABASE_KEY) {
+    throw new Error('At least one of SUPABASE_SERVICE_KEY, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_KEY must be set');
+  }
+  
+  return validated;
 };
