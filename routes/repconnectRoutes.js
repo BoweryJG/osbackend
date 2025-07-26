@@ -18,7 +18,7 @@ router.use((req, res, next) => {
 });
 
 // Initialize Supabase for RepConnect
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 let supabase = null;
 let agentCore = null;
 let conversationManager = null;
