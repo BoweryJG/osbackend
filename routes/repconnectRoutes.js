@@ -754,21 +754,32 @@ router.delete('/agents/:agentId', requireAuth, async (req, res) => {
 
 // POST /api/repconnect/agents/:agentId/start-voice-session - Start a voice session (authenticated or trial)
 router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, res) => {
+  console.error('[VOICE DEBUG] Endpoint hit');
+  console.error('[VOICE DEBUG] Headers:', req.headers);
+  console.error('[VOICE DEBUG] User:', req.user);
+  
   try {
     const { provider = 'webrtc' } = req.body;
     const { agentId } = req.params;
     
+    console.error('[VOICE DEBUG] Agent ID:', agentId);
+    
     // Check if user is authenticated
     const isAuthenticated = !!(req.user && req.headers.authorization);
+    console.error('[VOICE DEBUG] Is authenticated:', isAuthenticated);
 
     // Get agent details (same for both authenticated and trial)
+    console.error('[VOICE DEBUG] Fetching agent from DB...');
     const { data: agent, error: agentError } = await supabase
       .from('unified_agents')
       .select('*, agent_voice_profiles(*)')
       .eq('id', agentId)
       .single();
 
+    console.error('[VOICE DEBUG] Agent fetch result:', { agent, agentError });
+
     if (agentError || !agent) {
+      console.error('[VOICE DEBUG] Agent not found error');
       return res.status(404).json(errorResponse('NOT_FOUND', 'Agent not found', null, 404));
     }
 
