@@ -89,6 +89,102 @@ router.get('/debug/supabase-config', (req, res) => {
   });
 });
 
+// Debug endpoint to test voice session steps
+router.post('/debug/voice-steps/:agentId', checkSupabase, async (req, res) => {
+  const { agentId } = req.params;
+  const steps = [];
+  
+  try {
+    // Step 1: Agent fetch
+    steps.push({ step: 'agent_fetch', status: 'starting' });
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+      
+    if (agentError) {
+      steps.push({ step: 'agent_fetch', status: 'failed', error: agentError });
+      throw agentError;
+    }
+    steps.push({ step: 'agent_fetch', status: 'success', agentName: agent.name });
+    
+    // Step 2: Voice check
+    steps.push({ step: 'voice_check', status: 'starting' });
+    const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
+    if (!voiceId) {
+      steps.push({ step: 'voice_check', status: 'failed', error: 'No voice ID' });
+      throw new Error('Agent does not have voice capabilities');
+    }
+    steps.push({ step: 'voice_check', status: 'success', voiceId });
+    
+    // Step 3: Client identifier
+    steps.push({ step: 'client_identifier', status: 'starting' });
+    const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const clientIdentifier = crypto
+      .createHash('sha256')
+      .update(`${clientIp}:${userAgent}`)
+      .digest('hex');
+    steps.push({ step: 'client_identifier', status: 'success', clientIp, hasUserAgent: !!userAgent });
+    
+    // Step 4: RPC call
+    steps.push({ step: 'rpc_call', status: 'starting' });
+    const { data: remainingSeconds, error: rpcError } = await supabase
+      .rpc('get_remaining_trial_seconds', { p_client_identifier: clientIdentifier });
+      
+    if (rpcError) {
+      steps.push({ step: 'rpc_call', status: 'failed', error: rpcError });
+      throw rpcError;
+    }
+    steps.push({ step: 'rpc_call', status: 'success', remainingSeconds });
+    
+    // Step 5: Session insert
+    steps.push({ step: 'session_insert', status: 'starting' });
+    const sessionId = `test_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const { error: insertError } = await supabase
+      .from('guest_voice_sessions')
+      .insert({
+        session_id: sessionId,
+        agent_id: agentId,
+        client_identifier: clientIdentifier,
+        max_duration_seconds: Math.min(remainingSeconds, 300)
+      });
+      
+    if (insertError) {
+      steps.push({ step: 'session_insert', status: 'failed', error: insertError });
+      throw insertError;
+    }
+    steps.push({ step: 'session_insert', status: 'success', sessionId });
+    
+    // Clean up test session
+    await supabase
+      .from('guest_voice_sessions')
+      .delete()
+      .eq('session_id', sessionId);
+    
+    res.json({
+      success: true,
+      message: 'All steps completed successfully',
+      steps
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      steps,
+      fullError: {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        stack: error.stack
+      }
+    });
+  }
+});
+
 // Debug endpoint to test voice session error
 router.get('/debug/voice-error/:agentId', checkSupabase, async (req, res) => {
   const { agentId } = req.params;
