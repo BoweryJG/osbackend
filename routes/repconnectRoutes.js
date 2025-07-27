@@ -1108,7 +1108,7 @@ router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, r
     } else {
       // TRIAL/GUEST USER FLOW
       // Create client identifier from IP and User-Agent
-      const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+      const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
       const userAgent = req.headers['user-agent'] || 'unknown';
       const clientIdentifier = crypto
         .createHash('sha256')
