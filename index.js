@@ -398,6 +398,14 @@ app.post('/stripe-webhook-endpoint', express.raw({ type: 'application/json' }), 
   }
 });
 
+// Test routes BEFORE requestLogger to confirm the issue
+app.get('/api/test-very-early', (req, res) => {
+  res.json({ success: true, message: 'GET before logger works' });
+});
+app.post('/api/test-very-early', (req, res) => {
+  res.json({ success: true, message: 'POST before logger works!' });
+});
+
 // Request ID and logging middleware
 app.use(requestId); // Add unique request ID to each request
 app.use(requestLogger); // Log all requests and responses
