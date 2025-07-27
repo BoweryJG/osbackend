@@ -89,6 +89,55 @@ router.get('/debug/supabase-config', (req, res) => {
   });
 });
 
+// Debug endpoint to test voice session error
+router.get('/debug/voice-error/:agentId', checkSupabase, async (req, res) => {
+  const { agentId } = req.params;
+  
+  try {
+    // Just test the parts that might fail
+    const crypto = require('crypto');
+    
+    // Test crypto
+    const testHash = crypto.createHash('sha256').update('test').digest('hex');
+    console.log('Crypto test passed:', testHash);
+    
+    // Test agent fetch
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+      
+    if (agentError) throw agentError;
+    
+    // Test that we can access agent properties
+    const voiceId = agent.voice_id || agent.agent_voice_profiles?.[0]?.voice_id;
+    const personality = agent.personality_profile || {};
+    
+    res.json({
+      success: true,
+      data: {
+        cryptoWorks: true,
+        agentFound: true,
+        agentId: agent.id,
+        agentName: agent.name,
+        hasVoiceId: !!voiceId,
+        voiceId: voiceId,
+        personalityType: typeof personality,
+        personality: personality
+      }
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+      details: error
+    });
+  }
+});
+
 // Debug endpoint for voice session testing (public)
 router.get('/debug/voice-session-test/:agentId', checkSupabase, async (req, res) => {
   const { agentId } = req.params;
@@ -1043,6 +1092,13 @@ router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, r
     }
   } catch (error) {
     console.error('Error starting voice session:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
     res
       .status(500)
       .json(errorResponse('SESSION_ERROR', 'Failed to start voice session', error.message, 500));
