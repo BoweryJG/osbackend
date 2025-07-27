@@ -16,7 +16,7 @@ export const requestLogger = (req, res, next) => {
   // Log incoming request
   logger.request(req, 'Incoming request', {
     body: req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' 
-      ? JSON.stringify(req.body).substring(0, 1000) // Limit body size in logs
+      ? req.body ? JSON.stringify(req.body).substring(0, 1000) : 'body-not-parsed-yet' // Limit body size in logs
       : undefined,
     query: req.query,
     params: req.params
