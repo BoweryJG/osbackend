@@ -70,40 +70,19 @@ const checkSupabase = (req, res, next) => {
   next();
 };
 
-// Test crypto and req properties
-router.post('/debug/test-req-crypto', (req, res) => {
+// Test what happens before route handler
+router.post('/debug/test-minimal', (req, res, next) => {
   try {
-    const results = {
-      hasReq: !!req,
-      reqIp: req.ip || 'no-ip',
-      hasConnection: !!req.connection,
-      connectionType: typeof req.connection,
-      hasHeaders: !!req.headers,
-      userAgent: req.headers?.['user-agent'] || 'no-user-agent',
-      hasCrypto: !!crypto,
-      cryptoTest: null
-    };
-    
-    // Test crypto
-    try {
-      const hash = crypto.createHash('sha256').update('test').digest('hex');
-      results.cryptoTest = 'success';
-      results.cryptoHash = hash.substring(0, 8) + '...';
-    } catch (e) {
-      results.cryptoTest = 'failed';
-      results.cryptoError = e.message;
-    }
-    
+    // Just return success immediately
     res.json({
       success: true,
-      results
+      message: 'Route handler reached',
+      method: req.method,
+      path: req.path
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: error.stack
-    });
+    // Pass to error handler
+    next(error);
   }
 });
 
