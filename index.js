@@ -2361,6 +2361,11 @@ app.use('/', zapierRoutes);
 // Add Agent routes (unified agent system)
 app.use('/api/canvas', agentRoutes);
 
+// Test route to debug 500 errors
+app.post('/api/repconnect-test', (req, res) => {
+  res.json({ success: true, message: 'Direct route works' });
+});
+
 // Add RepConnect Agent routes  
 app.use('/api/repconnect', repconnectRoutes);
 
