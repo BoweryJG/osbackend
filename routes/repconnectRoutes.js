@@ -95,7 +95,7 @@ router.get('/debug/voice-error/:agentId', checkSupabase, async (req, res) => {
   
   try {
     // Just test the parts that might fail
-    const crypto = require('crypto');
+    // crypto is already imported at top of file
     
     // Test crypto
     const testHash = crypto.createHash('sha256').update('test').digest('hex');
