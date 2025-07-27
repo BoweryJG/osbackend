@@ -234,7 +234,7 @@ Always be helpful, accurate, and focused on driving sales success. When you don'
 
     // Create streaming response
     const stream = await this.anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022', // Using Claude 3.5 Sonnet for better performance
+      model: 'claude-sonnet-4-20250514', // Using Claude 4 Sonnet as requested
       messages,
       max_tokens: 2000,
       stream: true,
