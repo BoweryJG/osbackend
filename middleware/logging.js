@@ -57,7 +57,7 @@ export const errorLogger = (error, req, res, next) => {
     method: req.method,
     url: req.url,
     userAgent: req.get('User-Agent'),
-    ip: req.ip || req.connection.remoteAddress,
+    ip: req.ip || req.connection?.remoteAddress,
     userId: req.user?.id || req.session?.userId,
     body: JSON.stringify(req.body).substring(0, 500),
     stack: error.stack
@@ -130,7 +130,7 @@ export const errorHandler = (error, req, res, next) => {
 // Security event logger
 export const securityLogger = (event, severity = 'medium') => (req, res, next) => {
   logger.security(`${event} - ${severity}`, {
-    ip: req.ip || req.connection.remoteAddress,
+    ip: req.ip || req.connection?.remoteAddress,
     userAgent: req.get('User-Agent'),
     url: req.url,
     method: req.method,
