@@ -302,7 +302,7 @@ BE SPECIFIC. NO GENERIC STATEMENTS.`;
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'anthropic/claude-opus-4',
+        model: 'anthropic/claude-3.5-sonnet',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 2000

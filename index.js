@@ -317,7 +317,7 @@ app.post('/api/repconnect/chat/public/message', express.json(), async (req, res)
     
     // Call Anthropic with agent's personality
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', // Updated to Claude 4 Sonnet for faster responses
+      model: 'claude-3-5-sonnet-20241022', // Using Claude 3.5 Sonnet for faster responses
       max_tokens: 1000,
       system: agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`,
       messages: [{ role: 'user', content: message }]
@@ -346,6 +346,8 @@ app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) 
   try {
     const { agentId, message, conversationId } = req.body;
     
+    console.log('[Public Stream] Request received:', { agentId, message: message?.substring(0, 50) });
+    
     if (!agentId || !message) {
       return res.status(400).json({
         success: false,
@@ -354,6 +356,7 @@ app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) 
     }
     
     if (!supabase || !anthropic) {
+      console.error('[Public Stream] Services not initialized:', { supabase: !!supabase, anthropic: !!anthropic });
       return res.status(503).json({
         success: false,
         error: 'Chat service temporarily unavailable'
@@ -364,7 +367,17 @@ app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) 
     const agentCore = new AgentCore('repconnect');
     
     // Verify agent exists
-    const agent = await agentCore.getAgent(agentId);
+    let agent;
+    try {
+      agent = await agentCore.getAgent(agentId);
+    } catch (agentError) {
+      console.error('[Public Stream] Agent fetch error:', agentError);
+      return res.status(404).json({
+        success: false,
+        error: `Failed to fetch agent: ${agentError.message}`
+      });
+    }
+    
     if (!agent) {
       return res.status(404).json({
         success: false,
@@ -372,12 +385,15 @@ app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) 
       });
     }
     
-    // Set up SSE headers for streaming
+    console.log('[Public Stream] Agent found:', agent.name);
+    
+    // Set up SSE headers for streaming BEFORE any async operations that might fail
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no' // Disable Nginx buffering
     });
     
     // Build context for public users
@@ -388,34 +404,48 @@ app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) 
       conversation: null
     };
     
-    // Stream the response
-    const stream = await agentCore.streamResponse(agentId, message, publicContext, 'public-user');
-    let fullResponse = '';
-    
     try {
+      // Stream the response
+      const stream = await agentCore.streamResponse(agentId, message, publicContext, 'public-user');
+      let fullResponse = '';
+      
       for await (const chunk of stream) {
         if (chunk.type === 'text_delta' && chunk.text) {
           fullResponse += chunk.text;
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        } else if (chunk.type === 'message_start' || chunk.type === 'message_stop') {
+        } else if (chunk.type === 'message_start' || chunk.type === 'message_complete') {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        } else if (chunk.type === 'error') {
+          console.error('[Public Stream] Stream error:', chunk.error);
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         }
       }
       
       res.write(`data: [DONE]\n\n`);
       res.end();
+      
+      console.log('[Public Stream] Completed successfully, response length:', fullResponse.length);
     } catch (streamError) {
-      console.error('Public streaming error:', streamError);
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`);
+      console.error('[Public Stream] Streaming error:', streamError);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: streamError.message })}\n\n`);
       res.end();
     }
     
   } catch (error) {
-    console.error('[RepConnect Public Stream Error]:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to stream chat response'
-    });
+    console.error('[Public Stream] Critical error:', error);
+    console.error('[Public Stream] Error stack:', error.stack);
+    
+    // If headers haven't been sent yet, send JSON error
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Failed to stream chat response'
+      });
+    } else {
+      // If we're already streaming, send error in SSE format
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.end();
+    }
   }
 });
 
