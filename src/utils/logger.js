@@ -91,7 +91,7 @@ logger.logRequest = (req, message = 'Request received') => {
   logger.info(message, {
     method: req.method,
     url: req.url,
-    ip: req.ip || req.connection.remoteAddress,
+    ip: req.ip || req.connection?.remoteAddress,
     userAgent: req.get('User-Agent'),
     userId: req.user?.id,
     timestamp: new Date().toISOString()

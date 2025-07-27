@@ -29,7 +29,7 @@ export const createRateLimiter = (options = {}) => {
     },
     keyGenerator: (req) => {
       // Use forwarded IP if behind proxy, otherwise use connection IP
-      return req.ip || req.connection.remoteAddress || 'unknown';
+      return req.ip || req.connection?.remoteAddress || 'unknown';
     },
     ...options
   };
@@ -176,7 +176,7 @@ export const normalizeIP = (req, res, next) => {
     } else if (realIP) {
       req.clientIP = realIP;
     } else {
-      req.clientIP = req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+      req.clientIP = req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
     }
     
     // Log suspicious patterns

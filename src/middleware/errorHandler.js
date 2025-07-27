@@ -5,7 +5,7 @@ const errorHandler = (err, req, res, next) => {
   logger.logError(err, {
     method: req.method,
     url: req.url,
-    ip: req.ip || req.connection.remoteAddress,
+    ip: req.ip || req.connection?.remoteAddress,
     userAgent: req.get('User-Agent'),
     userId: req.user?.id,
     body: req.body,

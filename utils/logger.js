@@ -170,7 +170,7 @@ class Logger {
       method: req.method,
       url: req.url,
       userAgent: req.get('User-Agent'),
-      ip: req.ip || req.connection.remoteAddress,
+      ip: req.ip || req.connection?.remoteAddress,
       userId: req.user?.id || req.session?.userId
     });
   }
