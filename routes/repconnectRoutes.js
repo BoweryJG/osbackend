@@ -89,6 +89,132 @@ router.get('/debug/supabase-config', (req, res) => {
   });
 });
 
+// Debug endpoint for voice session testing (public)
+router.get('/debug/voice-session-test/:agentId', checkSupabase, async (req, res) => {
+  const { agentId } = req.params;
+  console.log('[VOICE DEBUG TEST] Starting test for agent:', agentId);
+  
+  try {
+    // Test 1: Fetch agent
+    console.log('[VOICE DEBUG TEST] Test 1: Fetching agent from unified_agents...');
+    const { data: agent, error: agentError } = await supabase
+      .from('unified_agents')
+      .select('*, agent_voice_profiles(*)')
+      .eq('id', agentId)
+      .single();
+    
+    if (agentError) {
+      console.error('[VOICE DEBUG TEST] Agent fetch error:', agentError);
+      return res.json({
+        success: false,
+        error: 'Agent fetch failed',
+        details: agentError
+      });
+    }
+    
+    console.log('[VOICE DEBUG TEST] Agent found:', {
+      id: agent?.id,
+      name: agent?.name,
+      voice_id: agent?.voice_id,
+      has_voice_profiles: !!agent?.agent_voice_profiles?.length
+    });
+    
+    // Test 2: Check voice capabilities
+    const voiceId = agent?.voice_id || agent?.agent_voice_profiles?.[0]?.voice_id;
+    console.log('[VOICE DEBUG TEST] Voice ID:', voiceId);
+    
+    // Test 3: Test RPC function
+    console.log('[VOICE DEBUG TEST] Test 3: Testing RPC function...');
+    const clientIdentifier = 'test-' + Date.now();
+    
+    try {
+      const { data: rpcResult, error: rpcError } = await supabase
+        .rpc('get_remaining_trial_seconds', { p_client_identifier: clientIdentifier });
+      
+      console.log('[VOICE DEBUG TEST] RPC result:', { rpcResult, rpcError });
+      
+      if (rpcError) {
+        return res.json({
+          success: false,
+          error: 'RPC function failed',
+          details: rpcError
+        });
+      }
+    } catch (rpcErr) {
+      console.error('[VOICE DEBUG TEST] RPC exception:', rpcErr);
+      return res.json({
+        success: false,
+        error: 'RPC function exception',
+        details: rpcErr.message
+      });
+    }
+    
+    // Test 4: Test guest session insert
+    console.log('[VOICE DEBUG TEST] Test 4: Testing guest session insert...');
+    const sessionId = `test_voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      const { error: insertError } = await supabase
+        .from('guest_voice_sessions')
+        .insert({
+          session_id: sessionId,
+          agent_id: agentId,
+          client_identifier: clientIdentifier,
+          max_duration_seconds: 300
+        });
+      
+      if (insertError) {
+        console.error('[VOICE DEBUG TEST] Insert error:', insertError);
+        return res.json({
+          success: false,
+          error: 'Guest session insert failed',
+          details: insertError
+        });
+      }
+      
+      // Clean up test session
+      await supabase
+        .from('guest_voice_sessions')
+        .delete()
+        .eq('session_id', sessionId);
+        
+      console.log('[VOICE DEBUG TEST] All tests passed!');
+      
+      res.json({
+        success: true,
+        data: {
+          agent: {
+            id: agent.id,
+            name: agent.name,
+            voice_id: voiceId,
+            has_voice: !!voiceId
+          },
+          tests: {
+            agent_fetch: 'passed',
+            voice_check: voiceId ? 'passed' : 'failed - no voice ID',
+            rpc_function: 'passed',
+            session_insert: 'passed'
+          }
+        }
+      });
+    } catch (insertErr) {
+      console.error('[VOICE DEBUG TEST] Insert exception:', insertErr);
+      return res.json({
+        success: false,
+        error: 'Guest session insert exception',
+        details: insertErr.message
+      });
+    }
+  } catch (error) {
+    console.error('[VOICE DEBUG TEST] General error:', error);
+    res.json({
+      success: false,
+      error: 'Test failed',
+      details: error.message
+    });
+  }
+});
+
 // Middleware to check if chat services are initialized
 const checkChatServices = (req, res, next) => {
   if (!supabase || !agentCore || !conversationManager) {
