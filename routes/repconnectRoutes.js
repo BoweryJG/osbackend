@@ -952,7 +952,7 @@ router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, r
             voice_id: voiceId,
             voice_name: agent.voice_name || agent.agent_voice_profiles?.[0]?.voice_name,
             voice_settings: agent.voice_settings || agent.agent_voice_profiles?.[0]?.voice_config,
-            personality: agent.personality_profile,
+            personality: agent.personality_profile || {},
             whisper_enabled: agent.whisper_config?.supports_whisper && voiceConfig?.whisper_enabled
           },
           provider: voiceConfig?.preferred_provider || provider,
