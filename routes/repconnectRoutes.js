@@ -70,6 +70,59 @@ const checkSupabase = (req, res, next) => {
   next();
 };
 
+// Test crypto and req properties
+router.post('/debug/test-req-crypto', (req, res) => {
+  try {
+    const results = {
+      hasReq: !!req,
+      reqIp: req.ip || 'no-ip',
+      hasConnection: !!req.connection,
+      connectionType: typeof req.connection,
+      hasHeaders: !!req.headers,
+      userAgent: req.headers?.['user-agent'] || 'no-user-agent',
+      hasCrypto: !!crypto,
+      cryptoTest: null
+    };
+    
+    // Test crypto
+    try {
+      const hash = crypto.createHash('sha256').update('test').digest('hex');
+      results.cryptoTest = 'success';
+      results.cryptoHash = hash.substring(0, 8) + '...';
+    } catch (e) {
+      results.cryptoTest = 'failed';
+      results.cryptoError = e.message;
+    }
+    
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Simple voice test endpoint
+router.get('/debug/voice-simple-test', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Voice test endpoint is working',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Debug endpoint for Supabase configuration (public)
 router.get('/debug/supabase-config', (req, res) => {
   res.json({
