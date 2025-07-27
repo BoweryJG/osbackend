@@ -402,6 +402,14 @@ app.post('/stripe-webhook-endpoint', express.raw({ type: 'application/json' }), 
 app.use(requestId); // Add unique request ID to each request
 app.use(requestLogger); // Log all requests and responses
 
+// Test routes BEFORE body parser to see if that's the issue
+app.get('/api/test-before-parser', (req, res) => {
+  res.json({ success: true, message: 'GET before parser works' });
+});
+app.post('/api/test-before-parser', (req, res) => {
+  res.json({ success: true, message: 'POST before parser works' });
+});
+
 // JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
 app.use(cookieParser()); // Parse cookies
@@ -2361,9 +2369,12 @@ app.use('/', zapierRoutes);
 // Add Agent routes (unified agent system)
 app.use('/api/canvas', agentRoutes);
 
-// Test route to debug 500 errors
-app.post('/api/repconnect-test', (req, res) => {
-  res.json({ success: true, message: 'Direct route works' });
+// Test route to debug 500 errors - place BEFORE error-prone middleware
+app.get('/api/test-get-early', (req, res) => {
+  res.json({ success: true, message: 'Early GET works' });
+});
+app.post('/api/test-post-early', (req, res) => {
+  res.json({ success: true, message: 'Early POST works' });
 });
 
 // Add RepConnect Agent routes  
