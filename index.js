@@ -315,12 +315,12 @@ app.post('/api/repconnect/chat/public/message', express.json(), async (req, res)
       });
     }
     
-    // Call Anthropic with agent's personality
+    // Call Anthropic with agent's personality (system as top-level parameter for Claude 4)
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514', // Using Claude 4 Sonnet as requested
-      max_tokens: 1000,
       system: agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`,
-      messages: [{ role: 'user', content: message }]
+      messages: [{ role: 'user', content: message }],
+      max_tokens: 1000
     });
     
     // Return real AI response

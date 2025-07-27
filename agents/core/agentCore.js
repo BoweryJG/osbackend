@@ -219,22 +219,25 @@ Always be helpful, accurate, and focused on driving sales success. When you don'
     const agent = await this.getAgent(agentId);
     const systemPrompt = this.buildSystemPrompt(agent, context);
 
-    // Build messages array
-    const messages = [
-      { role: 'system', content: systemPrompt }
-    ];
+    // Build messages array (no system message for Claude 4)
+    const messages = [];
 
     // Add conversation history if available
     if (context.previousMessages) {
-      messages.push(...context.previousMessages.slice(-10)); // Last 10 messages
+      // Filter out any system messages from history
+      const userAssistantMessages = context.previousMessages
+        .filter(msg => msg.role !== 'system')
+        .slice(-10); // Last 10 messages
+      messages.push(...userAssistantMessages);
     }
 
     // Add current message
     messages.push({ role: 'user', content: message });
 
-    // Create streaming response
+    // Create streaming response with system as top-level parameter for Claude 4
     const stream = await this.anthropic.messages.create({
       model: 'claude-sonnet-4-20250514', // Using Claude 4 Sonnet as requested
+      system: systemPrompt, // System prompt as top-level parameter for Claude 4
       messages,
       max_tokens: 2000,
       stream: true,
