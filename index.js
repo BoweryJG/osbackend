@@ -28,6 +28,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 import gracefulShutdown from './utils/gracefulShutdown.js';
 import { validateCommonEnvironment } from './utils/envValidator.js';
 import logger from './utils/logger.js';
+import { AgentCore } from './agents/core/agentCore.js';
 // Validate environment variables in production
 if (process.env.NODE_ENV === 'production') {
   try {
@@ -316,7 +317,7 @@ app.post('/api/repconnect/chat/public/message', express.json(), async (req, res)
     
     // Call Anthropic with agent's personality
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-20250514', // Updated to Claude 4 Sonnet for faster responses
       max_tokens: 1000,
       system: agent.system_prompt || `You are ${agent.name}, ${agent.description || 'a helpful AI assistant'}. Respond in character.`,
       messages: [{ role: 'user', content: message }]
@@ -336,6 +337,84 @@ app.post('/api/repconnect/chat/public/message', express.json(), async (req, res)
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to process chat message'
+    });
+  }
+});
+
+// Add RepConnect public streaming endpoint AFTER CORS middleware
+app.post('/api/repconnect/chat/public/stream', express.json(), async (req, res) => {
+  try {
+    const { agentId, message, conversationId } = req.body;
+    
+    if (!agentId || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Agent ID and message are required'
+      });
+    }
+    
+    if (!supabase || !anthropic) {
+      return res.status(503).json({
+        success: false,
+        error: 'Chat service temporarily unavailable'
+      });
+    }
+    
+    // Initialize AgentCore for RepConnect
+    const agentCore = new AgentCore('repconnect');
+    
+    // Verify agent exists
+    const agent = await agentCore.getAgent(agentId);
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Agent not found'
+      });
+    }
+    
+    // Set up SSE headers for streaming
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+    
+    // Build context for public users
+    const publicContext = {
+      appName: 'repconnect',
+      userType: 'public',
+      previousMessages: [],
+      conversation: null
+    };
+    
+    // Stream the response
+    const stream = await agentCore.streamResponse(agentId, message, publicContext, 'public-user');
+    let fullResponse = '';
+    
+    try {
+      for await (const chunk of stream) {
+        if (chunk.type === 'text_delta' && chunk.text) {
+          fullResponse += chunk.text;
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        } else if (chunk.type === 'message_start' || chunk.type === 'message_stop') {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+      }
+      
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    } catch (streamError) {
+      console.error('Public streaming error:', streamError);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Stream interrupted' })}\n\n`);
+      res.end();
+    }
+    
+  } catch (error) {
+    console.error('[RepConnect Public Stream Error]:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to stream chat response'
     });
   }
 });
