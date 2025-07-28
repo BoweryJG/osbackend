@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:3001';
 
 async function testWhisperAudioGeneration() {
   console.log('🎯 Testing Whisper Audio Generation...\n');
