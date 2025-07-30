@@ -8,6 +8,68 @@ This is **osbackend** - a production Node.js backend serving a unified agent sys
 
 **Production URL**: `https://osbackend-zl1h.onrender.com`
 
+## Unified Authentication System (July 30, 2025)
+
+### Overview
+RepSpheres uses a unified authentication system with progressive feature unlocking. All 5 apps (CRM, Canvas, Market Data, RepConnect, Global) share ONE Google OAuth client and use Supabase as primary auth.
+
+### Subscription Tiers (RepX)
+- **Rep⁰ (Free)**: Basic login, 30-second AI agents
+- **Rep¹ ($97/mo)**: Cross-app SSO, 1-minute agents
+- **Rep² ($197/mo)**: + Vultr SMTP unlimited email, 5-minute agents
+- **Rep³ ($297/mo)**: + Twilio phone auto-provisioning, 15-minute agents
+- **Rep⁴ ($497/mo)**: + Gmail OAuth sync, 30-minute agents
+- **Rep⁵ ($997/mo)**: + White label, unlimited agents
+
+### Key RepX Endpoints
+```javascript
+// Feature validation
+GET /api/repx/validate-access    // Returns user's tier, features, connections
+POST /api/repx/check-feature     // Check specific feature access
+GET /api/repx/agent-time-limit   // Get conversation time limits
+
+// Stripe pricing
+GET /api/stripe/repx/plans       // Get all tiers with pricing
+```
+
+### Stripe Price IDs (Live)
+```javascript
+// Rep¹ - $97/mo, $970/yr
+monthlyPriceId: 'price_1RqhStGRiAPUZqWutwNBJlnr'
+annualPriceId: 'price_1RqhStGRiAPUZqWu8eRYprp6'
+
+// Rep² - $197/mo, $1,970/yr
+monthlyPriceId: 'price_1RqhSuGRiAPUZqWu29dIsVGz'
+annualPriceId: 'price_1RqhSuGRiAPUZqWu0nHKxkmp'
+
+// Rep³ - $297/mo, $2,970/yr
+monthlyPriceId: 'price_1RqhSvGRiAPUZqWuygjxykuG'
+annualPriceId: 'price_1RqhSvGRiAPUZqWuuvRB2q20'
+
+// Rep⁴ - $497/mo, $4,970/yr
+monthlyPriceId: 'price_1RqhSvGRiAPUZqWu6YlhyKE2'
+annualPriceId: 'price_1RqhSwGRiAPUZqWuJmTnpUXw'
+
+// Rep⁵ - $997/mo, $9,970/yr
+monthlyPriceId: 'price_1RqhSwGRiAPUZqWuAJzj4tw5'
+annualPriceId: 'price_1RqhSwGRiAPUZqWump7raV5n'
+```
+
+### Authentication Flow
+1. **Primary**: Supabase auth (email/password)
+2. **Secondary**: Google OAuth ONLY for Gmail (Rep⁴+)
+3. **Cross-domain**: `.repspheres.com` cookies for SSO
+
+### Auto-Provisioning
+- Rep³+ subscribers get automatic Twilio phone provisioning
+- Handled in `routes/stripe-webhook.js` on subscription/upgrade
+- Phone numbers stored in `user_twilio_config` table
+
+### Important Tables
+- `user_subscriptions` - Stores subscription_tier (repx0-repx5)
+- `user_twilio_config` - Auto-provisioned phone numbers
+- `user_gmail_tokens` - Gmail OAuth tokens (Rep⁴+ only)
+
 ## Development Commands
 
 ### Essential Commands
