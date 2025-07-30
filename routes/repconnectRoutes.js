@@ -181,7 +181,7 @@ router.post('/debug/voice-steps/:agentId', checkSupabase, async (req, res) => {
         session_id: sessionId,
         agent_id: agentId,
         client_identifier: clientIdentifier,
-        max_duration_seconds: Math.min(remainingSeconds, 300)
+        max_duration_seconds: Math.min(remainingSeconds, 600)
       });
       
     if (insertError) {
@@ -337,7 +337,7 @@ router.get('/debug/voice-session-test/:agentId', checkSupabase, async (req, res)
           session_id: sessionId,
           agent_id: agentId,
           client_identifier: clientIdentifier,
-          max_duration_seconds: 300
+          max_duration_seconds: 600
         });
       
       if (insertError) {
@@ -1176,7 +1176,7 @@ router.post('/agents/:agentId/start-voice-session', checkSupabase, async (req, r
           session_id: sessionId,
           agent_id: agentId,
           client_identifier: clientIdentifier,
-          max_duration_seconds: Math.min(remainingSeconds, 300)
+          max_duration_seconds: Math.min(remainingSeconds, 600)
         });
       
       if (sessionError) {

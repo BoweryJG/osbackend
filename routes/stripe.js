@@ -13,55 +13,56 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 // RepX Enhancement Levels Pricing Configuration
+// Updated July 30, 2025 with new unified pricing structure
 const repxPricing = {
   repx1: {
     monthly: {
-      amount: 3900, // $39.00 in cents
-      priceId: process.env.STRIPE_REPX1_MONTHLY_PRICE_ID || 'price_1RRutVGRiAPUZqWuDMSAqHsD'
+      amount: 9700, // $97.00 in cents
+      priceId: process.env.STRIPE_REPX1_MONTHLY_PRICE_ID || 'price_1RqhStGRiAPUZqWutwNBJlnr'
     },
     annual: {
-      amount: 39000, // $390.00 in cents
-      priceId: process.env.STRIPE_REPX1_ANNUAL_PRICE_ID || 'price_1RWMSCGRiAPUZqWu30j19b9G'
+      amount: 97000, // $970.00 in cents
+      priceId: process.env.STRIPE_REPX1_ANNUAL_PRICE_ID || 'price_1RqhStGRiAPUZqWu8eRYprp6'
     }
   },
   repx2: {
     monthly: {
-      amount: 9700, // $97.00 in cents
-      priceId: process.env.STRIPE_REPX2_MONTHLY_PRICE_ID || 'price_1RRushGRiAPUZqWuIvqueK7h'
+      amount: 19700, // $197.00 in cents
+      priceId: process.env.STRIPE_REPX2_MONTHLY_PRICE_ID || 'price_1RqhSuGRiAPUZqWu29dIsVGz'
     },
     annual: {
-      amount: 97000, // $970.00 in cents
-      priceId: process.env.STRIPE_REPX2_ANNUAL_PRICE_ID || 'price_1RWMT4GRiAPUZqWuqiNhkZfw'
+      amount: 197000, // $1,970.00 in cents
+      priceId: process.env.STRIPE_REPX2_ANNUAL_PRICE_ID || 'price_1RqhSuGRiAPUZqWu0nHKxkmp'
     }
   },
   repx3: {
     monthly: {
-      amount: 19700, // $197.00 in cents
-      priceId: process.env.STRIPE_REPX3_MONTHLY_PRICE_ID || 'price_1RWMW3GRiAPUZqWuoTA0eLUC'
+      amount: 29700, // $297.00 in cents
+      priceId: process.env.STRIPE_REPX3_MONTHLY_PRICE_ID || 'price_1RqhSvGRiAPUZqWuygjxykuG'
     },
     annual: {
-      amount: 197000, // $1970.00 in cents
-      priceId: process.env.STRIPE_REPX3_ANNUAL_PRICE_ID || 'price_1RRus5GRiAPUZqWup3jk1S8U'
+      amount: 297000, // $2,970.00 in cents
+      priceId: process.env.STRIPE_REPX3_ANNUAL_PRICE_ID || 'price_1RqhSvGRiAPUZqWuuvRB2q20'
     }
   },
   repx4: {
     monthly: {
-      amount: 39700, // $397.00 in cents
-      priceId: process.env.STRIPE_REPX4_MONTHLY_PRICE_ID || 'price_1RRurNGRiAPUZqWuklICsE4P'
+      amount: 49700, // $497.00 in cents
+      priceId: process.env.STRIPE_REPX4_MONTHLY_PRICE_ID || 'price_1RqhSvGRiAPUZqWu6YlhyKE2'
     },
     annual: {
-      amount: 397000, // $3970.00 in cents
-      priceId: process.env.STRIPE_REPX4_ANNUAL_PRICE_ID || 'price_1RWMWjGRiAPUZqWu6YBZY7o4'
+      amount: 497000, // $4,970.00 in cents
+      priceId: process.env.STRIPE_REPX4_ANNUAL_PRICE_ID || 'price_1RqhSwGRiAPUZqWuJmTnpUXw'
     }
   },
   repx5: {
     monthly: {
-      amount: 79700, // $797.00 in cents
-      priceId: process.env.STRIPE_REPX5_MONTHLY_PRICE_ID || 'price_1RRuqbGRiAPUZqWu3f91wnNx'
+      amount: 99700, // $997.00 in cents
+      priceId: process.env.STRIPE_REPX5_MONTHLY_PRICE_ID || 'price_1RqhSwGRiAPUZqWuAJzj4tw5'
     },
     annual: {
-      amount: 797000, // $7970.00 in cents
-      priceId: process.env.STRIPE_REPX5_ANNUAL_PRICE_ID || 'price_1RWMXEGRiAPUZqWuPwcgrovN'
+      amount: 997000, // $9,970.00 in cents
+      priceId: process.env.STRIPE_REPX5_ANNUAL_PRICE_ID || 'price_1RqhSwGRiAPUZqWump7raV5n'
     }
   }
 };
@@ -73,101 +74,119 @@ const repxPricing = {
 router.get('/repx/plans', async (req, res) => {
   try {
     // Add feature details for each tier
+    // Updated July 30, 2025 - Unified authentication system
     const plansWithFeatures = {
       repx1: {
         ...repxPricing.repx1,
-        name: 'RepX1 Professional Business Line',
+        name: 'Rep¹ - Login',
+        description: 'Basic RepSpheres access with authentication across all apps',
         features: {
-          calls: 100,
-          emails: 0,
-          canvas_scans: 0,
+          login: true,
+          email: false,
+          phone: false,
+          gmail: false,
+          agentMinutes: 1,
           basic: [
-            'Your Professional Business Line for Life',
-            'AI transcription of every sales call',
-            'Transcriptions sent directly to your CRM',
-            'Professional/personal call separation',
-            'Basic call analytics and history',
-            '100 calls per month',
-            'Eternal professional phone number'
+            'Cross-app SSO authentication',
+            'Access to ALL 5 RepSpheres apps',
+            'CRM, Canvas, Market Data, RepConnect, Global',
+            '1-minute AI agent conversations',
+            'Basic profile and settings',
+            'Core feature access'
           ]
         }
       },
       repx2: {
         ...repxPricing.repx2,
-        name: 'RepX2 Market Intelligence',
+        name: 'Rep² - Login + Email',
+        description: 'Email capabilities with Vultr SMTP for unlimited sending',
         features: {
-          calls: 200,
-          emails: 50,
-          canvas_scans: 10,
+          login: true,
+          email: true,
+          phone: false,
+          gmail: false,
+          agentMinutes: 5,
           basic: [
-            'Everything in RepX1, plus:',
-            'Work email integration (no IT approval needed)',
-            'Basic Market Data access (all procedures)',
-            '200 calls per month',
-            '50 emails per day',
-            '10 Canvas practice scans per day',
-            'Enhanced call analytics and insights'
+            'Everything in Rep¹, plus:',
+            'Unlimited email sending via Vultr SMTP',
+            'Professional email templates',
+            'Email tracking and analytics',
+            '5-minute AI agent conversations',
+            'Email launcher from any app',
+            'Cross-app email integration'
           ]
         }
       },
       repx3: {
         ...repxPricing.repx3,
-        name: 'RepX3 Territory Command',
+        name: 'Rep³ - Login + Email + Phone',
+        description: 'Twilio phone provisioning with dedicated number',
         features: {
-          calls: 400,
-          emails: 100,
-          canvas_scans: 25,
+          login: true,
+          email: true,
+          phone: true,
+          gmail: false,
+          agentMinutes: 15,
           basic: [
-            'Everything in RepX2, plus:',
-            'Full Canvas practice intelligence platform',
-            'Territory mapping and local insights',
-            'Advanced market analytics with trends',
-            '400 calls per month',
-            '100 emails per day',
-            '25 Canvas practice scans per day',
-            'Competitive intelligence reports'
+            'Everything in Rep², plus:',
+            'Automatic Twilio phone provisioning',
+            'Dedicated business phone number',
+            'Click-to-call from any app',
+            'Call recording and transcription',
+            '15-minute AI agent conversations',
+            'Phone + Email enrichment in Market Data',
+            'Advanced territory intelligence'
           ]
         }
       },
       repx4: {
         ...repxPricing.repx4,
-        name: 'RepX4 Executive Operations',
+        name: 'Rep⁴ - Login + Email + Phone + Gmail',
+        description: 'Full integration suite with Gmail sync',
         features: {
-          calls: 800,
-          emails: 200,
-          canvas_scans: 50,
+          login: true,
+          email: true,
+          phone: true,
+          gmail: true,
+          agentMinutes: 30,
           basic: [
-            'Everything in RepX3, plus:',
-            'AI coaching insights and recommendations',
-            'Workflow automation (up to 5 workflows)',
-            'Advanced CRM integration and automation',
-            '800 calls per month',
-            '200 emails per day',
-            '50 Canvas practice scans per day',
-            'Real-time sales performance analytics'
+            'Everything in Rep³, plus:',
+            'Gmail OAuth integration',
+            'Read, send, compose, modify emails',
+            'Gmail sync across all apps',
+            '30-minute AI agent conversations',
+            'Advanced analytics and reporting',
+            'Priority support',
+            'Full RepSpheres ecosystem access'
           ]
         }
       },
       repx5: {
         ...repxPricing.repx5,
-        name: 'RepX5 Elite Global',
+        name: 'Rep⁵ - Everything + Custom',
+        description: 'Enterprise tier with white label options',
         features: {
-          calls: 'unlimited',
-          emails: 'unlimited',
-          canvas_scans: 'unlimited',
+          login: true,
+          email: true,
+          phone: true,
+          gmail: true,
+          agentMinutes: 'unlimited',
           basic: [
-            'Everything in RepX4, plus:',
-            'Real-time AI whisper coaching during live calls',
-            'Unlimited calls, emails, and Canvas scans',
-            'Unlimited workflow automations',
-            'Custom AI agent configuration'
+            'Everything in Rep⁴, plus:',
+            'Unlimited AI agent conversations',
+            'White label options',
+            'Custom integrations',
+            'Dedicated success manager',
+            'Priority feature development',
+            'Enterprise SLA',
+            'Custom training and onboarding'
           ],
           premium: [
-            'Dedicated success manager',
-            'Priority support and training',
-            'Custom integrations and setup',
-            'Early access to new AI features',
-            'The complete "Enhanced Rep" experience'
+            'Your brand, your domain',
+            'Custom AI agent personalities',
+            'API access for integrations',
+            'Bulk user management',
+            'Advanced security features'
           ]
         }
       }

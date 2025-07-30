@@ -57,6 +57,7 @@ import optimizedQueries from './services/optimizedQueries.js';
 import agentRoutes from './routes/agents/agentRoutes.js';
 import repconnectRoutes from './routes/repconnectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import googleAuthRoutes from './routes/googleAuthRoutes.js';
 import fundingStrategyRoutes from './routes/fundingStrategy.js';
 import healthRoutes from './routes/healthRoutes.js';
 import websocketRoute, { websocketProxy } from './routes/websocketRoute.js';
@@ -67,6 +68,9 @@ import voiceCloningRoutes from './routes/voiceCloning.js';
 import dashboardRoutes from './routes/dashboard.js';
 import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
 import stripeRoutes from './routes/stripe.js';
+import stripeWebhookRoutes from './routes/stripe-webhook.js';
+import subscriptionRoutes from './routes/subscription.js';
+import repxRoutes from './routes/repxRoutes.js';
 import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
 import phoneRoutes from './routes/phone.js';
@@ -528,6 +532,9 @@ app.get('/api/test-before-parser', (req, res) => {
 app.post('/api/test-before-parser', (req, res) => {
   res.json({ success: true, message: 'POST before parser works' });
 });
+
+// Add Stripe webhook route BEFORE body parser (needs raw body)
+app.use('/api/stripe', stripeWebhookRoutes);
 
 // JSON body parser for all other routes
 app.use(express.json()); // Parse JSON request bodies
@@ -2521,17 +2528,20 @@ app.use(twilioWebhookRoutes);
 // Add Auth routes
 app.use('/api/auth', authRoutes);
 
+// Add Google OAuth routes
+app.use('/api', googleAuthRoutes);
+
 // Add protected Funding Strategy routes
 app.use('/api/funding', fundingStrategyRoutes);
 
 // Add Stripe routes for RepX subscriptions
 app.use('/api/stripe', stripeRoutes);
 
-// Add RepX-specific routes (shared endpoints from stripe routes)
-app.use('/api/repx', stripeRoutes);
+// Add RepX-specific routes (feature validation, access control)
+app.use('/api/repx', repxRoutes);
 
-// Add Market Data subscription routes (shared endpoints from stripe routes)
-app.use('/api/subscription', stripeRoutes);
+// Add unified subscription routes (new implementation)
+app.use('/api/subscription', subscriptionRoutes);
 
 // Add GlobalRepSpheres specific routes (legacy compatibility)
 // Route /api/subscription-status to the authenticated subscription endpoint 
