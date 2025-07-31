@@ -73,7 +73,7 @@ import subscriptionRoutes from './routes/subscription.js';
 import repxRoutes from './routes/repxRoutes.js';
 import usageRoutes from './routes/usage.js';
 import emailRoutes from './routes/email.js';
-import repxEmailRoutes from './routes/repxEmailRoutes.js';
+import sesEmailRoutes from './routes/sesEmailRoutes.js';
 import phoneRoutes from './routes/phone.js';
 import harveyRoutes from './routes/harvey.js';
 import coachingSessionRoutes from './routes/coachingSessionRoutes.js';
@@ -2481,8 +2481,8 @@ app.use('/api/usage', usageRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/email', emailRoutes);  // Also mount at /api/email for frontend compatibility
 
-// Add RepX email routes (tier-based email limits)
-app.use('/api/repx/email', repxEmailRoutes);
+// Add SES email routes (tier-based email limits with Amazon SES)
+app.use('/api/repx/email', sesEmailRoutes);
 
 // Add phone system routes
 app.use('/api/phone', phoneRoutes);
