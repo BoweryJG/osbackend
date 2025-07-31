@@ -24,10 +24,10 @@ const REPX_FEATURES = {
       phone: false,
       gmail: false,
       agentMinutes: 0.5, // 30 seconds
-      apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'],
+      apps: ['crm', 'market-data', 'repconnect', 'global'], // NO Canvas
       emailLimit: 0,
       phoneLimit: 0,
-      canvasScans: 3,
+      canvasScans: 0, // No Canvas access
       smtpProvider: null,
       twilioProvisioning: false,
       whiteLabel: false
@@ -35,17 +35,17 @@ const REPX_FEATURES = {
   },
   repx1: {
     tier: 1,
-    name: 'Rep¹ - Login',
+    name: 'Rep¹ - Phone Only',
     features: {
       login: true,
       email: false,
-      phone: false,
+      phone: true, // Phone access added
       gmail: false,
       agentMinutes: 1,
-      apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'],
+      apps: ['crm', 'market-data', 'repconnect', 'global'], // NO Canvas
       emailLimit: 0,
-      phoneLimit: 0,
-      canvasScans: 10,
+      phoneLimit: -1, // Unlimited phone
+      canvasScans: 0, // No Canvas access
       smtpProvider: null,
       twilioProvisioning: false,
       whiteLabel: false
@@ -53,16 +53,16 @@ const REPX_FEATURES = {
   },
   repx2: {
     tier: 2,
-    name: 'Rep² - Login + Email',
+    name: 'Rep² - Email + Canvas',
     features: {
       login: true,
       email: true,
-      phone: false,
+      phone: true, // Continue phone from Rep1
       gmail: false,
       agentMinutes: 5,
-      apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'],
+      apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'], // Canvas added here
       emailLimit: -1, // unlimited
-      phoneLimit: 0,
+      phoneLimit: -1, // unlimited
       canvasScans: 25,
       smtpProvider: 'vultr',
       twilioProvisioning: false,
@@ -71,7 +71,7 @@ const REPX_FEATURES = {
   },
   repx3: {
     tier: 3,
-    name: 'Rep³ - Login + Email + Phone',
+    name: 'Rep³ - Twilio Auto-Provision',
     features: {
       login: true,
       email: true,
@@ -83,19 +83,19 @@ const REPX_FEATURES = {
       phoneLimit: -1, // unlimited
       canvasScans: 50,
       smtpProvider: 'vultr',
-      twilioProvisioning: true,
+      twilioProvisioning: true, // Key feature: auto-provision
       whiteLabel: false,
       territoryIntelligence: true
     }
   },
   repx4: {
     tier: 4,
-    name: 'Rep⁴ - Login + Email + Phone + Gmail',
+    name: 'Rep⁴ - Gmail OAuth',
     features: {
       login: true,
       email: true,
       phone: true,
-      gmail: true,
+      gmail: true, // Key feature: Gmail OAuth
       agentMinutes: 30,
       apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'],
       emailLimit: -1,
@@ -111,13 +111,13 @@ const REPX_FEATURES = {
   },
   repx5: {
     tier: 5,
-    name: 'Rep⁵ - Everything + Custom',
+    name: 'Rep⁵ - White Label',
     features: {
       login: true,
       email: true,
       phone: true,
       gmail: true,
-      agentMinutes: -1, // unlimited
+      agentMinutes: -1, // unlimited agents
       apps: ['crm', 'canvas', 'market-data', 'repconnect', 'global'],
       emailLimit: -1,
       phoneLimit: -1,
@@ -125,7 +125,7 @@ const REPX_FEATURES = {
       smtpProvider: 'vultr',
       twilioProvisioning: true,
       gmailScopes: ['readonly', 'send', 'compose', 'modify'],
-      whiteLabel: true,
+      whiteLabel: true, // Key feature: White label
       territoryIntelligence: true,
       advancedAnalytics: true,
       customIntegrations: true,
@@ -264,7 +264,12 @@ router.post('/check-feature', requireAuth, async (req, res) => {
       
       case 'phone':
         hasAccess = tierFeatures.features.phone === true;
-        reason = hasAccess ? 'Phone features available' : 'Upgrade to Rep³ or higher for phone access';
+        reason = hasAccess ? 'Phone features available' : 'Upgrade to Rep¹ or higher for phone access';
+        break;
+      
+      case 'canvas':
+        hasAccess = tierFeatures.features.apps && tierFeatures.features.apps.includes('canvas');
+        reason = hasAccess ? 'Canvas app access granted' : 'Upgrade to Rep² or higher for Canvas access';
         break;
       
       case 'gmail':
