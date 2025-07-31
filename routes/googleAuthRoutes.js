@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { createClient } from '@supabase/supabase-js';
 
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireTier } from '../middleware/unifiedAuth.js';
 import logger from '../utils/logger.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
@@ -35,7 +36,7 @@ const GMAIL_SCOPES = [
  * Get Google OAuth URL
  * This endpoint is called by the frontend to get the URL to redirect users to Google
  */
-router.get('/auth/google/url', requireAuth, (req, res) => {
+router.get('/auth/google/url', requireAuth, requireTier('repx4'), (req, res) => {
   try {
     // Get the origin from the request to determine redirect URI
     const origin = req.headers.origin || req.headers.referer;
@@ -154,7 +155,7 @@ router.get('/auth/google/callback', async (req, res) => {
 /**
  * Disconnect Gmail account
  */
-router.delete('/auth/google/disconnect', requireAuth, async (req, res) => {
+router.delete('/auth/google/disconnect', requireAuth, requireTier('repx4'), async (req, res) => {
   try {
     const { email } = req.body;
     const userId = req.user.id;
@@ -180,7 +181,7 @@ router.delete('/auth/google/disconnect', requireAuth, async (req, res) => {
 /**
  * Get connected Gmail accounts
  */
-router.get('/auth/google/accounts', requireAuth, async (req, res) => {
+router.get('/auth/google/accounts', requireAuth, requireTier('repx4'), async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -206,7 +207,7 @@ router.get('/auth/google/accounts', requireAuth, async (req, res) => {
 /**
  * Refresh Gmail token if needed
  */
-router.post('/auth/google/refresh', requireAuth, async (req, res) => {
+router.post('/auth/google/refresh', requireAuth, requireTier('repx4'), async (req, res) => {
   try {
     const { email } = req.body;
     const userId = req.user.id;

@@ -8,6 +8,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
 import logger from './utils/logger.js';
+import { authenticateToken, requireCanvasAccess } from './middleware/unifiedAuth.js';
 
 const router = express.Router();
 
@@ -400,7 +401,7 @@ async function conductResearch(doctor, product, jobId, updateProgress) {
 }
 
 // Start research job
-router.post('/research/start', async (req, res) => {
+router.post('/research/start', authenticateToken, requireCanvasAccess, async (req, res) => {
   const { doctor, product, userId } = req.body;
   
   // Check rate limit
@@ -467,7 +468,7 @@ router.post('/research/start', async (req, res) => {
 });
 
 // Get job status
-router.get('/research/:jobId/status', (req, res) => {
+router.get('/research/:jobId/status', authenticateToken, requireCanvasAccess, (req, res) => {
   const job = researchJobs.get(req.params.jobId);
   
   if (!job) {
@@ -486,7 +487,7 @@ router.get('/research/:jobId/status', (req, res) => {
 });
 
 // Get job results
-router.get('/research/:jobId', (req, res) => {
+router.get('/research/:jobId', authenticateToken, requireCanvasAccess, (req, res) => {
   const job = researchJobs.get(req.params.jobId);
   
   if (!job) {
@@ -505,7 +506,7 @@ router.get('/research/:jobId', (req, res) => {
 });
 
 // Stream updates via SSE
-router.get('/research/:jobId/stream', (req, res) => {
+router.get('/research/:jobId/stream', authenticateToken, requireCanvasAccess, (req, res) => {
   const jobId = req.params.jobId;
   
   res.writeHead(200, {
@@ -537,7 +538,7 @@ router.get('/research/:jobId/stream', (req, res) => {
 });
 
 // Batch research
-router.post('/research/batch', async (req, res) => {
+router.post('/research/batch', authenticateToken, requireCanvasAccess, async (req, res) => {
   const { doctors, product, userId } = req.body;
   
   if (!Array.isArray(doctors) || doctors.length === 0) {
@@ -590,7 +591,7 @@ router.post('/research/batch', async (req, res) => {
 });
 
 // Brave Search endpoint for Canvas
-router.post('/brave-search', async (req, res) => {
+router.post('/brave-search', authenticateToken, requireCanvasAccess, async (req, res) => {
   try {
     const { query, count = 10 } = req.body;
     
@@ -628,7 +629,7 @@ router.post('/brave-search', async (req, res) => {
 
 // Firecrawl Scrape endpoint for Canvas
 
-router.post('/firecrawl-scrape', async (req, res) => {
+router.post('/firecrawl-scrape', authenticateToken, requireCanvasAccess, async (req, res) => {
   try {
     const { url, formats = ['markdown'] } = req.body;
     
@@ -674,7 +675,7 @@ router.post('/firecrawl-scrape', async (req, res) => {
 });
 
 // Master Orchestrator for Private Practice Intelligence Factory
-router.post('/private-practice-intelligence', async (req, res) => {
+router.post('/private-practice-intelligence', authenticateToken, requireCanvasAccess, async (req, res) => {
   try {
     const { doctor, product, userId } = req.body;
     
@@ -806,7 +807,7 @@ router.post('/private-practice-intelligence', async (req, res) => {
 });
 
 // Direct Claude API endpoint for Canvas (legacy support)
-router.post('/openrouter', async (req, res) => {
+router.post('/openrouter', authenticateToken, requireCanvasAccess, async (req, res) => {
   try {
     const { prompt, model = 'claude-3-5-sonnet-20241022' } = req.body;
     
@@ -865,7 +866,7 @@ router.post('/openrouter', async (req, res) => {
 });
 
 // NPI Lookup endpoint for Canvas
-router.get('/npi-lookup', async (req, res) => {
+router.get('/npi-lookup', authenticateToken, requireCanvasAccess, async (req, res) => {
   try {
     const { search } = req.query;
     
@@ -968,7 +969,7 @@ router.get('/npi-lookup', async (req, res) => {
 });
 
 // Apify Actor proxy
-router.post('/apify-actor', async (req, res) => {
+router.post('/apify-actor', authenticateToken, requireCanvasAccess, async (req, res) => {
   const { actorId, input, waitForFinish = true } = req.body;
   
   if (!actorId || !input) {
@@ -1026,7 +1027,7 @@ router.post('/apify-actor', async (req, res) => {
 });
 
 // Anthropic Claude proxy endpoint for Canvas
-router.post('/anthropic', async (req, res) => {
+router.post('/anthropic', authenticateToken, requireCanvasAccess, async (req, res) => {
   const { prompt, model = 'claude-3-5-sonnet-20241022' } = req.body;
   
   if (!prompt) {
@@ -1087,7 +1088,7 @@ router.post('/anthropic', async (req, res) => {
 });
 
 // Research Intelligence proxy - Uses Anthropic directly
-router.post('/perplexity-research', async (req, res) => {
+router.post('/perplexity-research', authenticateToken, requireCanvasAccess, async (req, res) => {
   const { query, model = 'sonar' } = req.body;
   
   if (!query) {
