@@ -1,12 +1,12 @@
 import express from 'express';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateToken, requireTier } from '../middleware/auth.js';
 import repxEmailService from '../services/repxEmailService.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
 
 // Send email with RepX tier-based limits
-router.post('/send', authenticateUser, async (req, res) => {
+router.post('/send', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { to, subject, html, text, replyTo, attachments } = req.body;
@@ -40,7 +40,7 @@ router.post('/send', authenticateUser, async (req, res) => {
 });
 
 // Send bulk emails (RepX4+ only)
-router.post('/send-bulk', authenticateUser, async (req, res) => {
+router.post('/send-bulk', authenticateToken, requireTier('repx4'), async (req, res) => {
   try {
     const userId = req.user.id;
     const { recipients, subject, html, text, replyTo } = req.body;
@@ -100,7 +100,7 @@ router.post('/send-bulk', authenticateUser, async (req, res) => {
 });
 
 // Get email usage stats
-router.get('/stats', authenticateUser, async (req, res) => {
+router.get('/stats', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const stats = await repxEmailService.getEmailStats(userId);
@@ -121,7 +121,7 @@ router.get('/stats', authenticateUser, async (req, res) => {
 });
 
 // Check email quota
-router.get('/quota', authenticateUser, async (req, res) => {
+router.get('/quota', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const emailConfig = await repxEmailService.getUserEmailConfig(userId);
@@ -150,7 +150,7 @@ router.get('/quota', authenticateUser, async (req, res) => {
 });
 
 // Test SMTP connection (admin only)
-router.get('/test-smtp', authenticateUser, async (req, res) => {
+router.get('/test-smtp', authenticateToken, async (req, res) => {
   try {
     // Check if user is admin
     if (req.user.email !== 'admin@repspheres.com') {

@@ -1,12 +1,12 @@
 import express from 'express';
-import { authenticateUser } from '../middleware/auth.js';
+import { authenticateToken, requireTier } from '../middleware/auth.js';
 import sesEmailService from '../services/sesEmailService.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
 
 // Send email with RepX tier-based limits
-router.post('/send', authenticateUser, async (req, res) => {
+router.post('/send', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await sesEmailService.sendEmail({
@@ -25,7 +25,7 @@ router.post('/send', authenticateUser, async (req, res) => {
 });
 
 // Send bulk email (RepX4+ only)
-router.post('/send-bulk', authenticateUser, async (req, res) => {
+router.post('/send-bulk', authenticateToken, requireTier('repx4'), async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await sesEmailService.sendBulkEmail({
@@ -44,7 +44,7 @@ router.post('/send-bulk', authenticateUser, async (req, res) => {
 });
 
 // Create email template
-router.post('/templates', authenticateUser, async (req, res) => {
+router.post('/templates', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const result = await sesEmailService.createEmailTemplate(req.body);
     res.json(result);
@@ -57,7 +57,7 @@ router.post('/templates', authenticateUser, async (req, res) => {
 });
 
 // Get email statistics
-router.get('/stats', authenticateUser, async (req, res) => {
+router.get('/stats', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const stats = await sesEmailService.getEmailStats(userId);
@@ -71,7 +71,7 @@ router.get('/stats', authenticateUser, async (req, res) => {
 });
 
 // Get remaining quota
-router.get('/quota', authenticateUser, async (req, res) => {
+router.get('/quota', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const emailConfig = await sesEmailService.getUserEmailConfig(userId);
@@ -91,7 +91,7 @@ router.get('/quota', authenticateUser, async (req, res) => {
 });
 
 // SES Setup Endpoints (Admin only)
-router.post('/verify-email', authenticateUser, async (req, res) => {
+router.post('/verify-email', authenticateToken, async (req, res) => {
   try {
     // Check if user is admin
     if (req.user.email !== process.env.ADMIN_EMAIL) {
@@ -109,7 +109,7 @@ router.post('/verify-email', authenticateUser, async (req, res) => {
   }
 });
 
-router.post('/verify-domain', authenticateUser, async (req, res) => {
+router.post('/verify-domain', authenticateToken, async (req, res) => {
   try {
     // Check if user is admin
     if (req.user.email !== process.env.ADMIN_EMAIL) {
@@ -127,7 +127,7 @@ router.post('/verify-domain', authenticateUser, async (req, res) => {
   }
 });
 
-router.get('/sandbox-status', authenticateUser, async (req, res) => {
+router.get('/sandbox-status', authenticateToken, async (req, res) => {
   try {
     const status = await sesEmailService.getSandboxStatus();
     res.json(status);
@@ -140,7 +140,7 @@ router.get('/sandbox-status', authenticateUser, async (req, res) => {
 });
 
 // Test email endpoint
-router.post('/test', authenticateUser, async (req, res) => {
+router.post('/test', authenticateToken, requireTier('repx2'), async (req, res) => {
   try {
     const userId = req.user.id;
     const testEmail = req.user.email;
