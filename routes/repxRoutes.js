@@ -1,5 +1,6 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+
 import { requireAuth } from '../middleware/authMiddleware.js';
 import logger from '../utils/logger.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';

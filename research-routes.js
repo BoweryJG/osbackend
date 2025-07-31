@@ -6,6 +6,7 @@
 import express from 'express';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+
 import logger from './utils/logger.js';
 
 const router = express.Router();
@@ -875,10 +876,10 @@ router.get('/npi-lookup', async (req, res) => {
     // Parse search term - handle variations
     const searchLower = search.toLowerCase().trim();
     const terms = search.trim().split(/\s+/);
-    let firstName = terms[0];
-    let lastName = terms.length > 1 ? terms[terms.length - 1] : '';
+    const firstName = terms[0];
+    const lastName = terms.length > 1 ? terms[terms.length - 1] : '';
     let state = '';
-    let city = '';
+    const city = '';
     
     // Check if search includes location hints
     if (searchLower.includes('buffalo') || searchLower.includes('ny')) {

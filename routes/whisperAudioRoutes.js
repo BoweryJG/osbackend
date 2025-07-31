@@ -1,7 +1,8 @@
 import express from 'express';
-import { ElevenLabsTTS } from '../services/elevenLabsTTS.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+
+import { ElevenLabsTTS } from '../services/elevenLabsTTS.js';
 
 dotenv.config();
 

@@ -1,5 +1,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import readline from 'readline';
 
 import twilio from 'twilio';
 import dotenv from 'dotenv';
@@ -96,7 +97,6 @@ console.log('7. The transcription will show sentiment analysis (positive/neutral
 console.log('Alternatively, this script will make a test call to demonstrate transcription.\n');
 
 // Ask if they want to make a test call
-import readline from 'readline';
 
 const rl = readline.createInterface({
   input: process.stdin,

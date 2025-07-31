@@ -18,18 +18,67 @@ class GmailSyncService {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI || 'urn:ietf:wg:oauth:2.0:oob'
+      null // Redirect URI will be set dynamically
     );
 
-    // Set credentials if available
-    if (process.env.GOOGLE_ACCESS_TOKEN && process.env.GOOGLE_REFRESH_TOKEN) {
-      this.oauth2Client.setCredentials({
-        access_token: process.env.GOOGLE_ACCESS_TOKEN,
-        refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-      });
-    }
-
     this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
+  }
+
+  /**
+   * Get OAuth credentials for a user from the database
+   * @param {string} userId - The user ID
+   * @param {string} email - The Gmail email address
+   * @returns {Promise<Object|null>}
+   */
+  async getUserGmailCredentials(userId, email) {
+    try {
+      const { data, error } = await supabase
+        .from('user_gmail_tokens')
+        .select('*')
+        .match({ user_id: userId, email })
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      // Check if token is expired
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        // Try to refresh the token
+        this.oauth2Client.setCredentials({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token
+        });
+
+        try {
+          const { credentials } = await this.oauth2Client.refreshAccessToken();
+          
+          // Update tokens in database
+          await supabase
+            .from('user_gmail_tokens')
+            .update({
+              access_token: credentials.access_token,
+              expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
+              updated_at: new Date().toISOString()
+            })
+            .match({ user_id: userId, email });
+
+          return {
+            ...data,
+            access_token: credentials.access_token,
+            expires_at: credentials.expiry_date
+          };
+        } catch (refreshError) {
+          console.error('Failed to refresh token:', refreshError);
+          return null;
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching Gmail credentials:', error);
+      return null;
+    }
   }
 
   /**
@@ -42,10 +91,32 @@ class GmailSyncService {
     try {
       console.log(`Starting Gmail sync for user: ${userId}, account: ${accountEmail || 'all'}`);
 
-      // For now, we'll use a simple approach with the configured Gmail accounts
-      // In production, you'd integrate with OAuth to get user's Gmail access
+      // Get user's connected Gmail accounts
+      const { data: gmailAccounts, error } = await supabase
+        .from('user_gmail_tokens')
+        .select('email')
+        .eq('user_id', userId);
+
+      if (error || !gmailAccounts || gmailAccounts.length === 0) {
+        throw new Error('No Gmail accounts connected for this user');
+      }
+
+      const syncedEmails = [];
       
-      const syncedEmails = await this.syncFromConfiguredAccounts(userId, accountEmail);
+      // Sync emails from each connected account
+      for (const account of gmailAccounts) {
+        if (accountEmail && account.email !== accountEmail) {
+          continue; // Skip if specific account requested
+        }
+
+        try {
+          const emails = await this.syncUserGmailAccount(userId, account.email);
+          syncedEmails.push(...emails);
+        } catch (error) {
+          console.error(`Error syncing account ${account.email}:`, error);
+          // Continue with other accounts even if one fails
+        }
+      }
       
       console.log(`Gmail sync completed. Synced ${syncedEmails.length} emails`);
       
@@ -56,6 +127,108 @@ class GmailSyncService {
     } catch (error) {
       console.error('Gmail sync error:', error);
       throw new Error(`Gmail sync failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Sync emails from a specific user's Gmail account using OAuth
+   * @param {string} userId - The user ID
+   * @param {string} email - The Gmail email address
+   * @returns {Promise<Array>}
+   */
+  async syncUserGmailAccount(userId, email) {
+    console.log(`Syncing Gmail account: ${email} for user: ${userId}`);
+
+    // Get user's OAuth credentials
+    const credentials = await this.getUserGmailCredentials(userId, email);
+    if (!credentials) {
+      throw new Error(`No valid credentials found for ${email}`);
+    }
+
+    // Set OAuth credentials
+    this.oauth2Client.setCredentials({
+      access_token: credentials.access_token,
+      refresh_token: credentials.refresh_token
+    });
+
+    try {
+      // Get emails from Gmail API
+      const response = await this.gmail.users.messages.list({
+        userId: 'me',
+        q: 'in:sent', // Get sent emails
+        maxResults: 50 // Limit for initial sync
+      });
+
+      if (!response.data.messages) {
+        return [];
+      }
+
+      const emails = [];
+      
+      // Fetch full details for each message
+      for (const message of response.data.messages) {
+        try {
+          const fullMessage = await this.gmail.users.messages.get({
+            userId: 'me',
+            id: message.id
+          });
+
+          const email = this.parseGmailMessage(fullMessage.data, userId, email);
+          if (email) {
+            const stored = await this.storeEmailInDatabase(email);
+            if (stored) {
+              emails.push(stored);
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching message ${message.id}:`, error);
+        }
+      }
+
+      return emails;
+    } catch (error) {
+      console.error('Gmail API error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse Gmail message into our email format
+   * @param {Object} message - Gmail message object
+   * @param {string} userId - The user ID
+   * @param {string} fromEmail - The sender email
+   * @returns {Object|null}
+   */
+  parseGmailMessage(message, userId, fromEmail) {
+    try {
+      const headers = message.payload.headers;
+      const getHeader = (name) => headers.find(h => h.name === name)?.value || '';
+
+      // Extract email body
+      let body = '';
+      if (message.payload.body?.data) {
+        body = Buffer.from(message.payload.body.data, 'base64').toString();
+      } else if (message.payload.parts) {
+        const textPart = message.payload.parts.find(p => p.mimeType === 'text/plain');
+        if (textPart?.body?.data) {
+          body = Buffer.from(textPart.body.data, 'base64').toString();
+        }
+      }
+
+      return {
+        user_id: userId,
+        from_email: fromEmail,
+        to_email: getHeader('To'),
+        subject: getHeader('Subject'),
+        body: body,
+        email_type: 'outbound',
+        sent_at: new Date(parseInt(message.internalDate)).toISOString(),
+        gmail_message_id: message.id,
+        thread_id: message.threadId
+      };
+    } catch (error) {
+      console.error('Error parsing Gmail message:', error);
+      return null;
     }
   }
 

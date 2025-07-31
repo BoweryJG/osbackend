@@ -1,7 +1,8 @@
+import crypto from 'crypto';
+
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
-import crypto from 'crypto';
 
 import { AgentCore } from '../agents/core/agentCore.js';
 import { ConversationManager } from '../agents/core/conversationManager.js';
