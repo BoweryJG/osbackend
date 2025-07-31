@@ -20,7 +20,7 @@ const COOKIE_OPTIONS = {
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin in production
   maxAge: 30 * 60 * 1000, // 30 minutes
   path: '/',
-  // domain: '.repspheres.com' // Removed - each app handles its own auth
+  domain: process.env.NODE_ENV === 'production' ? '.repspheres.com' : undefined // Enable cross-domain for production
 };
 
 // Exchange Supabase token for httpOnly cookies
@@ -85,9 +85,16 @@ router.post('/login', async (req, res) => {
 
 // Logout
 router.post('/logout', requireAuth, (req, res) => {
-  res.clearCookie('session');
-  res.clearCookie('csrf_token');
-  res.clearCookie('last_activity');
+  // Clear cookies with the same options used to set them
+  res.clearCookie('session', COOKIE_OPTIONS);
+  res.clearCookie('csrf_token', {
+    ...COOKIE_OPTIONS,
+    httpOnly: false
+  });
+  res.clearCookie('last_activity', {
+    ...COOKIE_OPTIONS,
+    httpOnly: false
+  });
 
   logger.info('User logged out:', req.user?.id);
 

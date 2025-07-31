@@ -229,7 +229,7 @@ export function getStandardAuthConfig() {
       flowType: 'pkce',
       cookies: isProduction ? {
         domain: '.repspheres.com',
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: true,
         path: '/'
       } : {

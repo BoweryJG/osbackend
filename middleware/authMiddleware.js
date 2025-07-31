@@ -36,9 +36,10 @@ const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin in production
   maxAge: SESSION_TIMEOUT,
-  path: '/'
+  path: '/',
+  domain: process.env.NODE_ENV === 'production' ? '.repspheres.com' : undefined // Enable cross-domain for production
 };
 
 // Generate CSRF token
@@ -147,10 +148,16 @@ export const sessionTimeout = (req, res, next) => {
     const timeSinceLastActivity = Date.now() - parseInt(lastActivity);
 
     if (timeSinceLastActivity > SESSION_TIMEOUT) {
-      // Clear cookies
-      res.clearCookie('session');
-      res.clearCookie('last_activity');
-      res.clearCookie('csrf_token');
+      // Clear cookies with consistent options
+      res.clearCookie('session', COOKIE_OPTIONS);
+      res.clearCookie('last_activity', {
+        ...COOKIE_OPTIONS,
+        httpOnly: false
+      });
+      res.clearCookie('csrf_token', {
+        ...COOKIE_OPTIONS,
+        httpOnly: false
+      });
 
       return res.status(401).json({ error: 'Session expired' });
     }
