@@ -5,7 +5,7 @@ import express from 'express';
 import multer from 'multer';
 
 import { VoiceCloningService } from '../services/voiceCloningService.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/unifiedAuth.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();

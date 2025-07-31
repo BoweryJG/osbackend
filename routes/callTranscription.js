@@ -5,7 +5,7 @@ import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-import { authenticateUser } from '../auth.js';
+import { authenticateUser } from '../middleware/unifiedAuth.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 // Get the directory name of the current module

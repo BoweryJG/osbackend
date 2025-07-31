@@ -102,7 +102,7 @@ import {
 } from './twilio_service.js';
 import researchRoutes from './research-routes.js';
 import zapierRoutes from './zapier_webhook.js';
-import { authenticateUser, optionalAuth } from './auth.js';
+import { authenticateUser, optionalAuth } from './middleware/unifiedAuth.js';
 import { successResponse, errorResponse } from './utils/responseHelpers.js';
 
 // Initialize cache for API responses with enhanced configuration

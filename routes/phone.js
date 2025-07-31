@@ -1,7 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 
-import { authenticateUser } from '../auth.js';
+import { authenticateUser } from '../middleware/unifiedAuth.js';
 import julieAI from '../services/julieAI.js';
 import WebRTCVoiceService from '../services/webrtcVoiceService.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';

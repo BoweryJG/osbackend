@@ -1,7 +1,7 @@
 import express from 'express';
 import OpenAI from 'openai';
 
-import { authenticateUser } from '../auth.js';
+import { authenticateUser } from '../middleware/unifiedAuth.js';
 import HarveyVoiceService from '../services/harveyVoiceService.js';
 import { ProcedureService } from '../agents/services/procedureService.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';

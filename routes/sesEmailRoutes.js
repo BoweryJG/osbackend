@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken, requireTier } from '../middleware/auth.js';
+import { authenticateToken, requireTier } from '../middleware/unifiedAuth.js';
 import sesEmailService from '../services/sesEmailService.js';
 import logger from '../utils/logger.js';
 

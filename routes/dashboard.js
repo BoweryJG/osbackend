@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { authenticateToken, requireTier } from '../middleware/auth.js';
+import { authenticateToken, requireTier } from '../middleware/unifiedAuth.js';
 import { apiRateLimiter, createTierBasedRateLimiter } from '../middleware/rateLimiter.js';
 import logger from '../utils/logger.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';

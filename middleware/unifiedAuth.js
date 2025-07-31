@@ -1,42 +1,96 @@
-import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
-
 import logger from '../utils/logger.js';
 
+// Initialize Supabase client for auth verification
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_URL || 'https://cbopynuvhcymbumjnvay.supabase.co',
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
 );
 
-// Middleware to authenticate JWT tokens
-const authenticateToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
+/**
+ * Primary authentication middleware - verifies Supabase JWT tokens
+ * This is the main auth method that should be used going forward
+ */
+export async function authenticateToken(req, res, next) {
   try {
-    // Verify token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization || req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing or invalid authorization header'
+      });
     }
 
+    const token = authHeader.replace('Bearer ', '');
+
+    // Verify token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      logger.error('Token verification failed:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token'
+      });
+    }
+
+    // Attach user to request
     req.user = user;
+    req.userId = user.id;
+    req.userEmail = user.email;
+
     next();
   } catch (error) {
     logger.error('Authentication error:', error);
-    return res.status(403).json({ error: 'Invalid token' });
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication failed'
+    });
   }
-};
+}
 
-// Middleware to check subscription tier (updated for RepX system)
-const requireTier = (minTier) => {
+/**
+ * Legacy alias for authenticateToken to maintain backward compatibility
+ * @deprecated Use authenticateToken instead
+ */
+export async function authenticateUser(req, res, next) {
+  return authenticateToken(req, res, next);
+}
+
+/**
+ * Optional authentication - continues even if no auth provided
+ * Useful for routes that work with or without authentication
+ */
+export async function optionalAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      
+      if (user) {
+        req.user = user;
+        req.userId = user.id;
+        req.userEmail = user.email;
+      }
+    }
+  } catch (error) {
+    // Silent fail for optional auth
+    logger.warn('Optional auth check failed:', error.message);
+  }
+  
+  next();
+}
+
+/**
+ * Middleware to check subscription tier (updated for RepX system)
+ * Usage: requireTier('repx2') - requires RepX2 or higher
+ */
+export const requireTier = (minTier) => {
   const tierHierarchy = {
     free: 0,
+    repx0: 0,
     repx1: 1,
     repx2: 2,
     repx3: 3,
@@ -84,8 +138,11 @@ const requireTier = (minTier) => {
   };
 };
 
-// Middleware to validate Canvas scan limits
-const validateCanvasAccess = async (req, res, next) => {
+/**
+ * Middleware to validate Canvas scan limits
+ * Checks daily scan limits based on subscription tier
+ */
+export const validateCanvasAccess = async (req, res, next) => {
   try {
     const userId = req.user?.sub || req.user?.id;
     
@@ -133,8 +190,11 @@ const validateCanvasAccess = async (req, res, next) => {
   }
 };
 
-// Middleware specifically for RepX1 tier (phone-only) validation
-const requireCanvasAccess = async (req, res, next) => {
+/**
+ * Middleware specifically for Canvas access validation
+ * Blocks RepX1 users (phone-only tier) from Canvas features
+ */
+export const requireCanvasAccess = async (req, res, next) => {
   try {
     const userId = req.user?.sub || req.user?.id;
     
@@ -173,9 +233,5 @@ const requireCanvasAccess = async (req, res, next) => {
   }
 };
 
-export {
-  authenticateToken,
-  requireTier,
-  validateCanvasAccess,
-  requireCanvasAccess
-};
+// Default export for convenience
+export default authenticateToken;
