@@ -450,7 +450,58 @@ The system includes 6 comprehensive knowledge domains for B2B medical device sal
 - **Rate Limiting**: Request throttling to prevent abuse
 - **Error Handling**: Secure error responses without data leaks
 
+## Voice Conversation System (August 2, 2025)
+
+### Overview
+Complete two-way voice conversation system with WebRTC audio streaming, real-time transcription, and AI agent responses. Supports whisper coaching for sales training.
+
+### Implementation Status ✅ DEPLOYED
+- **WebRTC Pipeline**: WebRTC → Deepgram STT → AI Agent → ElevenLabs TTS → WebRTC
+- **Whisper Coaching**: Twilio 3-way conference calls with coach-only audio channel
+- **Real-time Analysis**: Live conversation analysis with coaching triggers
+- **Voice Sessions**: Complete tracking in `agent_voice_sessions` table
+- **WebSocket Namespace**: `/voice-agents` for real-time voice events
+
+### Key Endpoints
+```javascript
+// Voice session management
+GET  /api/voice/sessions/:sessionId/status     // Get session status
+GET  /api/voice/sessions/:sessionId/transcript  // Get conversation transcript
+POST /api/voice/test-audio                     // Test microphone/audio setup
+GET  /api/voice/agents/voice-enabled           // List voice-capable agents
+POST /api/voice/coaching/start                 // Start whisper coaching session
+```
+
+### Architecture Components
+- **Deepgram STT**: Real-time speech-to-text transcription
+- **ElevenLabs TTS**: Natural voice synthesis with agent-specific voices
+- **Mediasoup SFU**: WebRTC server for scalable audio routing
+- **Twilio Conference**: 3-way calls with whisper mode for coaching
+- **Socket.IO**: Real-time events on `/voice-agents` namespace
+
+### Database Schema
+```sql
+agent_voice_sessions    -- Voice call session tracking
+voice_transcripts       -- Real-time conversation transcripts
+agent_voice_profiles    -- Voice configurations per agent
+voice_calls            -- Call history and metrics
+```
+
+### Integration Notes
+- Uses unified authentication (`authenticateToken` from unifiedAuth.js)
+- Requires Rep² tier or higher for voice features
+- Conversation time limits based on subscription tier
+- All voice services use lazy initialization for deployment stability
+
 ## Production Fixes and Deployment History
+
+### August 2025 - Voice System Implementation
+- Implemented complete voice conversation pipeline
+- Fixed multiple import and module resolution issues
+- Created missing service files (deepgramSTT.js, elevenLabsTTS.js)
+- Aligned with unified authentication system
+- Created missing `voice_transcripts` table
+- Successfully deployed with all services operational
 
 ### August 2025 - Complete Production Overhaul
 
