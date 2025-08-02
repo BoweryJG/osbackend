@@ -22,7 +22,25 @@ import Anthropic from '@anthropic-ai/sdk';
 // Get the directory name and load environment variables first
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+// DEPLOYMENT DIAGNOSTICS: Log environment before and after dotenv
+console.log('=== STARTUP ENVIRONMENT DIAGNOSTICS ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT (before dotenv):', process.env.PORT);
+console.log('ELEVENLABS_API_KEY (before dotenv):', process.env.ELEVENLABS_API_KEY ? 'SET' : 'NOT SET');
+console.log('SENDGRID_API_KEY (before dotenv):', process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+
+// Only load .env in development
+if (process.env.NODE_ENV !== 'production') {
+  console.log('Loading .env file (development mode)...');
+  dotenv.config({ path: path.resolve(__dirname, '.env') });
+} else {
+  console.log('Production mode - using platform environment variables');
+}
+
+console.log('PORT (after dotenv):', process.env.PORT);
+console.log('ELEVENLABS_API_KEY (after dotenv):', process.env.ELEVENLABS_API_KEY ? 'SET' : 'NOT SET');
+console.log('=== END ENVIRONMENT DIAGNOSTICS ===\n');
 
 // Internal utilities
 import gracefulShutdown from './utils/gracefulShutdown.js';

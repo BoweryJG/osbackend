@@ -809,7 +809,25 @@ export class AudioClipService {
   }
 }
 
-// Export singleton instance
-export const audioClipService = new AudioClipService();
+// Export singleton instance with lazy initialization
+let _audioClipService = null;
+
+export function getAudioClipService() {
+  if (!_audioClipService) {
+    _audioClipService = new AudioClipService();
+  }
+  return _audioClipService;
+}
+
+// For backward compatibility, export a proxy that creates the instance on first access
+export const audioClipService = new Proxy({}, {
+  get(target, prop) {
+    return getAudioClipService()[prop];
+  },
+  set(target, prop, value) {
+    getAudioClipService()[prop] = value;
+    return true;
+  }
+});
 
 export default AudioClipService;

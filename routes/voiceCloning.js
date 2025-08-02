@@ -9,7 +9,29 @@ import { authenticateToken } from '../middleware/unifiedAuth.js';
 import { successResponse, errorResponse } from '../utils/responseHelpers.js';
 
 const router = express.Router();
-const voiceCloningService = new VoiceCloningService();
+
+// Lazy initialization to prevent crashes when ELEVENLABS_API_KEY is not yet available
+let voiceCloningService = null;
+
+function getVoiceCloningService() {
+  if (!voiceCloningService) {
+    try {
+      voiceCloningService = new VoiceCloningService();
+    } catch (error) {
+      console.error('Failed to initialize VoiceCloningService:', error.message);
+      // Return a stub that throws meaningful errors
+      return {
+        listVoices: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); },
+        addVoice: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); },
+        editVoice: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); },
+        deleteVoice: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); },
+        getVoice: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); },
+        generateVoicePreview: () => { throw new Error('Voice cloning service not available - ELEVENLABS_API_KEY may be missing'); }
+      };
+    }
+  }
+  return voiceCloningService;
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -40,7 +62,7 @@ router.post('/clone-from-url', authenticateToken, async (req, res) => {
     }
     
     // Clone voice
-    const result = await voiceCloningService.cloneVoiceFromUrl(url, name, {
+    const result = await getVoiceCloningService().cloneVoiceFromUrl(url, name, {
       description,
       labels,
       userId: req.user.id
@@ -83,12 +105,12 @@ router.post('/clone-from-files', authenticateToken, upload.array('audioFiles', 5
     const processedFiles = [];
     
     for (const file of uploadedFiles) {
-      const processed = await voiceCloningService.processAudioFile(file.path);
+      const processed = await getVoiceCloningService().processAudioFile(file.path);
       processedFiles.push(processed.processedPath);
     }
     
     // Create voice profile
-    const voice = await voiceCloningService.createVoiceProfile(
+    const voice = await getVoiceCloningService().createVoiceProfile(
       name,
       description,
       processedFiles,
@@ -124,7 +146,7 @@ router.get('/voices/:voiceId', authenticateToken, async (req, res) => {
   try {
     const { voiceId } = req.params;
     
-    const voice = await voiceCloningService.getVoiceProfile(voiceId);
+    const voice = await getVoiceCloningService().getVoiceProfile(voiceId);
     
     if (!voice) {
       return res.status(404).json(errorResponse('NOT_FOUND', 'Voice not found', null, 404));
@@ -146,7 +168,7 @@ router.get('/voices', authenticateToken, async (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
     
-    const voices = await voiceCloningService.listVoiceProfiles({
+    const voices = await getVoiceCloningService().listVoiceProfiles({
       limit: parseInt(limit),
       offset: parseInt(offset),
       userId: req.user.id
@@ -176,7 +198,7 @@ router.put('/voices/:voiceId/settings', authenticateToken, async (req, res) => {
       return res.status(400).json(errorResponse('MISSING_PARAMETER', 'Settings are required', null, 400));
     }
     
-    const updated = await voiceCloningService.updateVoiceSettings(voiceId, settings);
+    const updated = await getVoiceCloningService().updateVoiceSettings(voiceId, settings);
     
     res.json(successResponse({ voice: updated }, 'Voice settings updated successfully'));
     
@@ -194,7 +216,7 @@ router.delete('/voices/:voiceId', authenticateToken, async (req, res) => {
   try {
     const { voiceId } = req.params;
     
-    const result = await voiceCloningService.deleteVoiceProfile(voiceId);
+    const result = await getVoiceCloningService().deleteVoiceProfile(voiceId);
     
     res.json(successResponse(result, 'Voice profile deleted successfully'));
     
@@ -216,7 +238,7 @@ router.post('/extract-audio', authenticateToken, async (req, res) => {
       return res.status(400).json(errorResponse('MISSING_PARAMETER', 'URL is required', null, 400));
     }
     
-    const audioInfo = await voiceCloningService.extractAudioFromUrl(url);
+    const audioInfo = await getVoiceCloningService().extractAudioFromUrl(url);
     
     res.json(successResponse({
       info: {

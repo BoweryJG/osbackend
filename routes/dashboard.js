@@ -18,7 +18,21 @@ import { personalityEngine } from '../services/personalityEngine.js';
 import { audioClipService } from '../services/audioClipService.js';
 
 const router = express.Router();
-const voiceCloningService = new VoiceCloningService();
+
+// Lazy initialization to prevent crashes when ELEVENLABS_API_KEY is not yet available
+let voiceCloningService = null;
+
+function getVoiceCloningService() {
+  if (!voiceCloningService) {
+    try {
+      voiceCloningService = new VoiceCloningService();
+    } catch (error) {
+      console.error('Failed to initialize VoiceCloningService:', error.message);
+      return null;
+    }
+  }
+  return voiceCloningService;
+}
 
 // Apply authentication to all dashboard routes
 router.use(authenticateToken);
@@ -180,7 +194,15 @@ router.get('/voice-profiles', async (req, res) => {
     const { limit = 50, includeInactive = false } = req.query;
     
     // Get voice profiles from voice cloning service
-    const profiles = await voiceCloningService.listVoiceProfiles({
+    const service = getVoiceCloningService();
+    if (!service) {
+      return res.status(503).json({
+        success: false,
+        error: 'Voice cloning service not available'
+      });
+    }
+    
+    const profiles = await service.listVoiceProfiles({
       limit: Number(limit)
     });
     
@@ -516,7 +538,10 @@ async function getSystemStatus() {
     }
     
     try {
-      await voiceCloningService.listVoiceProfiles({ limit: 1 });
+      const service = getVoiceCloningService();
+      if (service) {
+        await service.listVoiceProfiles({ limit: 1 });
+      }
     } catch (err) {
       status.services.voiceCloning = 'degraded';
     }

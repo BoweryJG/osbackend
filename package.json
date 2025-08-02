@@ -11,6 +11,7 @@
     "test:supabase": "node test_supabase.js",
     "test:openrouter": "node test_openrouter_analysis.js",
     "check:env": "node check_environment.js",
+    "diagnose:deployment": "node deployment-diagnostics.js",
     "test:twilio": "node test_twilio.js",
     "test:stripe": "node test_stripe_checkout.js && node test_stripe_webhook.js",
     "test:brave": "node test_brave_search.js",
