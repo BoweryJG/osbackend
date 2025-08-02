@@ -455,6 +455,7 @@ The system includes 6 comprehensive knowledge domains for B2B medical device sal
 ### August 2025 - Complete Production Overhaul
 
 **Status**: ✅ DEPLOYED - Service fully operational at https://osbackend-zl1h.onrender.com
+**Auto-Deploy**: ✅ RESTORED - Commits now automatically deploy to production
 
 #### Critical Issues Resolved:
 
