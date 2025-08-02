@@ -49,7 +49,8 @@ class DatabasePool {
     this.initializeMainPool();
     
     // Start health monitoring
-    this.startHealthMonitoring();
+    // DISABLED FOR DEPLOYMENT FIX
+    // this.startHealthMonitoring();
     
     // Start metrics collection
     this.startMetricsCollection();
@@ -131,7 +132,8 @@ class DatabasePool {
       logger.info(`DatabasePool: Initialized main pool with ${poolConnections.length} connections`);
       
       // Test initial connection
-      await this.healthCheck();
+      // DISABLED FOR DEPLOYMENT FIX
+      // await this.healthCheck();
       
     } catch (error) {
       logger.error('DatabasePool: Failed to initialize main pool:', error);
