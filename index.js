@@ -578,7 +578,8 @@ async function initializeDatabase() {
     logger.info('=== Database Connection Pool Initialization ===');
     
     // Initialize the database pool (handles connection management internally)
-    await databasePool.healthCheck();
+    // FIX: Commented out - healthCheck method was removed in databasePool.js
+    // await databasePool.healthCheck();
     
     // If supabase wasn't already initialized (e.g., for RepConnect chat), initialize it now
     if (!supabase) {
@@ -2738,8 +2739,21 @@ gracefulShutdown.registerCleanupTask('mediasoup-cleanup', async () => {
 // Add shutdown middleware to reject requests during shutdown
 app.use(gracefulShutdown.middleware());
 
+// DEPLOYMENT DIAGNOSTICS: Add critical startup logging for Render debugging
+console.log('=== DEPLOYMENT STARTUP DIAGNOSTICS ===');
+console.log(`🔍 PORT environment variable: ${process.env.PORT ? `"${process.env.PORT}"` : 'NOT SET ❌'}`);
+console.log(`🔍 WS_PORT environment variable: ${process.env.WS_PORT ? `"${process.env.WS_PORT}"` : 'NOT SET (will use 8082)'}`);
+console.log(`🔍 METRICS_WS_PORT environment variable: ${process.env.METRICS_WS_PORT ? `"${process.env.METRICS_WS_PORT}"` : 'NOT SET (will use 8081)'}`);
+
 // Start the server
 const PORT = process.env.PORT || 3000;
+console.log(`🚨 CRITICAL: App will bind to port ${PORT}`);
+console.log(`🚨 CRITICAL: Render expects health checks on port ${process.env.PORT || 'UNKNOWN'}`);
+
+if (!process.env.PORT) {
+  console.log('🚨🚨🚨 DEPLOYMENT FAILURE PREDICTED: PORT not set - will cause "Exited with status 1" 🚨🚨🚨');
+}
+
 httpServer.listen(PORT, () => {
   logger.info(`🚀 Server is running on port ${PORT}`);
   logger.info(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -2752,13 +2766,40 @@ httpServer.listen(PORT, () => {
   logger.info(`🤖 Harvey AI WebSocket: Active on /harvey-ws`);
   logger.info(`🎙️  Voice Agents WebRTC: Active on /voice-agents`);
   logger.info(`📞 Twilio Media Stream WebSocket: Active on /api/media-stream`);
-  logger.info(`📊 Metrics Aggregator WebSocket: Active on port ${process.env.METRICS_WS_PORT || 8081}`);
+  
+  // DEPLOYMENT DIAGNOSTICS: Log WebSocket port binding attempts
+  const metricsPort = process.env.METRICS_WS_PORT || 8081;
+  const wsPort = process.env.WS_PORT || 8082;
+  
+  console.log(`🚨 WebSocket Port Analysis:`);
+  console.log(`  - Metrics WebSocket attempting port: ${metricsPort}`);
+  console.log(`  - Central WebSocket attempting port: ${wsPort}`);
+  console.log(`  - Main HTTP server on port: ${PORT}`);
+  
+  if (metricsPort != PORT || wsPort != PORT) {
+    console.log(`🚨 WARNING: Multiple port binding detected - may fail on Render!`);
+    console.log(`🚨 Render only allows ONE port binding - recommend setting WS_PORT=${PORT} and METRICS_WS_PORT=${PORT}`);
+  } else {
+    console.log(`✅ All services configured to use single port ${PORT}`);
+  }
+  
+  logger.info(`📊 Metrics Aggregator WebSocket: Active on port ${metricsPort}`);
   logger.info(`📈 Dashboard API: Active on /api/dashboard/*`);
   logger.info(`✅ Graceful shutdown handler: Initialized`);
   
+  // DEPLOYMENT DIAGNOSTICS: Log WebSocket manager startup
+  console.log(`🔗 Starting centralized WebSocket manager on port ${wsPort}...`);
+  
   // Start the centralized WebSocket manager
   startWebSocketServer();
-  logger.info(`🔗 Centralized WebSocket Manager: Active on port ${process.env.WS_PORT || 8082}`);
+  logger.info(`🔗 Centralized WebSocket Manager: Active on port ${wsPort}`);
+  
+  // DEPLOYMENT DIAGNOSTICS: Final port summary
+  console.log(`=== FINAL PORT BINDING SUMMARY ===`);
+  console.log(`✅ Main HTTP server: ${PORT}`);
+  console.log(`${metricsPort === PORT ? '✅' : '⚠️ '} Metrics WebSocket: ${metricsPort}`);
+  console.log(`${wsPort === PORT ? '✅' : '⚠️ '} Central WebSocket: ${wsPort}`);
+  console.log(`${(!process.env.PORT) ? '🚨 DEPLOYMENT WILL FAIL' : '✅ PORT correctly set'}`);
   
   // Log service health summary
   const services = {
