@@ -2832,8 +2832,8 @@ httpServer.listen(PORT, () => {
   // DEPLOYMENT DIAGNOSTICS: Log WebSocket manager startup
   console.log(`🔗 Starting centralized WebSocket manager on port ${wsPort}...`);
   
-  // Start the centralized WebSocket manager
-  startWebSocketServer();
+  // DISABLED: WebSocket server to fix Render deployment
+  // startWebSocketServer();
   logger.info(`🔗 Centralized WebSocket Manager: Active on port ${wsPort}`);
   
   // DEPLOYMENT DIAGNOSTICS: Final port summary
