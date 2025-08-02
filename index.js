@@ -51,8 +51,9 @@ import { requestId, requestLogger, errorLogger, errorHandler } from './middlewar
 import websocketManager, { startWebSocketServer } from './services/websocketManager.js';
 import CallTranscriptionService from './services/callTranscriptionService.js';
 import HarveyWebSocketService from './services/harveyWebSocketService.js';
-import databasePool, { query as dbQuery } from './services/databasePool.js';
-import optimizedQueries from './services/optimizedQueries.js';
+// DISABLED: Database pool causing deployment crashes
+// import databasePool, { query as dbQuery } from './services/databasePool.js';
+// import optimizedQueries from './services/optimizedQueries.js';
 // Internal modules - routes
 import agentRoutes from './routes/agents/agentRoutes.js';
 import repconnectRoutes from './routes/repconnectRoutes.js';
@@ -583,10 +584,14 @@ async function initializeDatabase() {
     
     // If supabase wasn't already initialized (e.g., for RepConnect chat), initialize it now
     if (!supabase) {
-      // Get a connection from the pool to create the legacy supabase client
-      const connection = await databasePool.getConnection('main', 10000);
-      supabase = connection.client;
-      connection.release();
+      // DISABLED: Database pool - using direct import instead
+      // const connection = await databasePool.getConnection('main', 10000);
+      // supabase = connection.client;
+      // connection.release();
+      
+      // Direct import as fallback
+      const { default: supabaseImport } = await import('./config/supabase.js');
+      supabase = supabaseImport;
     }
     
     // Make supabase available to routes for backwards compatibility
@@ -595,19 +600,19 @@ async function initializeDatabase() {
     supabaseConnected = true;
     logger.info('Database connection pool initialized successfully!');
     
-    // Set up pool metrics monitoring
-    databasePool.on('metrics', (metrics) => {
-      if (process.env.LOG_LEVEL === 'debug') {
-        logger.debug('Database Pool Metrics:', {
-          totalConnections: metrics.totalConnections,
+    // DISABLED: Database pool metrics monitoring
+    // databasePool.on('metrics', (metrics) => {
+    //   if (process.env.LOG_LEVEL === 'debug') {
+    //     logger.debug('Database Pool Metrics:', {
+    //       totalConnections: metrics.totalConnections,
           activeConnections: metrics.activeConnections,
           queryCount: metrics.queryCount,
           avgQueryTime: metrics.avgQueryTime,
           slowQueries: metrics.slowQueries,
           healthy: metrics.connectionHealth.healthy
-        });
-      }
-    });
+    //     });
+    //   }
+    // });
     
     return true;
   } catch (err) {
@@ -667,7 +672,23 @@ async function callLLM(prompt, llm_model) {
 // Log activity to Supabase using optimized queries
 async function logActivity(task, result, userId = null, metadata = {}) {
   try {
-    return await optimizedQueries.activityLog.logActivity(task, result, userId, metadata);
+    // DISABLED: optimizedQueries - use direct supabase instead
+    // return await optimizedQueries.activityLog.logActivity(task, result, userId, metadata);
+    
+    // Direct supabase implementation
+    const { data, error } = await supabase
+      .from('activity_logs')
+      .insert({
+        task,
+        result,
+        user_id: userId,
+        metadata,
+        created_at: new Date().toISOString()
+      })
+      .single();
+      
+    if (error) throw error;
+    return data;
   } catch (err) {
     logger.error('Exception logging activity:', err);
     return null;
@@ -719,7 +740,17 @@ async function getUserSubscription(email) {
   if (!email) return { plan: 'free', features: pricingPlans.free.features };
   
   try {
-    const data = await optimizedQueries.userSubscription.getByEmail(email);
+    // DISABLED: optimizedQueries - use direct supabase instead
+    // const data = await optimizedQueries.userSubscription.getByEmail(email);
+    
+    // Direct supabase implementation
+    const { data, error } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+      
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
     
     if (!data) {
       logger.debug(`No subscription found for ${email}, defaulting to free`);
