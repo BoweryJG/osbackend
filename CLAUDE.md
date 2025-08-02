@@ -452,6 +452,51 @@ The system includes 6 comprehensive knowledge domains for B2B medical device sal
 
 ## Production Fixes and Deployment History
 
+### August 2025 - Complete Production Overhaul
+
+**Status**: ✅ DEPLOYED - Service fully operational at https://osbackend-zl1h.onrender.com
+
+#### Critical Issues Resolved:
+
+1. **Database Pool Restoration**:
+   - Re-enabled database pool imports and health monitoring
+   - Fixed connection pooling for optimized query performance
+   - Added query performance tracking with percentiles (p50, p95, p99)
+
+2. **WebSocket Single Port Fix**:
+   - Modified WebSocket to attach to httpServer (no separate port)
+   - All services now use PORT 10000 (Render requirement)
+   - WebSocket available at /ws path on main server
+
+3. **Environment & Error Handling**:
+   - Added comprehensive try-catch blocks around all service initializations
+   - ElevenLabs fallback mode when API key missing
+   - Graceful degradation for all optional services
+
+4. **Performance Monitoring**:
+   - Query time tracking and metrics collection
+   - Real-time performance percentiles
+   - Cache hit rate monitoring
+
+#### Files Modified:
+- `index.js` - Re-enabled database pool, fixed WebSocket initialization
+- `services/databasePool.js` - Added performance metrics and health monitoring
+- `services/websocketManager.js` - Added attachToServer method for single port
+- `services/audioClipService.js` - Added ElevenLabs fallback mode
+- `package.json` - Added monitoring dependencies
+
+#### Environment Variables Added:
+- `ELEVENLABS_API_KEY` - For voice synthesis (with fallback if missing)
+- `WS_PORT=10000` - WebSocket on main port
+- `METRICS_WS_PORT=10000` - Metrics on main port
+
+#### Deployment Success Metrics:
+- **Startup Time**: ~5 seconds
+- **Memory Usage**: Stable
+- **All Services**: Operational
+- **WebSocket**: Connected on single port
+- **Database Pool**: 20 connections available
+
 ### January 2025 - B2B Knowledge Domain Integration
 
 **Status**: ✅ DEPLOYED - Knowledge domains integrated into agent responses
