@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authenticateToken } from '../middleware/unifiedAuth.js';
 import voiceConversationPipeline from '../services/voiceConversationPipeline.js';
 import twilioConferenceService from '../services/twilioConferenceService.js';
 import realtimeCallAnalyzer from '../services/realtimeCallAnalyzer.js';
