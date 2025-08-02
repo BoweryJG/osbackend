@@ -605,11 +605,11 @@ async function initializeDatabase() {
     //   if (process.env.LOG_LEVEL === 'debug') {
     //     logger.debug('Database Pool Metrics:', {
     //       totalConnections: metrics.totalConnections,
-          activeConnections: metrics.activeConnections,
-          queryCount: metrics.queryCount,
-          avgQueryTime: metrics.avgQueryTime,
-          slowQueries: metrics.slowQueries,
-          healthy: metrics.connectionHealth.healthy
+    //       activeConnections: metrics.activeConnections,
+    //       queryCount: metrics.queryCount,
+    //       avgQueryTime: metrics.avgQueryTime,
+    //       slowQueries: metrics.slowQueries,
+    //       healthy: metrics.connectionHealth.healthy
     //     });
     //   }
     // });
