@@ -177,6 +177,190 @@ class VoiceAgentWebRTCService {
     }
   }
 
+
+  // Enhanced audio processing with pipeline integration
+  async setupAudioProcessingWithPipeline(session, producerId) {
+    try {
+      const voiceConversationPipeline = (await import('./voiceConversationPipeline.js')).default;
+      
+      // Create plain transport for extracting audio
+      const plainTransport = await this.mediasoup.createPlainTransport(session.roomId);
+      
+      // Create consumer for the audio producer
+      const router = this.mediasoup.routers.get(session.roomId);
+      const consumer = await plainTransport.consume({
+        producerId,
+        rtpCapabilities: router.rtpCapabilities,
+        paused: false
+      });
+      
+      // Create RTP to stream converter
+      const rtpToStream = new RTPToStreamConverter({
+        rtpPort: plainTransport.tuple.localPort,
+        rtcpPort: plainTransport.rtcpPort,
+        payloadType: 111, // Opus
+        sampleRate: 48000,
+        channels: 2
+      });
+      
+      // Create stream to RTP converter for output
+      const streamToRTP = new StreamToRTPConverter({
+        payloadType: 111,
+        sampleRate: 48000,
+        channels: 2
+      });
+      
+      // Connect to voice pipeline
+      await voiceConversationPipeline.connectAudioStreams(
+        session.id,
+        rtpToStream.getOutputStream(), // Input from user
+        streamToRTP.getInputStream()   // Output to user
+      );
+      
+      // Setup return path producer
+      const returnTransport = await this.mediasoup.createWebRtcTransport(
+        session.roomId,
+        session.peerId,
+        'send'
+      );
+      
+      const returnProducer = await returnTransport.produce({
+        kind: 'audio',
+        rtpParameters: {
+          codecs: [{
+            mimeType: 'audio/opus',
+            clockRate: 48000,
+            channels: 2,
+            parameters: {
+              'sprop-stereo': 1
+            }
+          }],
+          encodings: [{ ssrc: Math.floor(Math.random() * 1000000) }]
+        }
+      });
+      
+      // Store enhanced session data
+      session.audioProcessor = {
+        plainTransport,
+        consumer,
+        rtpToStream,
+        streamToRTP,
+        returnTransport,
+        returnProducer,
+        rtpPort: plainTransport.tuple.localPort,
+        rtcpPort: plainTransport.rtcpPort
+      };
+      
+      session.transcriptionActive = true;
+      
+      // Notify frontend about return audio producer
+      const socket = this.namespace.sockets.get(session.socketId);
+      if (socket) {
+        socket.emit('agent-audio-producer', {
+          producerId: returnProducer.id,
+          transportId: returnTransport.id
+        });
+      }
+      
+      console.log(`Enhanced audio processing setup for session ${session.id}`);
+    } catch (error) {
+      console.error('Error setting up enhanced audio processing:', error);
+      throw error;
+    }
+  }
+
+
+  // Enhanced audio processing with pipeline integration
+  async setupAudioProcessingWithPipeline(session, producerId) {
+    try {
+      const voiceConversationPipeline = (await import('./voiceConversationPipeline.js')).default;
+      
+      // Create plain transport for extracting audio
+      const plainTransport = await this.mediasoup.createPlainTransport(session.roomId);
+      
+      // Create consumer for the audio producer
+      const router = this.mediasoup.routers.get(session.roomId);
+      const consumer = await plainTransport.consume({
+        producerId,
+        rtpCapabilities: router.rtpCapabilities,
+        paused: false
+      });
+      
+      // Create RTP to stream converter
+      const rtpToStream = new RTPToStreamConverter({
+        rtpPort: plainTransport.tuple.localPort,
+        rtcpPort: plainTransport.rtcpPort,
+        payloadType: 111, // Opus
+        sampleRate: 48000,
+        channels: 2
+      });
+      
+      // Create stream to RTP converter for output
+      const streamToRTP = new StreamToRTPConverter({
+        payloadType: 111,
+        sampleRate: 48000,
+        channels: 2
+      });
+      
+      // Connect to voice pipeline
+      await voiceConversationPipeline.connectAudioStreams(
+        session.id,
+        rtpToStream.getOutputStream(), // Input from user
+        streamToRTP.getInputStream()   // Output to user
+      );
+      
+      // Setup return path producer
+      const returnTransport = await this.mediasoup.createWebRtcTransport(
+        session.roomId,
+        session.peerId,
+        'send'
+      );
+      
+      const returnProducer = await returnTransport.produce({
+        kind: 'audio',
+        rtpParameters: {
+          codecs: [{
+            mimeType: 'audio/opus',
+            clockRate: 48000,
+            channels: 2,
+            parameters: {
+              'sprop-stereo': 1
+            }
+          }],
+          encodings: [{ ssrc: Math.floor(Math.random() * 1000000) }]
+        }
+      });
+      
+      // Store enhanced session data
+      session.audioProcessor = {
+        plainTransport,
+        consumer,
+        rtpToStream,
+        streamToRTP,
+        returnTransport,
+        returnProducer,
+        rtpPort: plainTransport.tuple.localPort,
+        rtcpPort: plainTransport.rtcpPort
+      };
+      
+      session.transcriptionActive = true;
+      
+      // Notify frontend about return audio producer
+      const socket = this.namespace.sockets.get(session.socketId);
+      if (socket) {
+        socket.emit('agent-audio-producer', {
+          producerId: returnProducer.id,
+          transportId: returnTransport.id
+        });
+      }
+      
+      console.log(`Enhanced audio processing setup for session ${session.id}`);
+    } catch (error) {
+      console.error('Error setting up enhanced audio processing:', error);
+      throw error;
+    }
+  }
+
   async setupAudioProcessing(session, producerId) {
     try {
       // Create plain transport for extracting audio
