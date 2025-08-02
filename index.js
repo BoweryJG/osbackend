@@ -87,6 +87,7 @@ import callTranscriptionRoutes, { setCallTranscriptionService } from './routes/c
 import callSummaryRoutes from './routes/callSummaryRoutes.js';
 import twilioWebhookRoutes from './routes/twilioWebhookRoutes.js';
 import voiceCloningRoutes from './routes/voiceCloning.js';
+import voiceRoutes from './routes/voiceRoutes.js';
 import dashboardRoutes from './routes/dashboard.js';
 import knowledgeBankRoutes from './routes/knowledgeBankRoutes.js';
 import stripeRoutes from './routes/stripe.js';
@@ -2575,6 +2576,9 @@ app.use('/api', callTranscriptionRoutes);
 
 // Add Voice Cloning routes
 app.use('/api/voice-cloning', voiceCloningRoutes);
+
+// Add Voice routes (for voice conversations)
+app.use('/api/voice', voiceRoutes);
 
 // Add Dashboard routes
 app.use('/api/dashboard', dashboardRoutes);
