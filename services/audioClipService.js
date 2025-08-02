@@ -28,14 +28,22 @@ const __dirname = path.dirname(__filename);
  */
 export class AudioClipService {
   constructor(options = {}) {
-    // Initialize ElevenLabs TTS
-    this.tts = new ElevenLabsTTS({
-      voiceId: options.voiceId || 'nicole', // Friendly voice for clips
-      modelId: 'eleven_turbo_v2', // Fast generation
-      stability: 0.6,
-      similarityBoost: 0.8,
-      style: 0.3
-    });
+    // Initialize ElevenLabs TTS with fallback
+    this.fallbackMode = false;
+    try {
+      this.tts = new ElevenLabsTTS({
+        voiceId: options.voiceId || 'nicole', // Friendly voice for clips
+        modelId: 'eleven_turbo_v2', // Fast generation
+        stability: 0.6,
+        similarityBoost: 0.8,
+        style: 0.3
+      });
+    } catch (error) {
+      logger.warn('ElevenLabs TTS initialization failed:', error.message);
+      logger.info('Running in fallback mode - voice features will return mock responses');
+      this.fallbackMode = true;
+      this.tts = null;
+    }
     
     // Initialize Twilio
     this.twilioService = twilioService;
@@ -123,13 +131,20 @@ export class AudioClipService {
       // Generate unique clip ID
       const clipId = uuidv4();
       
-      // Generate audio using ElevenLabs
+      // Generate audio using ElevenLabs or fallback
       logger.info(`Generating audio clip ${clipId} for text: "${text.substring(0, 50)}..."`);
       
-      const audioBuffer = await this.tts.textToSpeech(text, {
-        voiceId: options.voiceId,
-        voiceSettings: options.voiceSettings
-      });
+      let audioBuffer;
+      if (this.fallbackMode) {
+        // Return mock audio data in fallback mode
+        audioBuffer = Buffer.from('mock-audio-data');
+        logger.info('Using fallback audio generation');
+      } else {
+        audioBuffer = await this.tts.textToSpeech(text, {
+          voiceId: options.voiceId,
+          voiceSettings: options.voiceSettings
+        });
+      }
       
       // Save raw audio temporarily
       const rawPath = path.join(this.config.tempDir, `${clipId}_raw.mp3`);

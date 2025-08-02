@@ -24,7 +24,9 @@
     "format:check": "prettier --check .",
     "code:check": "npm run lint && npm run format:check",
     "code:fix": "npm run lint:fix && npm run format",
-    "prepare": "husky || echo 'Husky not available, skipping git hooks setup'"
+    "prepare": "husky || echo 'Husky not available, skipping git hooks setup'",
+    "fix:production": "node production-fix-orchestrator.js --parallel --dashboard --checkpoint-validation",
+    "fix:production:sequential": "node production-fix-orchestrator.js --checkpoint-validation"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
@@ -74,7 +76,10 @@
     "wav": "^1.0.2",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "ws": "^8.18.2"
+    "ws": "^8.18.2",
+    "chalk": "^5.3.0",
+    "ora": "^6.3.1",
+    "blessed": "^0.1.81"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.0",

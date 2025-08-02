@@ -69,9 +69,8 @@ import { requestId, requestLogger, errorLogger, errorHandler } from './middlewar
 import websocketManager, { startWebSocketServer } from './services/websocketManager.js';
 import CallTranscriptionService from './services/callTranscriptionService.js';
 import HarveyWebSocketService from './services/harveyWebSocketService.js';
-// DISABLED: Database pool causing deployment crashes
-// import databasePool, { query as dbQuery } from './services/databasePool.js';
-// import optimizedQueries from './services/optimizedQueries.js';
+import databasePool, { query as dbQuery } from './services/databasePool.js';
+import optimizedQueries from './services/optimizedQueries.js';
 // Internal modules - routes
 import agentRoutes from './routes/agents/agentRoutes.js';
 import repconnectRoutes from './routes/repconnectRoutes.js';
@@ -597,19 +596,13 @@ async function initializeDatabase() {
     logger.info('=== Database Connection Pool Initialization ===');
     
     // Initialize the database pool (handles connection management internally)
-    // FIX: Commented out - healthCheck method was removed in databasePool.js
-    // await databasePool.healthCheck();
+    await databasePool.healthCheck();
     
     // If supabase wasn't already initialized (e.g., for RepConnect chat), initialize it now
     if (!supabase) {
-      // DISABLED: Database pool - using direct import instead
-      // const connection = await databasePool.getConnection('main', 10000);
-      // supabase = connection.client;
-      // connection.release();
-      
-      // Direct import as fallback
-      const { default: supabaseImport } = await import('./config/supabase.js');
-      supabase = supabaseImport;
+      const connection = await databasePool.getConnection('main', 10000);
+      supabase = connection.client;
+      connection.release();
     }
     
     // Make supabase available to routes for backwards compatibility
@@ -2850,9 +2843,14 @@ httpServer.listen(PORT, () => {
   // DEPLOYMENT DIAGNOSTICS: Log WebSocket manager startup
   console.log(`🔗 Starting centralized WebSocket manager on port ${wsPort}...`);
   
-  // DISABLED: WebSocket server to fix Render deployment
-  // startWebSocketServer();
-  logger.info(`🔗 Centralized WebSocket Manager: Active on port ${wsPort}`);
+  // Start WebSocket server attached to httpServer
+  try {
+    startWebSocketServer(httpServer);
+    logger.info(`🔗 Centralized WebSocket Manager: Attached to HTTP server`);
+  } catch (error) {
+    logger.error('Failed to start WebSocket server:', error);
+    logger.warn('Running without WebSocket support - real-time features disabled');
+  }
   
   // DEPLOYMENT DIAGNOSTICS: Final port summary
   console.log(`=== FINAL PORT BINDING SUMMARY ===`);

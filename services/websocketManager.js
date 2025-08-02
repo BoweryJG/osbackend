@@ -99,6 +99,42 @@ class WebSocketManager extends EventEmitter {
   }
   
   /**
+   * Attach WebSocket server to existing HTTP server
+   */
+  attachToServer(httpServer) {
+    this.wss = new WebSocketServer({ 
+      server: httpServer,
+      path: '/ws',
+      perMessageDeflate: {
+        zlibDeflateOptions: {
+          chunkSize: 1024,
+          memLevel: 7,
+          level: 3
+        },
+        zlibInflateOptions: {
+          chunkSize: 10 * 1024
+        },
+        clientNoContextTakeover: true,
+        serverNoContextTakeover: true,
+        serverMaxWindowBits: 10,
+        concurrencyLimit: 10,
+        threshold: 1024
+      }
+    });
+    
+    this.wss.on('connection', (ws, req) => {
+      this.handleConnection(ws, req);
+    });
+    
+    logger.info(`WebSocketManager: Attached to HTTP server on path /ws`);
+    
+    // Setup cleanup on server close
+    this.wss.on('close', () => {
+      this.cleanup();
+    });
+  }
+  
+  /**
    * Handle new WebSocket connection
    */
   async handleConnection(ws, req) {
@@ -739,7 +775,14 @@ const websocketManager = new WebSocketManager();
 export default websocketManager;
 
 // Convenience exports
-export const startWebSocketServer = () => websocketManager.start();
+export const startWebSocketServer = (httpServer) => {
+  if (httpServer) {
+    websocketManager.attachToServer(httpServer);
+  } else {
+    websocketManager.start();
+  }
+  return websocketManager;
+};
 export const broadcastToRoom = (room, message) => websocketManager.broadcastToRoom(room, message);
 export const broadcastToAll = (message) => websocketManager.broadcastToAll(message);
 export const sendToUser = (userId, message) => websocketManager.sendToUser(userId, message);

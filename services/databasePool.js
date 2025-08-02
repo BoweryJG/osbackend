@@ -45,12 +45,17 @@ class DatabasePool {
     this.queryCache = new Map();
     this.maxCacheSize = 100;
     
+    // Performance tracking
+    this.queryTimes = [];
+    this.maxQueryTimeSamples = 1000;
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+    
     // Initialize main pool
     this.initializeMainPool();
     
     // Start health monitoring
-    // DISABLED FOR DEPLOYMENT FIX
-    // this.startHealthMonitoring();
+    this.startHealthMonitoring();
     
     // Start metrics collection
     this.startMetricsCollection();
@@ -322,6 +327,12 @@ class DatabasePool {
     }
     
     this.metrics.queryCount++;
+    
+    // Track query times for performance monitoring
+    this.queryTimes.push(queryTime);
+    if (this.queryTimes.length > this.maxQueryTimeSamples) {
+      this.queryTimes.shift(); // Remove oldest
+    }
     this.metrics.avgQueryTime = 
       (this.metrics.avgQueryTime * (this.metrics.queryCount - 1) + queryTime) / this.metrics.queryCount;
   }
@@ -533,9 +544,18 @@ class DatabasePool {
       };
     }
     
+    // Calculate performance metrics
+    const performanceMetrics = {
+      averageQueryTime: this.calculateAverageQueryTime(),
+      slowQueries: this.queryTimes.filter(t => t > this.config.slowQueryThreshold).length,
+      cacheHitRate: this.cacheHits / (this.cacheHits + this.cacheMisses) || 0,
+      queryTimePercentiles: this.calculatePercentiles(this.queryTimes)
+    };
+    
     return {
       ...this.metrics,
       connectionHealth: this.connectionHealth,
+      performance: performanceMetrics,
       pools: poolMetrics,
       timestamp: new Date().toISOString()
     };
@@ -557,6 +577,35 @@ class DatabasePool {
           stats: pool.stats
         };
       })
+    };
+  }
+  
+  /**
+   * Calculate average query time
+   */
+  calculateAverageQueryTime() {
+    if (this.queryTimes.length === 0) return 0;
+    const sum = this.queryTimes.reduce((a, b) => a + b, 0);
+    return Math.round(sum / this.queryTimes.length);
+  }
+  
+  /**
+   * Calculate percentiles for query times
+   */
+  calculatePercentiles(times) {
+    if (times.length === 0) {
+      return { p50: 0, p95: 0, p99: 0 };
+    }
+    
+    const sorted = [...times].sort((a, b) => a - b);
+    const p50Index = Math.floor(sorted.length * 0.5);
+    const p95Index = Math.floor(sorted.length * 0.95);
+    const p99Index = Math.floor(sorted.length * 0.99);
+    
+    return {
+      p50: sorted[p50Index] || 0,
+      p95: sorted[p95Index] || 0,
+      p99: sorted[p99Index] || 0
     };
   }
   
