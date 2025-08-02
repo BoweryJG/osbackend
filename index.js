@@ -675,7 +675,12 @@ async function logActivity(task, result, userId = null, metadata = {}) {
     // DISABLED: optimizedQueries - use direct supabase instead
     // return await optimizedQueries.activityLog.logActivity(task, result, userId, metadata);
     
-    // Direct supabase implementation
+    // Direct supabase implementation with null check
+    if (!supabase) {
+      logger.warn('Supabase not initialized, skipping activity log');
+      return null;
+    }
+    
     const { data, error } = await supabase
       .from('activity_logs')
       .insert({
@@ -743,7 +748,12 @@ async function getUserSubscription(email) {
     // DISABLED: optimizedQueries - use direct supabase instead
     // const data = await optimizedQueries.userSubscription.getByEmail(email);
     
-    // Direct supabase implementation
+    // Direct supabase implementation with null check
+    if (!supabase) {
+      logger.warn('Supabase not initialized, returning free plan');
+      return { plan: 'free', features: pricingPlans.free.features };
+    }
+    
     const { data, error } = await supabase
       .from('user_subscriptions')
       .select('*')
@@ -2799,8 +2809,9 @@ httpServer.listen(PORT, () => {
   logger.info(`📞 Twilio Media Stream WebSocket: Active on /api/media-stream`);
   
   // DEPLOYMENT DIAGNOSTICS: Log WebSocket port binding attempts
-  const metricsPort = process.env.METRICS_WS_PORT || 8081;
-  const wsPort = process.env.WS_PORT || 8082;
+  // RENDER FIX: Use same port as main server to avoid multi-port binding
+  const metricsPort = process.env.METRICS_WS_PORT || PORT;
+  const wsPort = process.env.WS_PORT || PORT;
   
   console.log(`🚨 WebSocket Port Analysis:`);
   console.log(`  - Metrics WebSocket attempting port: ${metricsPort}`);
