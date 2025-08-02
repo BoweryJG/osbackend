@@ -116,7 +116,7 @@ class RealtimeCallAnalyzer extends EventEmitter {
       'need to think',
       'not the right time',
       'already have',
-      'don't need',
+      "don't need",
       'maybe later',
       'not interested'
     ];
