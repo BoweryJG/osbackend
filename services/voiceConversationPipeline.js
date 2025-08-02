@@ -2,7 +2,7 @@ import { Transform, pipeline } from 'stream';
 import { getMediasoupService } from './mediasoupService.js';
 import DeepgramSTT from './deepgramSTT.js';
 import { ElevenLabsTTS } from './elevenLabsTTS.js';
-import agentCore from '../agents/core/agentCore.js';
+import { AgentCore } from '../agents/core/agentCore.js';
 import { createClient } from '@supabase/supabase-js';
 import EventEmitter from 'events';
 
@@ -19,7 +19,7 @@ class VoiceConversationPipeline extends EventEmitter {
     this.mediasoup = getMediasoupService();
     this.deepgram = new DeepgramSTT();
     this.elevenLabs = new ElevenLabsTTS();
-    this.agentCore = new agentCore('repconnect'); // Voice agents from RepConnect
+    this.agentCore = new AgentCore('repconnect'); // Voice agents from RepConnect
   }
   
   async createSession(config) {
