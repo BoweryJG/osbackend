@@ -47,6 +47,10 @@ import gracefulShutdown from './utils/gracefulShutdown.js';
 import { validateCommonEnvironment } from './utils/envValidator.js';
 import logger from './utils/logger.js';
 import { AgentCore } from './agents/core/agentCore.js';
+import setupProcessErrorHandlers from './utils/processErrorHandler.js';
+
+// Set up global error handlers to prevent crashes
+setupProcessErrorHandlers();
 // Validate environment variables in production
 if (process.env.NODE_ENV === 'production') {
   try {

@@ -34,13 +34,23 @@ router.get('/health', (req, res) => {
     }, 503));
   }
 
+  // Include memory usage to monitor for leaks
+  const memoryUsage = process.memoryUsage();
+  const memoryMB = {
+    rss: Math.round(memoryUsage.rss / 1024 / 1024),
+    heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+    heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+    external: Math.round(memoryUsage.external / 1024 / 1024)
+  };
+  
   res.json(successResponse({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'RepSpheres OS Backend',
     version: process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    uptime: Math.floor(process.uptime())
+    uptime: Math.floor(process.uptime()),
+    memory: memoryMB
   }));
 });
 
