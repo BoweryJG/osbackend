@@ -100,7 +100,7 @@ router.get('/health/ready', async (req, res) => {
   try {
     // Check database connection
     if (supabase) {
-      const { error } = await supabase.from('users').select('count').limit(1);
+      const { error } = await supabase.from('user_subscriptions').select('count').limit(1);
       checks.database = !error;
     } else {
       checks.database = false;
@@ -243,7 +243,7 @@ router.get('/health/dependencies', async (req, res) => {
     try {
       const result = await trackExternalService('supabase', async () => {
         const start = Date.now();
-        const { data, error } = await supabase.from('users').select('count').limit(1);
+        const { data, error } = await supabase.from('user_subscriptions').select('count').limit(1);
         const responseTime = Date.now() - start;
         
         if (error) throw error;
